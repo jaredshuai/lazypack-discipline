@@ -4,17 +4,17 @@
 
 ## 两层结构
 
-- **固定层**：跨项目不变的条文，见 [docs/DECISIONS.md](docs/DECISIONS.md)。改它要走多 AI 讨论章程。
-- **项目层**：每个仓库编译一次的平台细节（打包上传、lint/format/类型工具、验证命令）。由 `/lazypack-setup` skill 生成（待写）。
+- **固定层**：跨项目不变的条文，当前版本为 0.2.0，见 [docs/DECISIONS.md](docs/DECISIONS.md)。改它要走多 AI 讨论章程。
+- **项目层**：每个仓库编译一次的平台细节（打包上传、lint/format/类型工具、验证命令）。由 [skills/lazypack-setup](skills/lazypack-setup/) skill 生成。
 
 ## 目录
 
 | 路径 | 放什么 |
 |---|---|
-| `docs/DECISIONS.md` | 固定层条文，唯一事实源 |
+| `docs/DECISIONS.md` | 固定层条文，当前版本 0.2.0，唯一事实源 |
 | `docs/interviews/` | 立项访谈的去敏整理稿；原始记录在私有 vault |
-| `docs/reviews/` | 多 AI 讨论留档（按 `<日期>-<议题>/`） |
-| `skills/` | `/lazypack-setup`、`/lazypack-harvest`（待写） |
+| `docs/reviews/` | 多 AI 讨论留档（按 `<日期>-<议题>/`）；当前进展见 [lazy setup 实施基线](docs/reviews/2026-09-05-lazy-setup/synthesis.md) |
+| `skills/` | [`skills/lazypack-setup`](skills/lazypack-setup/) 已实现；`/lazypack-harvest`（待写） |
 
 ## 来源
 
