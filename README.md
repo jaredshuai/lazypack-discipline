@@ -14,7 +14,7 @@
 | `docs/DECISIONS.md` | 固定层条文，当前版本 0.2.0，唯一事实源 |
 | `docs/interviews/` | 立项访谈的去敏整理稿；原始记录在私有 vault |
 | `docs/reviews/` | 多 AI 讨论留档（按 `<日期>-<议题>/`）；当前进展见 [lazy setup 实施基线](docs/reviews/2026-09-05-lazy-setup/synthesis.md) |
-| `skills/` | [`skills/lazypack-setup`](skills/lazypack-setup/) 已实现；`/lazypack-harvest`（待写） |
+| `skills/` | [`skills/lazypack-setup`](skills/lazypack-setup/) 已实现；[`skills/lazypack-harvest`](skills/lazypack-harvest/) 已实现（有限离线验证） |
 
 ## 来源
 
@@ -22,4 +22,6 @@
 
 ## 贡献方式
 
-在真实项目长对话后手动触发 `/lazypack-harvest`，它会向本仓库提 `harvest` 标签的 issue（已脱敏）。issue 走 Matt 的 `triage` 流程，不直接改条文。
+在真实项目长对话后手动触发 [`/lazypack-harvest`](skills/lazypack-harvest/)，它会向本仓库提 `harvest` 标签的 issue（已脱敏）。issue 走 Matt 的 `triage` 流程，不直接改条文。
+
+> **说明**：当前完成有限离线验证（状态机阶梯、账本防覆写保护与离线模拟）；真实 GitHub 创建与网络恢复链路尚未验证。运行前需具备可用写通道（如已认证的 `gh` CLI）及目标仓 `harvest` 标签，缺失标签时默认阻断发送。
