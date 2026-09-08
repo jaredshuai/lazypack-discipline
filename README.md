@@ -12,8 +12,10 @@
 | 路径 | 放什么 |
 |---|---|
 | `docs/DECISIONS.md` | 固定层条文，当前版本 0.2.0，唯一事实源 |
+| `docs/handoff-verification.md` | 多 Agent 跨阶段交接清单与核验指引 |
 | `docs/interviews/` | 立项访谈的去敏整理稿；原始记录在私有 vault |
 | `docs/reviews/` | 多 AI 讨论留档（按 `<日期>-<议题>/`）；当前进展见 [lazy setup 实施基线](docs/reviews/2026-09-05-lazy-setup/synthesis.md) |
+| `scripts/` | 通用辅助脚本；`scripts/handoff_manifest.js` 提供跨阶段交接同源清单生成与核验 |
 | `skills/` | [`skills/lazypack-setup`](skills/lazypack-setup/) 已实现；[`skills/lazypack-harvest`](skills/lazypack-harvest/) 已实现（有限离线验证） |
 
 ## 来源
