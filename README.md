@@ -5,7 +5,7 @@
 ## 两层结构
 
 - **固定层**：跨项目不变的条文，当前版本为 0.2.0，见 [docs/DECISIONS.md](docs/DECISIONS.md)。改它要走多 AI 讨论章程。
-- **项目层**：每个仓库编译一次的平台细节（打包上传、lint/format/类型工具、验证命令）。由 [skills/lazypack-setup](skills/lazypack-setup/) skill 生成。
+- **项目层**：每个仓库编译一次的平台细节（打包上传、lint/format/类型工具、验证命令、访谈材料留存策略）。由 [skills/lazypack-setup](skills/lazypack-setup/) skill 生成。
 
 ## 目录
 
@@ -16,7 +16,7 @@
 | `docs/interviews/` | 立项访谈的去敏整理稿；原始记录在私有 vault |
 | `docs/reviews/` | 多 AI 讨论留档（按 `<日期>-<议题>/`）；当前进展见 [lazy setup 实施基线](docs/reviews/2026-09-05-lazy-setup/synthesis.md) |
 | `scripts/` | 通用辅助脚本；`scripts/handoff_manifest.js` 提供跨阶段交接同源清单生成与核验 |
-| `skills/` | [`skills/lazypack-setup`](skills/lazypack-setup/) 已实现；[`skills/lazypack-harvest`](skills/lazypack-harvest/) 已实现（有限离线验证） |
+| `skills/` | [`skills/lazypack-setup`](skills/lazypack-setup/) 已实现（支持门禁装配与项目自选访谈材料留存指引）；[`skills/lazypack-harvest`](skills/lazypack-harvest/) 已实现（有限离线验证） |
 
 ## 来源
 

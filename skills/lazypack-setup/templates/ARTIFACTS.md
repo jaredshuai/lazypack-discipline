@@ -27,3 +27,11 @@ __STANDARDS_REGISTER_ROW__
 __RELEASE_REGISTER_ROW__
 __ROLES_REGISTER_ROW__
 <!-- lazypack:end block=artifacts-register -->
+
+## 3. 项目自选材料登记（非受管协作区）
+
+> 本区由团队与 Agent 协同维护，不设强制覆盖托管标记。可在下方按需登记探索性想法池、访谈纪要归档或外部参考素材（setup 重跑保持本区字节不变）：
+
+| 产物相对路径 | 类别 | 状态 | 来源说明 |
+|---|---|---|---|
+<!-- 示例：| docs/ideas/inbox.md | exploration | exploration | 规划研讨碎片想法池，非现行基准 | -->

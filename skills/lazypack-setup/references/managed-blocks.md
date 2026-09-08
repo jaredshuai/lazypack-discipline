@@ -79,6 +79,50 @@
 
 无条件依赖托管块**不包含** `artifacts` 字段。
 
+#### 3.1.1.1 角色映射托管块序列化结构 (docs/agents/roles.md)
+`docs/agents/roles.md` 的 `agent-roles` 托管块属于 Layer 0 独立产物（无条件依赖托管块）。为持久化项目留存策略且保持单向无环依赖（DAG），其 input 字典中包含规范机器字段 `retention`：
+
+```json
+{
+  "commands": {
+    "format": "biome format --write",
+    "lint": "biome lint",
+    "test": "missing",
+    "type": "missing"
+  },
+  "gen": "<generator-id>",
+  "platform": "generic",
+  "retention": {
+    "dimensions": ["ideas", "minutes"],
+    "mode": "hybrid",
+    "paths": {
+      "ideas": "docs/ideas/inbox.md",
+      "minutes": "docs/interviews",
+      "raw_qa": ""
+    },
+    "retentionSrc": "<retention-source-hash>",
+    "visibility": {
+      "ideas": "private-repo",
+      "minutes": "public-repo",
+      "raw_qa": "none"
+    }
+  },
+  "src": "DECISIONS.md@0.2.0"
+}
+```
+
+- **字段规范**：
+  * `dimensions`：启用维度的升序排序字符串数组（可包含 `"ideas"`, `"minutes"`, `"raw_qa"`；若仅留决议或未配置则为 `[]`）；
+  * `mode`：`"decisions-only" | "ideas-pool" | "minutes-only" | "raw-qa" | "hybrid" | "unconfigured"`（严格从 `dimensions` 派生：`[]` 派生为 `decisions-only` 或 `unconfigured`，单一维度派生为相应模式，多维度派生为 `hybrid`，不得相互矛盾）；
+  * `paths`：规范化相对路径或安全引用别名词典（键固定为 `ideas`, `minutes`, `raw_qa`，未启用项统一为空字符串 `""`；仓内材料使用 POSIX 规范相对路径，仓外私有原文使用可解析的安全引用别名如 `vault:raw-qa`，严禁将宿主本机绝对物理路径或密钥凭据写入公开产物；实际物理绑定遵循 `session-authorized` 会话授权契约：写前在当前可见会话检查别名到真实物理路径的授权映射，若未提供安全绑定则该维度保持待绑定 `unbound` 且不写材料，亦不跨会话在仓库内持久化私有物理路径）；
+  * `retentionSrc`：正文权威源 `references/retention-sections.md` 经剔除 UTF-8 BOM、CRLF→LF 规范化后的 SHA-256 摘要前 16 位小写十六进制字符串。当且仅当权威正文库发生变动时驱动 `roles.md` 平滑触发 `[UPGRADE]`，避免改动策略文本时因 input 未变而漏升级。无论 8 种启用组合还是 `unconfigured` 分支均包含该字段；`pending` 待答状态不记录；
+  * `visibility`：按维度划分的可见性字典（键固定为 `ideas`, `minutes`, `raw_qa`，取值为 `"public-repo" | "private-repo" | "private-storage" | "none"`，未启用项为 `"none"`；外部私有存储取值为 `"private-storage"`）；
+  * 严禁纳入临时时间戳、材料正文或运行日志，杜绝跨会话伪漂移。
+- **平滑升级契约 (Upgrade Lifecycle)**：
+  既有项目的 `roles.md` 若缺少 `retention` 字段或其 `retentionSrc` 与当前权威正文源不一致时，重跑时因 `current_input !== header.input`，在正文未手改时精准触发 `[UPGRADE]`；若正文已手改则触发 `[CONFLICT]` 并展示 2-way diff。经用户确认写盘后，二次重跑立即进入稳定 `[NO-OP]`。
+- **协作材料隔离**：
+  `docs/ideas/inbox.md` 与 `docs/interviews/*.md` 为非受管协作材料，位于托管块外部。向其中追加想法或笔记绝不改变托管块的 `fp` 或 `input`，重跑保持幂等。
+
 #### 3.1.2 依赖状态摘要契约（条件依赖托管块）
 适用于具备条件登记行或条件指针行的托管块：
 - `docs/ARTIFACTS.md` 的 `artifacts-register` 托管块；
@@ -98,6 +142,8 @@
   2. `RELEASE.md`
   3. `docs/ARTIFACTS.md`
   4. `docs/agents/roles.md`
+
+> **常驻指针文案稳定原则 (P7)**：`resident-discipline` 托管块内对 `roles.md` 的指针采用稳定通用表述（`- **角色与职责**：查阅 [docs/agents/roles.md](docs/agents/roles.md)，遵循各角色防撞车边界与项目指引。`），PAUSE/BROKEN 时彻底省略。文案不随 retention mode 或 §3 动态改变，因此 `resident-discipline` 严格保持上述 4 项固定依赖不变，杜绝因策略调整导致的误判 `[DRIFT]`。
 
 ##### 2. 磁盘事实到稳定状态值映射 (Disk Facts Mapping)
 状态值直接来源于只读探测的磁盘持久可观测事实，**严禁**使用本轮执行决策的临时计算结果（如 NEW / UPGRADE / NO-OP），映射至以下 4 个小写固定状态词：
@@ -208,6 +254,21 @@
 - **非法状态与空命令防御**：
   - 若 `GATE_STATUS` 为 `wired` 但 `GATE_CMD` 为空或纯空白，显式阻断并置 `EXIT_CODE=1`；
   - 若 `GATE_STATUS` 为未知字符串或遗留占位符（如 `__FORMAT_STATUS__`），进入通配分支 `*)`，打印错误并置 `EXIT_CODE=1`（Fail-closed 闭门防御）。
+
+### 5.5 Section 3 非受管协作区追加与去重契约 (P6)
+- **物理边界与块外保护**：`docs/ARTIFACTS.md` 的 Section 3 位于 `<!-- lazypack:end block=artifacts-register -->` 之后，属于非受管协作区。
+- **旧项目缺节平滑追加**：既有项目的 `docs/ARTIFACTS.md` 若无 Section 3，在确认写盘时将 Section 3 模板框架追加至文件末尾，块内字节逐字节不变，不影响 `fp` 计算。
+- **去重键与增量登记**：
+  1. **唯一去重键**：
+     - 仓内协作产物：POSIX 归一化相对路径（如 `docs/ideas/inbox.md`、`docs/interviews`）；
+     - 仓外私有引用：规范化安全引用/别名（如 `vault:raw-qa`）。
+     - 去重匹配使用规范化身份（去重键完全比对），不使用显示文字或格式排版模糊匹配。
+  2. **写入与存在核验前提**：
+     - 仅当新确认启用的协作材料在磁盘（或已绑定的授权私有存储）上实际写入成功且校验非空真实存在后，才触发登记；
+     - 若私有存储绑定未就绪（未写入），绝不预登记，不虚报为已交付；
+     - 写入中断或部分失败时，仅登记实际核验通过的项。
+  3. **不重复添加（幂等追加）**：若 Section 3 表格已存在该去重键，不重复写入行，保持原样。
+  4. **人工行绝对保护**：用户手动登记的其他外部参考、探索设计行，setup 重跑时绝对不删除、不覆写、不重排，原有字节完全保护。
 
 ---
 

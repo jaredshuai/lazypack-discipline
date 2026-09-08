@@ -29,4 +29,10 @@
 | **审查者** | `code-review` | 未验证 (Matt Pocock skills；待核验实际调用与门禁复跑对抗证据) [未验证] |
 | **书记员** | `retro` 文档部分 | 未验证 (关票后事件驱动调用；待核验文档修补调用证据) [未验证] |
 | **清道夫** | 暂无专用 skill，依据 DECISIONS §4.1 执行 | 暂无专用 skill，规则/人工执行 (发版前事件驱动调用) [人工执行] |
+
+## 3. 规划者访谈与碎片想法留存指引
+
+> 本节由 /lazypack-setup 依据项目探测事实或用户明确选择编译生成，规范规划者在启动、推进及结束需求研讨（如 `grill-with-docs`）时的材料收敛行为。
+
+__INTERVIEW_RETENTION_SECTION__
 <!-- lazypack:end block=agent-roles -->
