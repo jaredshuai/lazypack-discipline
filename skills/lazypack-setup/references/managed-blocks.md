@@ -123,6 +123,74 @@
 - **协作材料隔离**：
   `docs/ideas/inbox.md` 与 `docs/interviews/*.md` 为非受管协作材料，位于托管块外部。向其中追加想法或笔记绝不改变托管块的 `fp` 或 `input`，重跑保持幂等。
 
+#### 3.1.1.2 提交前门禁托管块序列化结构 (.githooks/pre-commit)
+`.githooks/pre-commit` 脚本内的 `pre-commit-hook` 托管块属于无条件依赖托管块（不含 `artifacts` 字段）。当仓库采纳门禁配方时，其 input 字典中包含规范机器字段 `preset`、`presetSrc` 与 `provenance`：
+
+```json
+{
+  "commands": {
+    "format": "uv run --no-sync ruff format --check",
+    "lint": "uv run --no-sync ruff check --no-fix",
+    "test": "uv run --no-sync pytest",
+    "type": "uv run --no-sync ty check"
+  },
+  "gen": "<generator-id>",
+  "platform": "generic",
+  "preset": {
+    "id": "python-uv-ruff",
+    "version": "0.1.0"
+  },
+  "presetSrc": "<preset-source-hash>",
+  "provenance": {
+    "format": "wired:preset:recommended",
+    "lint": "wired:preset:recommended",
+    "test": "wired:preset:recommended",
+    "type": "wired:preset:recommended"
+  },
+  "src": "DECISIONS.md@0.2.0"
+}
+```
+
+对于 TypeScript/JavaScript 配方（`id: "ts-biome-vitest"`），格式完全同理：
+```json
+{
+  "commands": {
+    "format": "pnpm run format",
+    "lint": "pnpm run lint",
+    "test": "pnpm run test",
+    "type": "pnpm run type"
+  },
+  "gen": "<generator-id>",
+  "platform": "generic",
+  "preset": {
+    "id": "ts-biome-vitest",
+    "version": "0.1.0"
+  },
+  "presetSrc": "<preset-source-hash>",
+  "provenance": {
+    "format": "wired:preset:recommended",
+    "lint": "wired:preset:recommended",
+    "test": "wired:preset:recommended",
+    "type": "wired:preset:recommended"
+  },
+  "src": "DECISIONS.md@0.2.0"
+}
+```
+
+- **字段规范与约束**：
+  * `preset`：配方身份对象，固定包含 `id`（如 `"python-uv-ruff"` 或 `"ts-biome-vitest"`）与 `version`（如 `"0.1.0"`）；
+  * `presetSrc`：所采纳配方数据卡（实际采用的配方卡，如 `skills/lazypack-setup/presets/python-uv-ruff.md` 或 `skills/lazypack-setup/presets/ts-biome-vitest.md`）经剔除 UTF-8 BOM、CRLF→LF 规范化后的 UTF-8 字节流计算 SHA-256 的前 16 位小写十六进制字符串。配方卡正文发生变动时驱动 Hook 精准触发 `[UPGRADE]`；
+  * `provenance`：规范化的逐门禁槽位出处子字典（键严格固定为 `format`, `lint`, `test`, `type`，值为对应 `<state>:<source>:<reason>` 三段式稳定枚举串）。
+- **输入-正文一致性保证（防止正文变动而输入未变）**：
+  * 用户在交互确认中对工具的选择、安装失败或跳过，会直接改变 Hook 受管正文中的 `# lazypack:preset` 出处注释行（如由 `recommended` 变为 `declined`，或由 `wired` 变为 `install-failed`）；
+  * 若仅在 input 中记录 `commands`，可能出现“正文因出处变动而改变指纹 `fp`，但输入摘要 `input` 未变”，导致重跑时误触发 `[DRIFT]`；
+  * 将规范化 `provenance` 字典纳入 Hook input，确保受管正文中的出处行变动与 input 摘要严格同步变动；
+  * **仅在 Hook 托管块添加 `provenance` 字典**，不影响其他纪律文档（如 `CODING_STANDARDS.md` 的 input 仍保持标准无条件结构）。
+- **全量已有工具未采用配方时的省略规范（样例 C 契约）**：
+  * 当仓库所有门禁工具均为既有工具且用户未采用本配方时，Hook input **严格省略 `preset`、`presetSrc` 与 `provenance` 字段**；
+  * 同时 Hook 受管正文中**完全省略 `# lazypack:preset` 出处行**（不渲染占位符，不留空行）；
+  * 彻底避免未来配方版本更新时因配方哈希变动导致全既有工具仓库发生意外伪升级。
+
 #### 3.1.2 依赖状态摘要契约（条件依赖托管块）
 适用于具备条件登记行或条件指针行的托管块：
 - `docs/ARTIFACTS.md` 的 `artifacts-register` 托管块；
@@ -202,10 +270,27 @@
 - 计算方法：将 `skills/lazypack-setup/templates/` 目录下的所有文件按相对路径 ASCII 排序。
 - 对每个文件的“相对路径 + \0 + 文件正文 LF 规范化内容 + \0”进行串联。
 - 计算其 SHA-256，取前 16 位小写十六进制作为 `gen`。
+- **模板更新与首次升级传播说明**：
+  * 修改 `templates/pre-commit.sh`（例如新增 `# __PRESET_PROVENANCE_LINE__` 占位支持）会导致由 `templates/` 目录全量计算的全局 `gen` 发生变动；
+  * 重跑决策树在比对时，旧文件的 `header.input`（内含旧 `gen`）与当前计算的 `current_input`（内含新 `gen`）不一致；在正文未手改（`current_fp === header.fp`）的前提下，全仓所有已包含受管块的文件将触发一次性 `[UPGRADE]`；
+  * 经用户单次整体确认写盘后，全仓重新纳入新 `gen`，后续重读恢复稳定 `[NO-OP]`。
 
 ---
 
 ## 5. 变更检测与重跑契约 (Re-run Lifecycle)
+
+### 5.0 真实输入依赖与升级传播表 (Upgrade Propagation Matrix)
+
+由于 `commands` 是多数基础产物（如 `CODING_STANDARDS.md`）与登记册共享的字段，而 `preset`/`presetSrc`/`provenance` 仅属于 Hook，各变更场景的升级传播规律如下：
+
+| 变更场景 | `templates/` (`gen`) 变动 | `commands` 变动 | `presetSrc` 变动 | 目标文件决策树判定与升级传播行为 |
+|---|---|---|---|---|
+| **首次模板升级** | **变动** | 不变或变动 | 变动 | 全仓所有包含受管块的文件在未手改前提下触发一次性 `[UPGRADE]` |
+| **仅改配方正文说明**（命令串未变） | 不变 | **不变** | **变动** | **仅 `.githooks/pre-commit` 触发 `[UPGRADE]`**；全仓其余 5 类纪律文档保持稳定的 `[NO-OP]` |
+| **配方调整了被采纳的命令串**（如修改了 ruff 检查参数） | 不变 | **变动** | **变动** | `.githooks/pre-commit` 触发 `[UPGRADE]`；**所有包含 `commands` 的纪律文档在未手改前提下同步触发 `[UPGRADE]` 并展示命令 diff**（诚实反映命令共享传播事实） |
+| **配方未被采纳 / 全拒绝** | 不变 | 不变 | 不参与 | 全仓保持 `[NO-OP]`；Hook 不创建，不注入 `presetSrc` |
+
+> **升级状态机约束**：上表中“触发 UPGRADE”的前提是目标块处于未修改状态（`current_fp === header.fp`）。若用户曾手动修改过块内内容，决策树将准确判定为 `[DRIFT]` 或 `[CONFLICT]` 并展示 2-way diff，绝不强制覆盖。
 
 每次重跑时，先读取现有文件托管块，计算 `current_fp` 与 `current_input`，按以下决策树判断状态：
 
@@ -270,20 +355,97 @@
   3. **不重复添加（幂等追加）**：若 Section 3 表格已存在该去重键，不重复写入行，保持原样。
   4. **人工行绝对保护**：用户手动登记的其他外部参考、探索设计行，setup 重跑时绝对不删除、不覆写、不重排，原有字节完全保护。
 
+### 5.6 Hook 托管块出处读回与重跑恢复契约 (Provenance Recovery on Re-run)
+当 setup 在已配置 Hook 的仓库中重新运行时，按以下契约严格执行出处读回与来源恢复：
+1. **优先读取受管 Hook 出处**：
+   - 检查 `.githooks/pre-commit`（或对应受管 Hook）的托管块，计算 `current_fp` 并与 `header.fp` 比对；
+   - 仅当标记完整且 `current_fp === header.fp` 时，解析正文头部的 `# lazypack:preset` 出处注释行；
+   - 逐项提取 `id`、`version` 以及各门禁槽位的 `<state>:<source>:<reason>` 三段式出处事实与槽位命令、状态。
+2. **格式核验与历史事实恢复**：
+   - 核验出处行语法符合规范后，完整恢复历史决策（采纳推荐 `wired:preset:recommended`、拒绝 `missing:preset:declined`、安装失败 `install-failed:preset:install-error` 等）；
+   - **严禁逆向篡改来源（No Regressive Reclassification）**：**绝对不得**因为当前运行环境中已检测到候选工具（例如 `ruff` 已存在于系统 PATH 或虚拟环境 `.venv/` 中），就将原 `<source>=preset` 槽位错误改标为 `existing:pre-existing`！工具因配方而安装在环境中，其门禁来源事实仍属于 `preset`。
+3. **手改防御与缺失出处处理**：
+   - 若正文字节被手改（`current_fp !== header.fp`）或出处行格式非法：**坚决不猜测出处**，触发 `[DRIFT]` 或 `[CONFLICT]`，保留当前现状并展示 diff 由人工裁决；
+   - 若 Hook 包含有效托管块但**完全无 `# lazypack:preset` 出处行**（如遗留旧版 setup 生成或通用无配方 Hook）：将其中的门禁命令统一按通用既有命令处理（`source=existing`, `reason=pre-existing`）。
+4. **未变重跑稳定性 (Stable NO-OP)**：
+   - 若恢复的出处与命令与当前环境完全一致，重新计算得到的 `current_input === header.input`；
+   - 此时全流程判定为稳定 `[NO-OP]`：**不重复向用户报价、不重复发起依赖安装、不重复执行基线校验、不向磁盘写入任何文件（0 磁盘写入）**。
+5. **退出后再次运行行为**：
+   - 若此前已执行配方退出，Hook 中的出处行已移除；环境中遗留的工具**不代表用户重新接受了配方**；
+   - 再次 setup 探测到这些工具时，将其列为未接线工具，绝不自动接线回配方，必须由用户在澄清交互中做出显式选择。
+
 ---
 
 ## 6. 精确写入与恢复契约 (PRECISE + REPORT)
 
-1. **无关脏工作区不阻塞 (PRECISE)**：
-   - 检查目标路径集合 `T` 是否存在已暂存或未暂存修改。
-   - 若非目标文件有改动，直接忽略，不阻塞流程。
-   - 若目标路径存在未纳入托管的改动，在整体确认清单中明确提示用户，不得静默覆盖。
+### 6.1 三态快照生命周期契约 (Tri-State Snapshot Lifecycle)
+为确保写盘与回退过程不发生数据丢失与覆盖冲突，执行会话采用三态快照模型：
+- **$S_{\text{pre}}$（写前基线）**：
+  * 在当前可用执行会话内、对目标路径执行任何修改前采样保存；
+  * 记录目标文件的存在性、完整原始字节内容以及本地 Git 配置原值（`git config --local --get core.hooksPath`）；
+  * 仅保存在当前执行会话的内存/受控临时会话区中，不增加持久外部数据库。**若失去原字节记录，绝不执行猜测性自动恢复**。
+- **$S_{\text{agent}}$（写后事实）**：
+  * 代理每次执行直接写盘或委托外部命令（如包管理器批量安装）后，立即从磁盘实际读回的真实状态；
+  * 真实记录包括部分写入、命令中断或依赖失败时的环境残留，严禁将未确认的预估状态当作写后事实。
+- **$S_{\text{curr}}$（恢复时现状）**：
+  * 当需要执行回退或恢复时，从目标磁盘与 Git 配置读取的当前事实。
+  * 仅当 $S_{\text{curr}} == S_{\text{agent}}$（确认自代理写入后用户未作二次手工修改）时，才允许自动写回 $S_{\text{pre}}$。
 
+### 6.2 升级既有块的完整字节还原 (Full Block Byte Restoration)
+- 会话内回退已升级的既有托管块时，**必须还原完整的旧块字节 $S_{\text{pre\_block}}$**；
+- 完整旧块字节必须包括：旧块的起始标记行（含历史 `src`/`gen`/`input`/`fp` 元数据）、旧块正文逐字节内容、结束标记行以及文件原生换行符（CRLF/LF）；
+- **坚决禁止“仅换正文却沿用新标记头”的伪恢复**，彻底杜绝元数据与正文脱节导致的假升级或假漂移。
+
+### 6.3 干净依赖文件的字节直接写回与残留报告
+- 会话内回退依赖清单与锁文件（如 `pyproject.toml`, `uv.lock`）时，放弃使用逆向命令（如 `uv remove`）；
+- 在核验 $S_{\text{curr}} == S_{\text{agent}}$ 且写前基线已知的前提下，**直接将写盘前保存的 $S_{\text{pre}}$ 原始字节文件写回磁盘**；
+- 若原本不存在新文件（如新建的 `uv.lock`），在一致性保护下安全删除；
+- 若批量安装失败导致虚拟环境（`.venv/`）存在构建缓存或残留，在完成报告中如实列出残留路径供人工排查，**不执行激进的自动深度删除**。
+
+### 6.4 Git 本地配置 `core.hooksPath` 防覆盖恢复
+- 恢复前执行 `git config --local --get core.hooksPath` 读取当前配置值；
+- 仅当当前值严格等于代理写入值时，才允许写回 $S_{\text{pre}}$ 原值或执行 unset；
+- 若当前值已被用户手动修改，**坚决不覆盖改写用户新值**。
+
+### 6.5 退出配方的生命周期预检与所有权保护 (Lifecycle Pre-check)
+当用户选择退出配方或重置门禁时，严格执行以下生命周期预检：
+1. **标记与指纹核验**：
+   - 检查目标 Hook 脚本中的托管块标记完整性，计算 `current_fp`；
+2. **手改防御与版本/命令不匹配阻断**：
+   - 若检测到托管块标记残缺（`[BROKEN]`），或当前正文字节指纹不匹配（`current_fp !== header.fp`，即存在手工修改的 `[DRIFT]` 或 `[CONFLICT]`，例如用户手动修改了 `TYPE_CMD` 但未修改出处行）；
+   - **绝对禁止依据出处行自动删除或重置任何命令！**
+   - **版本与命令不匹配防御**：若来源对应旧配方版本（如出处 `version` 与当前配方不一致），或者槽位命令字面量不匹配当前推荐串且无法确定安全逆向映射：
+     - **整个自动退出分支必须立即停止**；
+     - 完整保留现有命令、`# lazypack:preset` 出处注释行和配方 input 字段，向用户报告未解决项由人工裁决；
+     - **坚决禁止无条件删除出处而残留无主命令**；
+   - 立即终止自动退出流程，向用户展示当前内容与推荐模板的 2-way diff，由人工进行安全清理。
+3. **安全清理执行范围与重算**：
+   - 仅当 `current_fp === header.fp` 且来源有效可确定安全退出时，才允许自动清理；
+   - 自动清理**仅重置 `<source>=preset` 且命令字符串完全匹配配方推荐串的槽位**为 `missing`（清除命令字面量）；
+   - 从正文头部移除 `# lazypack:preset` 出处注释行，从 `input` 中移除配方字段（`preset`, `presetSrc`, `provenance`）；
+   - **重新计算 Hook 托管块的 `fp` 与 `input`** 写回磁盘；
+   - 任何 `<source>=existing` 的命令槽位必须 **100% 保持保留**。
+4. **整文件物理删除的三重严格约束与混合 Hook 保护**：
+   - 整文件物理删除（`rm .githooks/pre-commit`）必须**同时满足三个严格条件**：
+     ① **所有权可证明**：Hook 文件 100% 属于 setup 全新创建（无外部历史）；
+     ② **无块外保留内容**：托管块外部完全无用户有效内容（无自定义 shebang、前置/后置逻辑或注释）；
+     ③ **无任何 existing 或其他须保留槽位**：清理后所有门禁槽位均为 `missing` 或 `n/a`，没有任何保留的 `existing` 命令或其他活跃门禁；
+   - **混合 Hook 保护**：若 Hook 中包含任何 `<source>=existing` 的槽位（或其他非配方保留命令），即使该 Hook 原本由 setup 新建且块外无内容，也**绝对严禁物理删除文件**！只能清理配方槽位与出处行，保留 existing 命令及其可调用入口与执行权限。
+5. **纪律文档与共享命令后续更新说明**：
+   - 退出配方后，若全仓其他纪律文档（如 `CODING_STANDARDS.md`, `CLAUDE.md`, `AGENTS.md`）仍予保留，必须向用户明确说明：下次这些文档中共享命令（shared commands）或配置发生变动时，将按正常决策树走整体更新确认流程，**绝不宣称全仓永久不变或永远 NO-OP**。
+6. **退出后再次运行 setup 的行为契约**：
+   - 退出配方后，宿主环境或 `.venv/` 中遗留的候选工具（如 `ruff`, `ty`, `pytest`）**不代表用户重新接受了配方**；
+   - 当用户再次运行 setup 时，探测阶段识别到工具已存在，但**绝不得自动安装或自动接线回配方**；必须将其作为未接线的环境既有工具提示用户，只有用户在澄清交互中做出显式选择后，才可重新接线。
+
+### 6.6 无关脏工作区与禁止全局操作
+1. **无关脏工作区不阻塞 (PRECISE)**：
+   - 检查目标路径集合 `T` 是否存在已暂存或未暂存修改；
+   - 若非目标文件有改动，直接忽略，不阻塞流程；
+   - 若目标路径存在未纳入托管的改动，在整体确认清单中明确提示用户，不得静默覆盖。
 2. **禁止全局操作**：
    - 严禁执行 `git reset --hard`、`git clean` 或通配符 `git checkout`。
-
 3. **中断恢复报告 (REPORT)**：
-   - 若写入过程中断，逐文件输出状态：`complete`（已写完）、`partial`（部分写入/残缺）、`missing`（未写入）。
-   - 新建文件：提供精确删除命令清单（`rm <file>`）。
-   - 既有修改文件：提供仅针对标记块范围的行级恢复建议，严禁抹除用户后续在块外添加的内容。
+   - 若写入过程中断，逐文件输出状态：`complete`（已写完）、`partial`（部分写入/残缺）、`missing`（未写入）；
+   - 新建文件：提供精确删除命令清单（`rm <file>`）；
+   - 既有修改文件：提供仅针对标记块范围的行级恢复建议，严禁抹除用户后续在块外添加的内容；
    - 本地配置（`core.hooksPath`）、权限位与依赖项变更单独列出恢复说明。
