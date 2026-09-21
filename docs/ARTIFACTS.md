@@ -77,3 +77,5 @@
 2026-09-20（发布基线收口）：工作区仍有未跟踪目录 `docs/reviews/2026-09-07-lazypack-harvest/`。目录内仅有主持 README 与三份第一轮提示词，`participants/` 为空，讨论未闭环。按固定层 §4.3 不把它视为现行 harvest 规格或 0.3.0 依据；本基线三个提交不收录、不删除。现行 harvest 入口仍是已跟踪的 `skills/lazypack-harvest/SKILL.md`。
 
 2026-09-21（发布基线加固）：干净 Git 树物化后不能依赖上述未跟踪目录。Section 3 将该路径改为非链接叙事，避免 `git archive` 扫描把工作区副本误当成仓内入口。工作区仍保留该目录，仍不入库。本地受控迁移引擎已实现，Windows/AGY 沙箱已验证；外部目标仓生产迁移、跨宿主、大型旧仓、全局安装与发布仍为 UNPROVEN。
+
+2026-09-21（#3）：`templates/RELEASE.md` 的 `release-discipline` 托管块改为只含固定发版纪律；「项目打包与发布」播种在 end 标记之后。setup 重跑按既有 §5.3 不覆盖块外。固定层条文未改。验收限于本机 Windows 契约沙箱（按 managed-blocks 算法模拟首次编译 / NO-OP / 晋升保护 / UPGRADE），不是完整 `/lazypack-setup` 访谈，也不代表跨宿主生产验证。
