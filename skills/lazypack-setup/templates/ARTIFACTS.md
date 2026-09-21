@@ -1,17 +1,17 @@
-<!-- lazypack:start block=artifacts-register src=DECISIONS.md@0.2.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
+<!-- lazypack:start block=artifacts-register src=DECISIONS.md@0.3.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
 # 产物登记册 (ARTIFACTS)
 
-> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.2.0（依据 lazypack-setup 内置快照编译，来源内容标识: 2b38b1b0543489226eda5e3bd2bf411c58c1c331；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§4。
+> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.3.0（依据 lazypack-setup 内置快照编译，来源内容标识: 1c78a216d27b82666c9724701f858f2bafe2b10d；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§4。
 > 原则：一个东西只有一个家；能推导出来的不手写；有生命周期的写清何时死。
 
 ## 1. 产物状态词与流转规则
 
 | 状态词 | 含义 | 流转约束 |
 |---|---|---|
-| `current` | 当前唯一的现行有效基准 | **在同一类别产物中全局唯一**。新产物标为 `current` 时，旧产物必须降级为 `superseded` |
+| `current` | 当前唯一的现行有效基准 | **在同一主题/用途的权威范围内全局唯一**（不同 feature 规格或多项有效 ADR 可各自主管对应主题的 current）。经明确确认存在替代关系的新产物标为 `current` 时，被替代旧产物方可标记为 `superseded` 并互指；未确认替代关系的不自动假定废弃 |
 | `reference` | 外部素材、外部规范、参考设计 | 永久作为参照依据 |
 | `exploration` | 探索方案、对比调研 | 仅供比对，不作为实现基准 |
-| `superseded` | 已废弃或被取代的旧产物 | `git mv` 归档至 `docs/archive/`，登记行同步更新，互指新产物 |
+| `superseded` | 已废弃或被取代的旧产物 | 状态变化本身不构成文件移动或删除授权；按材料类型、保留目的、有效引用及四步关卡（确认替代、核查引用、安全封存、登记更新）处理；setup 首期保持原位保留（preserve-existing），不执行自动 `git mv` 物理迁移；登记行同步更新互指新产物 |
 | `pipeline` | 由源文件生成的派生品（图标、数据） | 登记源与生成器命令；严禁手工修改派生文件，重新运行 pipeline 生成 |
 | `wip` | 正在编写或设计中的未决草案 | 完成后裁决为 `current` 或归档 |
 
@@ -28,10 +28,13 @@ __RELEASE_REGISTER_ROW__
 __ROLES_REGISTER_ROW__
 <!-- lazypack:end block=artifacts-register -->
 
-## 3. 项目自选材料登记（非受管协作区）
+## 3. 项目自选材料与存量文档登记（非受管协作区）
 
-> 本区由团队与 Agent 协同维护，不设强制覆盖托管标记。可在下方按需登记探索性想法池、访谈纪要归档或外部参考素材（setup 重跑保持本区字节不变）：
+> 本区由团队与 Agent 协同维护，位于受管托管区外部。遵循保留既有模式（preserve-existing），登记已存在各逻辑区域的实际原件、探索性想法池、访谈纪要归档或外部参考素材。八大逻辑区域（方向、需求与验收、设计与决策、规则与术语、工作与进度、现状与使用说明、验证与观察、来源材料）为逻辑导航，不强制预建八个物理目录。支持 path#anchor 细粒度定位；setup 重跑保持本区已有手工排版与字节不变：
 
-| 产物相对路径 | 类别 | 状态 | 来源说明 |
-|---|---|---|---|
-<!-- 示例：| docs/ideas/inbox.md | exploration | exploration | 规划研讨碎片想法池，非现行基准 | -->
+| 产物相对路径 / 锚点 | 逻辑区域 | 状态 | 维护者 / 更新触发 | 来源 / 替代关系 / 依据说明 |
+|---|---|---|---|---|
+<!-- 示例：| README.md#快速开始 | 现状与使用说明 | current | 维护者与各角色 / 上手流程或命令变化时 | 根目录快速上手指引 | -->
+<!-- 示例：| specs/pay-v2.md | 需求与验收 | current | 规划者 / 支付网关变更时 | 现行支付网关重构规格；supersedes specs/pay-v1.md | -->
+<!-- 示例：| specs/pay-v1.md | 需求与验收 | superseded | 规划者 / 历史保留 | 初版支付规格；superseded by specs/pay-v2.md；原位保留 | -->
+<!-- 示例：| docs/ideas/inbox.md | 来源材料 | exploration | 团队与规划者 / 讨论产生新想法时 | 规划研讨碎片想法池，非现行基准 | -->

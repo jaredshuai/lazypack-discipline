@@ -1,6 +1,6 @@
 # 固定层条文
 
-版本：0.2.0（2026-09-05 lazy setup 三轮讨论通过）
+版本：0.3.0（2026-09-10 文档归属正式采纳三轮讨论通过并经维护者裁定）
 状态：生效。改动任何一条须走 §9 讨论章程，并按 SemVer 升本文件版本号。
 
 本文件是 lazypack-discipline 固定层的**唯一事实源**。项目层文件（`AGENTS.md`、`CODING_STANDARDS.md`、`RELEASE.md` 等）由 `/lazypack-setup` 从本文件编译得出，出现分歧以本文件为准。
@@ -9,16 +9,16 @@
 
 ## 1. 地基与边界
 
-1.1 地基是 Matt Pocock 的 skills。本包只补它没管的部分，不替代、不并行复述。
+1.1 地基是 Matt Pocock 的 skills。本包只补它没管的部分，不替代、不并行复述。项目层用 `docs/agents/issue-tracker.md` 声明实际工单位置；使用非上游默认位置前，须核查开票、取票与写回（状态、结论、map 或引用）各环节消费者是否遵从该指引；存在写死路径时记为受限，不能只因指针已改就宣称适配完成；不侵入修改全局安装副本。
 1.2 `/understand-codebase` 是唯一的代码理解入口（依赖 codegraph / codebase-memory / fast-context 三个 MCP）。
 1.3 只维护一份常驻规则文件（`AGENTS.md` 或 `CLAUDE.md`，取已存在者），不平行写 `.cursor/rules` 复述同一批纪律。
-1.4 每条纪律只活在一处。同一句话不得同时出现在 `AGENTS.md`、`CONTEXT.md`、演变史里。
+1.4 每条纪律只活在一处。同一句话不得同时出现在 `AGENTS.md`、`CONTEXT.md`、演变史里。文档体系采用八大通用逻辑区域（方向、需求与验收、设计与决策、规则与术语、工作与进度、现状与使用说明、验证与观察、来源材料）统一导航，具体物理路径由项目层 `docs/ARTIFACTS.md` 登记；八区是逻辑认知边界，不强制所有项目均预建八个独立目录。
 
 ## 2. 两层结构与编译
 
 2.1 **固定层**：本文件全部条文。
 2.2 **项目层**：平台怎么打包上传、lint/format/类型工具、验证命令、错误码是否启用。
-2.3 **编译器** `/lazypack-setup`：在 `setup-matt-pocock-skills` 之后运行，问项目层问题，写出 `AGENTS.md` 指针、`CODING_STANDARDS.md`、`RELEASE.md`、`docs/ARTIFACTS.md` 骨架、`docs/agents/roles.md`、提交前 hook。能接到已有 format/lint/type/test 命令则写出提交前 hook；否则标明未接线或不适用及原因，不得宣称门禁已生效。
+2.3 **编译器** `/lazypack-setup`：在 `setup-matt-pocock-skills` 之后运行，问项目层问题，写出 `AGENTS.md`（或 `CLAUDE.md`）指针、`CODING_STANDARDS.md`、`RELEASE.md`、`docs/ARTIFACTS.md` 骨架、`docs/agents/roles.md`、提交前 hook。写出 `docs/ARTIFACTS.md` 时须读取并登记 `docs/agents/issue-tracker.md`，并在其非受管协作区（Section 3）登记已存在的各逻辑区域实际原件，不改动 Section 2 受管槽；无原件不虚构登记；登记册处于 PAUSE 或损坏时只报告待裁、严禁写穿。默认保留既有合理位置（保留模式），并提供迁至标准推荐路径的治理选项（迁移模式）。能接到已有 format/lint/type/test 命令则写出提交前 hook；否则标明未接线或不适用及原因，不得宣称门禁已生效。
 2.4 项目层默认值可由多 AI 头脑风暴扩展（含技术栈选型），不必开 §9 会议。
 
 ## 3. 角色
@@ -32,11 +32,11 @@
 | 执行者 | 一张票 | 提交（含 diff 涉及的文档行） | 代码、测试、与 diff 直接相关的文档行 |
 | 审查者 | diff + 票 + 编码标准 | 通过 / 退回清单 | 只写审查意见 |
 | 书记员 | 一段时间的提交 + 全部文档 | 文档修补提交 | `docs/`、`CONTEXT.md`、`CHANGELOG.md`；不碰代码 |
-| 清道夫 | 已关票、已合分支、登记册 | 删 `.scratch/`、归档废弃产物、清死分支 | 只删和移动，不新增 |
+| 清道夫 | 已关票、已合分支、登记册 | 回收临时现场与缓存、归档废弃产物、清死分支 | 仅在通过四步清理关卡后删除或移动，不新增 |
 
 3.2 「允许写」列是防撞车边界：两个角色不得写同一类文件。
 3.3 规划者长驻 `main`。同一设备同一时刻只有一个执行者写代码，直接在 `main` 提交。跨设备协作靠 issue 认领人（assignee），不靠文件系统。少用 worktree。
-3.4 书记员在每张票关闭后扫一遍；清道夫在每次发版前扫一遍。事件驱动，不用定时器。
+3.4 书记员在每张票关闭后扫一遍；清道夫在发版前或按需扫一遍。事件驱动，不用定时器。清道夫执行清理时必须严格遵守**四步清理关卡**：①排查是否在登记册、工单配置或 `.out-of-scope/` 中声明为权威原件或持久来源；命中登记或权威原件者不得当作可丢弃缓存自动清除，是否归档或删除仍依保留目的、有效引用与特定授权判断；②核验内容是否处于活跃状态（读取项目 `issue-tracker.md` 与 `triage-labels.md` 实际声明的状态词，不写死状态字符串；状态无法确定时报告未知并暂停自动清理，不改写原状态，不擅自视为活跃）；③按保留目的与复现条件鉴别是否为可丢弃缓存（严禁仅凭文件名或目录名推定，严禁将 specs、issues、out-of-scope 记录视为临时缓存）；④存在争议或未分类文件原地保留并列清单请用户裁定，裁决前不移动、不归档。严禁仅凭目录名或关票事件一键物理清空。
 3.5 角色 → skill 映射写在仓库 `docs/agents/roles.md`，换 skill 只改这张表。立项时映射：
 
 | 角色 | 当前 skill |
@@ -46,7 +46,7 @@
 | 执行者 | `implement`（内部 `tdd`） |
 | 审查者 | `code-review` |
 | 书记员 | `retro` 的文档部分（暂无专用 skill） |
-| 清道夫 | 暂无 skill，靠条文 |
+| 清道夫 | 暂无 skill，靠条文与四步清理关卡 |
 
 ## 4. 什么放哪
 
@@ -58,7 +58,8 @@
 | 难逆转的决定 | `docs/adr/NNN-*.md` | 不删；被取代改「已取代」并指向新 ADR |
 | 演变史（为什么变） | `docs/HISTORY.md`，只记转向 | 不删 |
 | 设计稿 / 参考图 / 外部素材 | `docs/reference/` + `docs/ARTIFACTS.md` 登记状态 | 废弃 → `git mv` 至 `docs/archive/`，登记行同步 |
-| 规格、票的草稿 | `.scratch/<feature>/` | 票关闭即删整个目录 |
+| 需求、工单与规格 | 以 `docs/agents/issue-tracker.md` 声明的实际位置为准（标准推荐 `docs/work/<feature>/` 须按 1.1 核查消费者；未核过或保留模式维持既有声明路径） | 按保留目的与有效引用判断；关票不自动构成删除授权 |
+| 临时现场与运行时缓存 | `.scratch/<feature>/` | 票关闭且验证交付后，经四步清理关卡安全回收 |
 | 原型代码 | `prototype/<名>` 分支 | 留证，不合回 `main` |
 | 研究笔记 | `docs/research/` | 结论进 ADR 或 CONTEXT 后冻结 |
 | 编码标准 | `CODING_STANDARDS.md`，由审查者执行 | 工具能查的条目移进 lint 配置后删 |
@@ -68,8 +69,9 @@
 | 交接文档 | 系统临时目录 | 用完即弃 |
 | `AGENTS.md` | 只放指针 + 每会话必踩的几条 | 超过一屏往下挪 |
 
-4.2 产物登记册状态词：`current` / `reference` / `exploration` / `superseded` / `pipeline` / `wip`。`current` 在同一类里唯一。
+4.2 产物登记册状态词：`current` / `reference` / `exploration` / `superseded` / `pipeline` / `wip`。`current` 在同一类里唯一。物理位置移动不改变状态词与内容效力；工单关闭仅改变其闭环状态，不等于删除授权。
 4.3 册上查不到的产物视为未登记：先问维护者，不按文件名或日期猜新旧。
+4.4 存量项目的非标路径在初始化时默认保留并在登记册 Section 3 登记；登记册处于 PAUSE、损坏或未托管时只报告待裁、不写穿。治理迁移选项触发时，AI 须整体输出源路径至目标路径的映射清单、链接与附件影响评估，经用户整体审阅确认后执行，不逐文件打扰。工单类迁移另受 1.1 消费者核查约束；未通过前保持保留模式。
 
 ## 5. 提交、版本、发版
 
@@ -77,7 +79,7 @@
 5.2 提交正文：Google CL 描述法——第一行独立说清「改了什么」；正文说「为什么」、有哪些没做好的地方、关联 bug 号。
 5.3 版本号：SemVer 2.0.0。
 5.4 提交 → 版本：`!` 或 `BREAKING CHANGE` → major；`feat` → minor；`fix` / `perf` → patch；其余不触发发版。
-5.5 变更记录：Keep a Changelog 1.1.0 格式，由提交生成，不手写。
+5.5 变更记录：Keep a Changelog 1.1.0 格式，由提交生成，不手写。CHANGELOG 是由版本发布提交生成的对外变更记录，不充当完整验收台账；验收记录留在对应工单或规格中。
 5.6 后端错误码：`google.rpc.Code` 字符串枚举，不用数字（项目层按需启用）。
 5.7 打包上传属项目层（微信开发者工具 / DevEco / npm publish 等），写在 `RELEASE.md` 平台段。每次发版打 git 标签。
 

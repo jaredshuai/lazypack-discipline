@@ -1,0 +1,170 @@
+# 正式采纳 R3：冻结条文选项
+
+这些文字逐字提取自各席 R2 clauses.md；仅去外层代码围栏/引用符，统一换行，不改正文。相同正文合并。选项字母按提取顺序，不代表推荐或排名。
+
+## 1.1
+
+### A — agy / qodercli
+
+正文SHA256：5b59046cefe17a453fff101fa3d1f0d4e1980b085676e1f290d55ad05df58f99
+
+```markdown
+1.1 地基是 Matt Pocock 的 skills。本包只补它没管的部分，不替代、不并行复述。项目层用 `docs/agents/issue-tracker.md` 声明实际工单位置；使用非上游默认位置前，须核查开票、取票与更新消费者是否遵从该指引；存在写死路径时记为受限，不能只因指针已改就宣称适配完成；不侵入修改全局安装副本。
+```
+
+### B — cursor-grok
+
+正文SHA256：3076dc612891bd1c1a050334eea47304133629e8c4529546b7946eda59e08ecc
+
+```markdown
+1.1 地基是 Matt Pocock 的 skills。本包只补它没管的部分，不替代、不并行复述。项目层用 `docs/agents/issue-tracker.md` 声明实际工单位置；使用非上游默认位置前，须核查开票、取票与写回（状态、结论、map 或引用）各环节消费者是否遵从该指引；存在写死路径时记为受限，不能只因指针已改就宣称适配完成；不侵入修改全局安装副本。
+```
+
+## 1.4
+
+### A — agy / cursor-grok / qodercli
+
+正文SHA256：39f5430218b5ace297b307f69d3fd6a9e5ccb681d3d2822439d18ae9fbd79487
+
+```markdown
+1.4 每条纪律只活在一处。同一句话不得同时出现在 `AGENTS.md`、`CONTEXT.md`、演变史里。文档体系采用八大通用逻辑区域（方向、需求与验收、设计与决策、规则与术语、工作与进度、现状与使用说明、验证与观察、来源材料）统一导航，具体物理路径由项目层 `docs/ARTIFACTS.md` 登记；八区是逻辑认知边界，不强制所有项目均预建八个独立目录。
+```
+
+## 2.3
+
+### A — agy
+
+正文SHA256：78b44b7b73a4e54f69034487499463ef3be0cb408ed01b093a6cc9fdfff06447
+
+```markdown
+2.3 **编译器** `/lazypack-setup`：在 `setup-matt-pocock-skills` 之后运行，问项目层问题，写出 `AGENTS.md`（或 `CLAUDE.md`）指针、`CODING_STANDARDS.md`、`RELEASE.md`、`docs/ARTIFACTS.md` 骨架、`docs/agents/roles.md`、提交前 hook。写出 `docs/ARTIFACTS.md` 时须读取并登记 `docs/agents/issue-tracker.md`，并在其非受管协作区（Section 3）登记已存在的各逻辑区域实际原件，不改动 Section 2 受管槽；无原件不虚构登记；登记册处于 PAUSE 或损坏时只报告待裁、严禁写穿。默认保留既有合理位置（保留模式），并提供迁至标准推荐路径的治理选项（迁移模式）。能接到已有 format/lint/type/test 命令则写出提交前 hook；否则标明未接线或不适用及原因，不得宣称门禁已生效。
+```
+
+### B — cursor-grok
+
+正文SHA256：473534d56e1ff7ada393c21f960c198002e54db7f39196b998380b0971b4b611
+
+```markdown
+2.3 **编译器** `/lazypack-setup`：在 `setup-matt-pocock-skills` 之后运行，问项目层问题，写出 `AGENTS.md`（或 `CLAUDE.md`）指针、`CODING_STANDARDS.md`、`RELEASE.md`、`docs/ARTIFACTS.md` 骨架、`docs/agents/roles.md`、提交前 hook。写出或更新 `docs/ARTIFACTS.md` 前须确认 `docs/agents/issue-tracker.md` 已存在且有效；setup 不创建该文件；前置双检失败则零写入，不得用任何目录回退绕过。通过后读取该文件，并在登记册非受管协作区（Section 3）登记各逻辑区域已存在的实际物理原件映射，不改 Section 2 四槽；无原件不虚构登记行；登记册处于 PAUSE、BROKEN 或未托管时本轮不写穿，仅报告待裁。默认保留既有合理位置（保留模式），并提供迁至已按 1.1 核过的推荐路径的治理选项（迁移模式）。能接到已有 format/lint/type/test 命令则写出提交前 hook；否则标明未接线或不适用及原因，不得宣称门禁已生效。
+```
+
+### C — qodercli
+
+正文SHA256：4b9a4649947b5cd8bc3fbc74c4a5a52de87d6369fe250d9517d72be68e272696
+
+```markdown
+2.3 **编译器** `/lazypack-setup`：在 `setup-matt-pocock-skills` 之后运行，问项目层问题，写出 `AGENTS.md`（或 `CLAUDE.md`）指针、`CODING_STANDARDS.md`、`RELEASE.md`、`docs/ARTIFACTS.md` 骨架、`docs/agents/roles.md`、提交前 hook。写出 `docs/ARTIFACTS.md` 时须读取并登记 `docs/agents/issue-tracker.md`，并在其非受管协作区登记各逻辑区域的实际物理原件映射，不改受管登记槽；无原件不虚构登记行。默认保留既有合理位置（保留模式），并提供迁至标准推荐路径的治理选项（迁移模式）。能接到已有 format/lint/type/test 命令则写出提交前 hook；否则标明未接线或不适用及原因，不得宣称门禁已生效。
+```
+
+## 3.1-row
+
+### A — agy / cursor-grok / qodercli
+
+正文SHA256：5024a6f3c92a516db3b73bab2a1d2183874dfc7e44dac594501026c00417d9d2
+
+```markdown
+| 清道夫 | 已关票、已合分支、登记册 | 回收临时现场与缓存、归档废弃产物、清死分支 | 仅在通过四步清理关卡后删除或移动，不新增 |
+```
+
+## 3.4
+
+### A — agy / cursor-grok / qodercli
+
+正文SHA256：1f77ef562c93a8936560df766ca06f6cbfb70db750f31ca60b88f30fed44d3ad
+
+```markdown
+3.4 书记员在每张票关闭后扫一遍；清道夫在发版前或按需扫一遍。事件驱动，不用定时器。清道夫执行清理时必须严格遵守**四步清理关卡**：①排查是否在登记册、工单配置或 `.out-of-scope/` 中声明为权威原件或持久来源；命中登记或权威原件者不得当作可丢弃缓存自动清除，是否归档或删除仍依保留目的、有效引用与特定授权判断；②核验内容是否处于活跃状态（读取项目 `issue-tracker.md` 与 `triage-labels.md` 实际声明的状态词，不写死状态字符串；状态无法确定时报告未知并暂停自动清理，不改写原状态，不擅自视为活跃）；③按保留目的与复现条件鉴别是否为可丢弃缓存（严禁仅凭文件名或目录名推定，严禁将 specs、issues、out-of-scope 记录视为临时缓存）；④存在争议或未分类文件原地保留并列清单请用户裁定，裁决前不移动、不归档。严禁仅凭目录名或关票事件一键物理清空。
+```
+
+## 3.5-row
+
+### A — agy / cursor-grok / qodercli
+
+正文SHA256：972d75e16599c5a3539361314eaecab1ab8357adc06c092e764b748bc057f1b9
+
+```markdown
+| 清道夫 | 暂无 skill，靠条文与四步清理关卡 |
+```
+
+## 4.1-durable
+
+### A — agy
+
+正文SHA256：83084b5bbfc10bc252470b1252dee7b442b93225e1c4e21c0a804b37108fd8d5
+
+```markdown
+| 需求、工单与规格 | 以 `docs/agents/issue-tracker.md` 声明的实际位置为准（标准推荐 `docs/work/<feature>/` 须按 1.1 核查消费者；未核过或保留模式维持既有声明路径） | 按保留目的与有效引用判断；关票不自动构成删除授权 |
+```
+
+### B — cursor-grok
+
+正文SHA256：ac63d70e2d17413ea79f8203ecb59b3856b913f663b799aa28c84182bdabf36a
+
+```markdown
+| 需求、工单与规格 | 以已存在且有效的 `docs/agents/issue-tracker.md` 声明的实际位置为准。无该文件或无效时前置双检失败、零写入，不得回退 `.scratch/` 绕过双检，setup 不创建该文件。文件未声明非上游路径时，沿用该文件已写明的地基本地约定。`docs/work/<feature>/` 为需按 1.1 核查后采用的推荐耐久落点；核查未通过前不得当作已生效的家，开票/取票/写回继续在声明位置进行 | 按保留目的与引用判断；关票不自动构成删除授权 |
+```
+
+### C — qodercli
+
+正文SHA256：637992183d4e4e3a58a2ac10b1a3c29e8726334f5e10d6215c730d01c752ef92
+
+```markdown
+| 需求、工单与规格 | 以 `docs/agents/issue-tracker.md` 声明的实际位置为准；标准推荐 `docs/work/<feature>/`（须按 §1.1 核查消费者适配后方可采用）；保留模式见 `issue-tracker.md` | 按保留目的与有效引用判断；关票不自动构成删除授权 |
+```
+
+## 4.1-temp
+
+### A — agy / cursor-grok / qodercli
+
+正文SHA256：e67115fdc79f9ea4d1b501967969bd6b5aa5fb4e13d0817b998e5a5c39c8fda0
+
+```markdown
+| 临时现场与运行时缓存 | `.scratch/<feature>/` | 票关闭且验证交付后，经四步清理关卡安全回收 |
+```
+
+## 4.2
+
+### A — agy / cursor-grok / qodercli
+
+正文SHA256：e21648c9ba451eb865838e1278d7d3f4bc743f3cd1e6d234471deca5f9199b6f
+
+```markdown
+4.2 产物登记册状态词：`current` / `reference` / `exploration` / `superseded` / `pipeline` / `wip`。`current` 在同一类里唯一。物理位置移动不改变状态词与内容效力；工单关闭仅改变其闭环状态，不等于删除授权。
+```
+
+## 4.4
+
+### A — agy
+
+正文SHA256：a1f966f2fb3a99f0307363c78c55fd013a541ef0444b9d3775d62ae87eb5c3b5
+
+```markdown
+4.4 存量项目的非标路径在初始化时默认保留并在登记册 Section 3 登记；登记册处于 PAUSE、损坏或未托管时只报告待裁、不写穿。治理迁移选项触发时，AI 须整体输出源路径至目标路径的映射清单、链接与附件影响评估，经用户整体审阅确认后执行，不逐文件打扰。工单类迁移另受 1.1 消费者核查约束；未通过前保持保留模式。
+```
+
+### B — cursor-grok
+
+正文SHA256：86a6eb9dbbabe2cff2badbdd19f272b20c4ce65c8bc1b9e0bf977c5483346156
+
+```markdown
+4.4 存量项目的非标路径在初始化时默认保留；能安全写入登记册时，在 `docs/ARTIFACTS.md` Section 3 登记实际路径与章节。治理迁移选项触发时，AI 须整体输出源路径至目标路径的映射清单、链接与附件影响评估，经用户整体审阅确认后执行，不逐文件打扰。登记册处于 PAUSE、BROKEN 或未托管时只报告不写穿。工单类迁移另受 1.1 约束；未通过则保持保留模式。日常映射沿用 §3：书记员维护 `docs/`；执行者只改与当次 diff 直接相关的登记行；清道夫不新增登记。
+```
+
+### C — qodercli
+
+正文SHA256：1d8f550a1cc9e58abecf4b229f6658dcd762004e10a31941ddb9360d6a52b9ac
+
+```markdown
+4.4 存量项目的非标路径在初始化时默认保留并在登记册中登记；治理迁移选项触发时，AI 须整体输出源路径至目标路径的映射清单、链接与附件影响评估，经用户整体审阅确认后执行，不逐文件打扰。工单类迁移另受 §1.1 消费者核查约束。
+```
+
+## 5.5
+
+### A — agy / cursor-grok / qodercli
+
+正文SHA256：508c86266b8fecff143deb73c4d3c471fba6dcaf11a9f504f3d986272a8ddd03
+
+```markdown
+5.5 变更记录：Keep a Changelog 1.1.0 格式，由提交生成，不手写。CHANGELOG 是由版本发布提交生成的对外变更记录，不充当完整验收台账；验收记录留在对应工单或规格中。
+```
+

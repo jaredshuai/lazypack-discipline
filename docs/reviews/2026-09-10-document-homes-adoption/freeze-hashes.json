@@ -1,0 +1,11 @@
+{
+  "description": "原始输入与归档副本哈希记录（rawInputs 校验对象为临时会话目录中的原始输入；archivedReplicas 校验对象为本归档目录中的脱敏副本）",
+  "rawInputs": {
+    "ballot-texts.json": "732ea7b9acf8dfba87b684fc8b68ccb44d822e721f69e57460501ff124f5b4b2",
+    "ballot-texts.md": "85f1cdd150071d33b86b8a5f4c5d9bc532361bd10e3fd8a7f1513ee7f02ab790"
+  },
+  "archivedReplicas": {
+    "ballot-texts.json": "d31ffddf11b2257808ecab8ddc97943086890f978b6bc5e0625d6eff2f67e55f",
+    "ballot-texts.md": "85f1cdd150071d33b86b8a5f4c5d9bc532361bd10e3fd8a7f1513ee7f02ab790"
+  }
+}
