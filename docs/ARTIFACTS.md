@@ -16,6 +16,7 @@
 | 访谈的来源、背景、当时的意见 | [interviews/](interviews/) | 经授权保留的去敏整理稿；现行结论链接到权威正文，历史原文不改成今天的决定 |
 | 多 AI 提案、互评与主持结论 | [reviews/](reviews/) 按议题归档 | 讨论收束时登记具体入口与采纳状态；集合中的一份报告不自动获得现行权威 |
 | 跨 Agent 交付与核验的操作指引 | [agents/handoff-verification.md](agents/handoff-verification.md) | 交接机制变动时维护；每轮临时报告仍按固定层放系统临时目录 |
+| 本仓 §7.2 机器对子清单 | [agents/doc-pairs.md](agents/doc-pairs.md) | 对子增删或判定方法变化时由本轮执行者更新；检查脚本只实现清单，不复述 |
 | 术语、ADR、演变史、研究、规格草稿、参考素材、编码与发布规则 | [DECISIONS.md §4](DECISIONS.md) 已定义的位置 | 按已有分类执行；路径尚不存在时按任务需要创建，避免预先建空文档 |
 
 ## 2. 每轮如何执行
@@ -40,6 +41,8 @@
 | [../AGENTS.md](../AGENTS.md) | 本仓 AI 入口 | current | 本轮新建；只提供读取指针 |
 | [../README.md](../README.md) | 对外导航 | current | 仓库总入口；能力说明不代替验收 |
 | [agents/handoff-verification.md](agents/handoff-verification.md) | 给 agent 的按需说明 | current | 按固定层 §4.1 由 docs/ 根部规范迁移至 docs/agents/；同源核验流程基准保持唯一 |
+| [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层 §7.2 第一批对子（P1–P5、P8）。不是跨项目固定层 |
+| [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述对子。手动运行。未接 hook/CI。不宣称门禁已生效 |
 | [../skills/lazypack-setup/SKILL.md](../skills/lazypack-setup/SKILL.md) | setup 执行入口 | current | 以本仓磁盘正文为准；不代表所有宿主或目标仓实测通过 |
 | [../skills/lazypack-setup/references/document-routing.md](../skills/lazypack-setup/references/document-routing.md) | 文档路由规范 | current | S1 产物：既有文档 8 大知识区归属规范、原位保留登记与同主题判定；首期 preserve-existing 在当前 AGY/Windows 限定沙箱验收完成（见 §4）。Phase 2 受控迁移规约已合入本文件；通用生产迁移仍 UNPROVEN |
 | [../skills/lazypack-setup/scripts/doc_scanner.mjs](../skills/lazypack-setup/scripts/doc_scanner.mjs) | setup 执行辅助 | current | 有界 Markdown 扫描与引用图构建器。证据：Phase 2 主仓应用收尾与本仓只读 scan。已验证：当前 Windows/AGY 隔离沙箱与本仓只读扫描。不代表外部目标仓生产级自动迁移 |
@@ -81,3 +84,5 @@
 2026-09-21（#3）：`templates/RELEASE.md` 的 `release-discipline` 托管块改为只含固定发版纪律；「项目打包与发布」播种在 end 标记之后。setup 重跑按既有 §5.3 不覆盖块外。固定层条文未改。验收限于本机 Windows 契约沙箱（按 managed-blocks 算法模拟首次编译 / NO-OP / 晋升保护 / UPGRADE），不是完整 `/lazypack-setup` 访谈，也不代表跨宿主生产验证。
 
 2026-09-21（#4）：块外种子增补「本机试打、发版与版本标签」：本机试打不等于发版、不发版不打版本标签、标签由谁打、与 CI 的先后。固定层 §5.7 条文未改。验收限于本机 Windows 契约沙箱；#3 与 #4 之间已编译仓的块外旧种子按不覆盖原则保留、不会自动补上试打指引。不代表完整 setup 访谈或跨宿主生产验证。
+
+2026-09-21（#12）：新增本仓项目层对子清单 [agents/doc-pairs.md](agents/doc-pairs.md) 与只读检查脚本 [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs)（P1–P5、P8）。固定层条文未改。检查器可手动运行，未接线到 pre-commit / CI，不宣称门禁已生效。验收限于本机 Windows 工作区：首次全过、负例检出后恢复、运行前后 git status 一致。
