@@ -50,7 +50,7 @@
 | [interviews/2026-09-04-founding-interview.md](interviews/2026-09-04-founding-interview.md) | 立项来源 | reference | 历史去敏访谈，不覆盖现行愿景与纪律 |
 | [reviews/](reviews/) | 讨论材料集合入口 | reference | 子文档各自状态需要核实，不将整个目录认作实施基线 |
 | [reviews/2026-09-10-document-homes-adoption/](reviews/2026-09-10-document-homes-adoption/) | 讨论留档 | current | 2026-09-10 文档归属正式采纳三轮会议留档、表决与维护者裁定，0.3.0 生效依据 |
-| [reviews/2026-09-07-lazypack-harvest/](reviews/2026-09-07-lazypack-harvest/) | 讨论留档 | reference | 未完成的历史讨论材料（仅主持 README 与三份第一轮提示词，participants 为空）。不是现行 harvest 规范，不纳入本次三个原子提交的正式能力，不删除。现行入口仍是已跟踪的 skills/lazypack-harvest/SKILL.md |
+| `docs/reviews/2026-09-07-lazypack-harvest/`（工作区未跟踪，不在 Git 树） | 讨论留档 | reference | 未完成的历史讨论材料（仅主持 README 与三份第一轮提示词，participants 为空）。不是现行 harvest 规范，不纳入 Git 树、不删除工作区副本。现行入口仍是已跟踪的 skills/lazypack-harvest/SKILL.md |
 
 ## 4. 本次补齐的范围
 
@@ -75,3 +75,5 @@
 边界重申：本次验收确证的是文档归属识别与原位登记、基本确认/拒绝与保护、受管区和 Section 3 隔离、限定格式兼容、留存代表模式及 rawqa 三边界；证据严格限于对应 fixture 及当前宿主（AGY / Windows），不代表生产发布、全局安装、跨宿主适配或真实大型旧仓接入完成。本地 Helper 与规约已合入本仓工作区；外部目标仓通用自动化物理迁移与链接重写、跨宿主与大型旧仓接入仍未交付。沙箱验证不等于生产通用能力。
 
 2026-09-20（发布基线收口）：工作区仍有未跟踪目录 `docs/reviews/2026-09-07-lazypack-harvest/`。目录内仅有主持 README 与三份第一轮提示词，`participants/` 为空，讨论未闭环。按固定层 §4.3 不把它视为现行 harvest 规格或 0.3.0 依据；本基线三个提交不收录、不删除。现行 harvest 入口仍是已跟踪的 `skills/lazypack-harvest/SKILL.md`。
+
+2026-09-21（发布基线加固）：干净 Git 树物化后不能依赖上述未跟踪目录。Section 3 将该路径改为非链接叙事，避免 `git archive` 扫描把工作区副本误当成仓内入口。工作区仍保留该目录，仍不入库。本地受控迁移引擎已实现，Windows/AGY 沙箱已验证；外部目标仓生产迁移、跨宿主、大型旧仓、全局安装与发布仍为 UNPROVEN。
