@@ -41,7 +41,11 @@
 | [../README.md](../README.md) | 对外导航 | current | 仓库总入口；能力说明不代替验收 |
 | [agents/handoff-verification.md](agents/handoff-verification.md) | 给 agent 的按需说明 | current | 按固定层 §4.1 由 docs/ 根部规范迁移至 docs/agents/；同源核验流程基准保持唯一 |
 | [../skills/lazypack-setup/SKILL.md](../skills/lazypack-setup/SKILL.md) | setup 执行入口 | current | 以本仓磁盘正文为准；不代表所有宿主或目标仓实测通过 |
-| [../skills/lazypack-setup/references/document-routing.md](../skills/lazypack-setup/references/document-routing.md) | 文档路由规范 | current | S1 产物：既有文档 8 大知识区归属规范、原位保留登记与同主题判定；首期 preserve-existing 在当前 AGY/Windows 限定沙箱验收完成（见 §4） |
+| [../skills/lazypack-setup/references/document-routing.md](../skills/lazypack-setup/references/document-routing.md) | 文档路由规范 | current | S1 产物：既有文档 8 大知识区归属规范、原位保留登记与同主题判定；首期 preserve-existing 在当前 AGY/Windows 限定沙箱验收完成（见 §4）。Phase 2 受控迁移规约已合入本文件；通用生产迁移仍 UNPROVEN |
+| [../skills/lazypack-setup/scripts/doc_scanner.mjs](../skills/lazypack-setup/scripts/doc_scanner.mjs) | setup 执行辅助 | current | 有界 Markdown 扫描与引用图构建器。证据：Phase 2 主仓应用收尾与本仓只读 scan。已验证：当前 Windows/AGY 隔离沙箱与本仓只读扫描。不代表外部目标仓生产级自动迁移 |
+| [../skills/lazypack-setup/scripts/doc_plan.mjs](../skills/lazypack-setup/scripts/doc_plan.mjs) | setup 执行辅助 | current | 迁移计划生成器（含双指纹与 Section 3 紧凑表修复）。证据：Phase 2 应用收尾与 fix2 回归。已验证：当前 Windows/AGY 隔离沙箱。不代表外部目标仓生产级自动迁移 |
+| [../skills/lazypack-setup/scripts/doc_executor.mjs](../skills/lazypack-setup/scripts/doc_executor.mjs) | setup 执行辅助 | current | 双指纹绑定的受控执行器（含补偿回滚）。证据：Phase 2 应用收尾与 S6 沙箱批次。已验证：当前 Windows/AGY 隔离沙箱。不宣称系统级抗崩溃原子性，不代表外部目标仓生产级自动迁移 |
+| [../skills/lazypack-setup/scripts/doc_helper.mjs](../skills/lazypack-setup/scripts/doc_helper.mjs) | setup 执行辅助 | current | scan/plan/exec 调度入口。证据：Phase 2 应用收尾与 3 个沙箱 fixture 的真实 Agent 验收。已验证：当前 Windows/AGY 隔离沙箱。不代表外部目标仓生产级自动迁移 |
 | [../skills/lazypack-harvest/SKILL.md](../skills/lazypack-harvest/SKILL.md) | harvest 执行入口 | current | 显式调用边界由该 skill 定义，本轮未触发 |
 | [interviews/2026-09-04-founding-interview.md](interviews/2026-09-04-founding-interview.md) | 立项来源 | reference | 历史去敏访谈，不覆盖现行愿景与纪律 |
 | [reviews/](reviews/) | 讨论材料集合入口 | reference | 子文档各自状态需要核实，不将整个目录认作实施基线 |
@@ -68,6 +72,6 @@
 
 2026-09-13 (Phase 2 首个文档迁移试点完成)：经用户单次整体确认，完成首个非工单文档 `docs/handoff-verification.md` → `docs/agents/handoff-verification.md` 试点迁移，同步完成出站链接（指向 `../DECISIONS.md`）与全仓入站引用（`AGENTS.md`、`README.md`、`docs/ARTIFACTS.md`）更新；原文件核验后清理；全套快照与操作日志留存于系统临时交接目录（`document-migration-handoff-implement-20260912/`）。通用物理迁移器与链接重写尚未实现为通用自动化能力，本次为受控手工实施试点。
 
-边界重申：本次验收确证的是文档归属识别与原位登记、基本确认/拒绝与保护、受管区和 Section 3 隔离、限定格式兼容、留存代表模式及 rawqa 三边界；证据严格限于对应 fixture 及当前宿主（AGY / Windows），不代表生产发布、全局安装、跨宿主适配或真实大型旧仓接入完成。通用自动化物理迁移与链接重写属于 Phase 2 后续能力，本次试点完成不代表目标仓通用迁移自动化已交付。
+边界重申：本次验收确证的是文档归属识别与原位登记、基本确认/拒绝与保护、受管区和 Section 3 隔离、限定格式兼容、留存代表模式及 rawqa 三边界；证据严格限于对应 fixture 及当前宿主（AGY / Windows），不代表生产发布、全局安装、跨宿主适配或真实大型旧仓接入完成。本地 Helper 与规约已合入本仓工作区；外部目标仓通用自动化物理迁移与链接重写、跨宿主与大型旧仓接入仍未交付。沙箱验证不等于生产通用能力。
 
 2026-09-20（发布基线收口）：工作区仍有未跟踪目录 `docs/reviews/2026-09-07-lazypack-harvest/`。目录内仅有主持 README 与三份第一轮提示词，`participants/` 为空，讨论未闭环。按固定层 §4.3 不把它视为现行 harvest 规格或 0.3.0 依据；本基线三个提交不收录、不删除。现行 harvest 入口仍是已跟踪的 `skills/lazypack-harvest/SKILL.md`。
