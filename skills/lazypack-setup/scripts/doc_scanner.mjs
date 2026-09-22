@@ -120,7 +120,40 @@ export function isExcludedOrSensitive(relPath) {
 }
 
 /**
- * 扫描项目全量 Markdown 文档并建立双向引用图谱
+ * 为链接提取准备一行 Markdown。
+ * 围栏标记行与围栏内的行整行跳过；围栏外的行内反引号替换为等长空白，避免代码示例被当成链接。
+ * 只用于链接提取。标题抽取仍读取原始正文，不调用本函数。
+ * @param {string} lineText 原始行
+ * @param {boolean} inFence 进入本行之前是否处于围栏代码块内
+ * @returns {{ skip: boolean, inFence: boolean, text: string }} skip 为真时不要在该行抽链；inFence 传给下一行
+ */
+export function prepareLineForLinkExtraction(lineText, inFence) {
+  if (/^\s*```/.test(lineText)) {
+    return { skip: true, inFence: !inFence, text: '' };
+  }
+  if (inFence) {
+    return { skip: true, inFence: true, text: '' };
+  }
+  const text = lineText.replace(/`[^`]*`/g, (chunk) => ' '.repeat(chunk.length));
+  return { skip: false, inFence: false, text };
+}
+
+/**
+ * 判断链接目标是否应在扫描时忽略。
+ * 与 scripts/check_doc_pairs.mjs 的非相对链接判定一致：纯锚点、协议相对 URL，以及带 scheme 的 URL（含 file:、http:、https:、mailto:、ftp:）。
+ * @param {string} rawurl 链接括号内的目标
+ * @returns {boolean} 为真时不写入出站图、入站图和死链
+ */
+export function isIgnoredLinkTarget(rawurl) {
+  if (!rawurl || rawurl.startsWith('#') || rawurl.startsWith('//')) {
+    return true;
+  }
+  return /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawurl);
+}
+
+/**
+ * 扫描项目全量 Markdown 文档并建立双向引用图谱。
+ * 链接提取会先剥离围栏与行内代码；标题抽取使用原始正文。
  * 声明: 扫描与引用解析严格限于有界 Markdown 文件的标准内联链接与参考定义
  */
 export function scanProjectDocuments(repoRoot) {
@@ -173,19 +206,19 @@ export function scanProjectDocuments(repoRoot) {
         const lines = content.split(/\r?\n/);
         const linkRegex = /(!?\[(?<text>[^\]]*)\]\((?<rawurl>[^\s\)]+)(?:\s+"(?<title>[^"]*)")?\))/g;
 
+        let inFence = false;
         for (let lineNum = 1; lineNum <= lines.length; lineNum++) {
-          const lineText = lines[lineNum - 1];
+          const prepared = prepareLineForLinkExtraction(lines[lineNum - 1], inFence);
+          inFence = prepared.inFence;
+          if (prepared.skip) {
+            continue;
+          }
+          const lineText = prepared.text;
+          linkRegex.lastIndex = 0;
           let match;
           while ((match = linkRegex.exec(lineText)) !== null) {
             const rawurl = match.groups.rawurl;
-            // 忽略外部协议
-            if (
-              rawurl.startsWith('http://') ||
-              rawurl.startsWith('https://') ||
-              rawurl.startsWith('mailto:') ||
-              rawurl.startsWith('ftp:') ||
-              rawurl.startsWith('#')
-            ) {
+            if (isIgnoredLinkTarget(rawurl)) {
               continue;
             }
 
