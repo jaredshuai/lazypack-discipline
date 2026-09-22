@@ -35,7 +35,7 @@
 
 | 路径 | 类别 | 状态 | 依据与边界 |
 |---|---|---|---|
-| [VISION.md](VISION.md) | 产品愿景 | current | 2026-09-09 维护者明确方向；实现状态另行验证 |
+| [VISION.md](VISION.md) | 产品愿景 | current | 2026-09-09 维护者明确方向；2026-09-22 确认提交历史的用户收益（#8 / #18）。该句不表示 commit-msg 已在本仓或全部目标仓生效 |
 | [DECISIONS.md](DECISIONS.md) | 固定层纪律 | current | 0.3.0；变更规则由正文自身定义 |
 | [ARTIFACTS.md](ARTIFACTS.md) | 本仓文档归属 | current | 本轮补齐的内容分类、维护触发和入口登记 |
 | [../AGENTS.md](../AGENTS.md) | 本仓 AI 入口 | current | 本轮新建；只提供读取指针 |
@@ -45,8 +45,8 @@
 | [../scripts/handoff_bom_classify_repro.js](../scripts/handoff_bom_classify_repro.js) | 本仓执行辅助 | current | 上述分类的手动回归。在系统临时目录写夹具，不改仓库。未接 hook/CI。不是门禁 |
 | [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层 §7.2 第一批对子（P1–P5、P8）。P8 动态抽取全部 `### 2.x`；P4/P5 围栏含反引号与波浪号。不是跨项目固定层 |
 | [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述对子。P8 不写死 generate/verify。P4/P5 按 CommonMark 跳过反引号与波浪号围栏，开闭须同字符。手动运行。未接 hook/CI。不宣称门禁已生效 |
-| [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。手动运行。未接 hook/CI。格式通过不等于语义已验证。不是门禁 |
-| [../scripts/check_commit_msg.mjs](../scripts/check_commit_msg.mjs) | 本仓执行辅助 | current | 只读检查候选提交说明的标题格式。词表从固定层 §5.1 抽取。手动运行。未接 hook/CI。不宣称门禁已生效 |
+| [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。本仓仍手动运行，未接 hook/CI。格式通过不等于语义已验证。不是门禁。2026-09-22 的隔离仓接线没有改这份口径 |
+| [../scripts/check_commit_msg.mjs](../scripts/check_commit_msg.mjs) | 本仓执行辅助 | current | 只读检查候选提交说明的标题格式。词表从固定层 §5.1 抽取。本仓仍手动运行，未接 hook/CI，不宣称门禁已生效。2026-09-22 只在本机 Git for Windows 隔离仓用未改行为的副本接通 commit-msg |
 | [../skills/lazypack-setup/SKILL.md](../skills/lazypack-setup/SKILL.md) | setup 执行入口 | current | 以本仓磁盘正文为准；不代表所有宿主或目标仓实测通过。第 2 步有界扫描的排除目录与敏感文件与 document-routing §2.2、doc_scanner 为同一显式集合 |
 | [../skills/lazypack-setup/references/document-routing.md](../skills/lazypack-setup/references/document-routing.md) | 文档路由规范 | current | S1 产物：既有文档 8 大知识区归属规范、原位保留登记与同主题判定；首期 preserve-existing 在当前 AGY/Windows 限定沙箱验收完成（见 §4）。Phase 2 受控迁移规约已合入本文件；通用生产迁移仍 UNPROVEN。§2.2 排除目录与敏感文件与 doc_scanner 为同一显式集合（含 `.DS_Store`；敏感文件为精确文件名或明确前后缀） |
 | [../skills/lazypack-setup/scripts/doc_scanner.mjs](../skills/lazypack-setup/scripts/doc_scanner.mjs) | setup 执行辅助 | current | 有界 Markdown 扫描与引用图构建器。证据：Phase 2 主仓应用收尾与本仓只读 scan。已验证：当前 Windows/AGY 隔离沙箱与本仓只读扫描；本机 Windows 上 #13 复跑死链 17→0（消除项均为 `file:` 与代码语境伪链接），临时 fixture 仍检出真死链。不代表外部目标仓生产级自动迁移。排除目录含 `.DS_Store`（路径小写化后按 `.ds_store` 匹配）；敏感文件仍为精确匹配。忽略带 scheme 的 URL（含 `file:`）与纯锚点；抽链前剥离围栏与行内反引号，标题抽取仍用原始正文 |
@@ -102,3 +102,5 @@
 2026-09-22（#17 F3）：`handoff_manifest.js` 的 LF 规范化哈希保留开头 UTF-8 BOM（`TextDecoder` `ignoreBOM: true`）。verify 把「其余字节相同、只多或只少开头 BOM」记为 `UTF8_BOM_ONLY_DIFFERENCE`，不再记成换行可解释。退出码仍为 1。换行可解释、字节一致通过、改内容为 `SHA256_RAW_MISMATCH` 保持不变。BOM 与换行同时变化时两种单独理由都不使用。固定层未改。未接 hook/CI。回归：`node scripts/handoff_bom_classify_repro.js`。验收限于本机 Windows。
 
 2026-09-22（#17 F4）：`templates/RELEASE.md` §2 导语改为与 setup `SKILL.md` 的播种条件一致：`[NEW]` 且块外无正文时播种；`[UPGRADE]` 且 end 标记之后无正文时允许一次性追加同一薄草稿；块外已有内容时不得覆盖、重排或再播种；`[NO-OP]` 不写盘。固定层未改。已编译仓的块外旧种子仍按不覆盖原则保留，不会因这次模板改字而重写。验收限于本机 Windows 的条文对照，不是完整 `/lazypack-setup` 访谈。
+
+2026-09-22（#18）：`docs/VISION.md` 写入已确认的用户收益：任务交给 AI 之后，用户不必再替它整理提交；接续者应能从 Git 历史读懂改了什么、为什么改、影响哪里，以及哪些事项尚未完成。句子不指定工具。本仓 `scripts/check_commit_msg.mjs` 的行为未改，本仓仍未接 hook/CI。隔离验证限于本机 Git for Windows 2.54.0 与 Node v24.19.0 的临时仓：默认 `.git/hooks` 里预置 post-commit 探针，另有一个退出码 0 的 pre-commit；`commit-msg` 调用检查器的字节副本；全程未设置 `core.hooksPath`。`wip: temp` 的真实 `git commit` 被阻断（检查器 `format-fail`，退出码 1）。合法候选在 pre-commit 通过且格式通过后提交成功，探针记下新提交，`NOTES.md` 仍为未暂存修改。临时移走隔离仓 `docs/DECISIONS.md` 时检查器为 `exec-failed`（其 JSON 退出码 3），`git commit` 退出码 1，HEAD 不变。把钩子改去调用不存在的 node 时，没有检查器状态行，归类 `not-run`，提交未发生。暂存范围加入 `NOTES.md` 后，上一次 `format-pass` 作废并重新检查。格式通过但说明只谈 README 拼写的候选由审查记为语义不符，没有提交。规则来源是本仓 `docs/DECISIONS.md` 的 §5.1 行按字节复制到隔离仓同路径，type 仍由检查器运行时抽出，没有第二份手写词表。固定层与 `templates/RELEASE.md` 第 12 行未改。不表示其他宿主或其他提交入口已被阻断。
