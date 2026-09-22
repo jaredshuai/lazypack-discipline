@@ -4,7 +4,7 @@
  * 跨阶段交接同源清单与文件核验工具 (CommonJS, 零外部依赖)
  *
  * 子命令:
- *   generate --root <基准根> --files-json <显式相对路径字符串数组JSON文件> --out-dir <尚不存在的新交付目录> [--include-lf-normalized]
+ *   generate --root <基准根> --files-json <显式相对路径字符串数组JSON文件> --out-dir <尚不存在的新交付目录> [--include-lf-normalized] [--include-git-blob]
  *   verify   --root <基准根> --manifest <清单JSON> [--table <摘要表Markdown>]
  */
 
@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { spawnSync } = require('child_process');
 
 /**
  * 错误类型与代码体系
@@ -172,6 +173,95 @@ function detectLineEndings(buffer) {
 }
 
 /**
+ * 调用本机 git hash-object 读取工作树会给出的 blob id。
+ * 不传 -w，不在 Node 里模拟哈希。git 不可用或不在工作树内时不返回 id。
+ */
+function createGitBlobLookup(absRoot) {
+  let state = null;
+
+  /**
+   * 确认 git 可执行，且 absRoot 位于某个工作树内。
+   */
+  function ensure() {
+    if (state) {
+      return state;
+    }
+    const version = spawnSync('git', ['--version'], { encoding: 'utf8', windowsHide: true });
+    if (version.error || version.status !== 0) {
+      state = { ok: false, reason: 'git executable not found; git_blob_id omitted' };
+      return state;
+    }
+    const inside = spawnSync('git', ['-C', absRoot, 'rev-parse', '--is-inside-work-tree'], {
+      encoding: 'utf8',
+      windowsHide: true
+    });
+    if (inside.status !== 0 || inside.stdout.trim() !== 'true') {
+      state = { ok: false, reason: 'root is not inside a git work tree; git_blob_id omitted' };
+      return state;
+    }
+    const top = spawnSync('git', ['-C', absRoot, 'rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+      windowsHide: true
+    });
+    if (top.status !== 0 || !top.stdout.trim()) {
+      state = { ok: false, reason: 'git rev-parse --show-toplevel failed; git_blob_id omitted' };
+      return state;
+    }
+    state = { ok: true, toplevel: path.resolve(top.stdout.trim()) };
+    return state;
+  }
+
+  /**
+   * 取单个相对路径的 blob id。失败时只返回原因，不返回伪造 id。
+   */
+  return function blobIdFor(relPosix) {
+    const ready = ensure();
+    if (!ready.ok) {
+      return { ok: false, reason: ready.reason };
+    }
+    const absFile = path.resolve(absRoot, relPosix);
+    const relToTop = path.relative(ready.toplevel, absFile);
+    if (relToTop.startsWith('..') || path.isAbsolute(relToTop)) {
+      return { ok: false, reason: `file is outside the git work tree: ${relPosix}` };
+    }
+    const hashed = spawnSync(
+      'git',
+      ['-C', ready.toplevel, 'hash-object', '--', relToTop.split(path.sep).join('/')],
+      { encoding: 'utf8', windowsHide: true }
+    );
+    if (hashed.error || hashed.status !== 0) {
+      return { ok: false, reason: `git hash-object failed: ${relPosix}` };
+    }
+    const id = hashed.stdout.trim().split(/\s+/)[0];
+    if (!/^[0-9a-f]{40}$/.test(id)) {
+      return { ok: false, reason: `git hash-object returned no blob id: ${relPosix}` };
+    }
+    return { ok: true, id };
+  };
+}
+
+/**
+ * 对一批相对路径收集真实 git blob id。任一失败则清单级降级说明非空，且该文件不带 id。
+ */
+function collectGitBlobIds(absRoot, relPaths) {
+  const lookup = createGitBlobLookup(absRoot);
+  const ids = new Map();
+  const reasons = [];
+  for (const relPath of relPaths) {
+    const found = lookup(relPath);
+    if (found.ok) {
+      ids.set(relPath, found.id);
+    } else if (!reasons.includes(found.reason)) {
+      reasons.push(found.reason);
+    }
+  }
+  return {
+    ids,
+    degraded: reasons.length > 0 ? reasons.join('; ') : null
+  };
+}
+
+/**
  * 对 UTF-8 文本执行 CRLF -> LF 规范化并计算 SHA256
  */
 function computeLfNormalizedSha256(buffer, relPath) {
@@ -253,10 +343,15 @@ function renderMarkdownTable(manifest) {
   }
 
   const hasLfNormalized = manifest.files.some(f => f && typeof f.sha256_lf_normalized === 'string');
+  const hasGitBlob = manifest.files.some(f => f && typeof f.git_blob_id === 'string');
 
-  const headers = hasLfNormalized
-    ? ['相对路径', '大小 (bytes)', 'SHA256 (Raw)', '换行类型', 'SHA256 (LF规范化)']
-    : ['相对路径', '大小 (bytes)', 'SHA256 (Raw)', '换行类型'];
+  const headers = ['相对路径', '大小 (bytes)', 'SHA256 (Raw)', '换行类型'];
+  if (hasLfNormalized) {
+    headers.push('SHA256 (LF规范化)');
+  }
+  if (hasGitBlob) {
+    headers.push('Git blob');
+  }
 
   const lines = [];
   lines.push(`| ${headers.join(' | ')} |`);
@@ -272,6 +367,9 @@ function renderMarkdownTable(manifest) {
     ];
     if (hasLfNormalized) {
       row.push(file.sha256_lf_normalized ? `\`${file.sha256_lf_normalized}\`` : '-');
+    }
+    if (hasGitBlob) {
+      row.push(file.git_blob_id ? `\`${file.git_blob_id}\`` : '-');
     }
     lines.push(`| ${row.join(' | ')} |`);
   }
@@ -327,6 +425,7 @@ async function generateHandoffArtifacts(options) {
     files,
     outDir,
     includeLfNormalized = false,
+    includeGitBlob = false,
     _testHooks = null
   } = options || {};
 
@@ -458,6 +557,9 @@ async function generateHandoffArtifacts(options) {
   validatedRelPaths.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
   // 5. 内存物理采样
+  const gitBlobs = includeGitBlob
+    ? collectGitBlobIds(absRoot, validatedRelPaths)
+    : { ids: new Map(), degraded: null };
   const fileEntries = [];
   for (const relPath of validatedRelPaths) {
     const absPath = path.resolve(absRoot, relPath);
@@ -476,6 +578,9 @@ async function generateHandoffArtifacts(options) {
     if (includeLfNormalized) {
       entry.sha256_lf_normalized = computeLfNormalizedSha256(buffer, relPath);
     }
+    if (includeGitBlob && gitBlobs.ids.has(relPath)) {
+      entry.git_blob_id = gitBlobs.ids.get(relPath);
+    }
 
     fileEntries.push(entry);
   }
@@ -487,6 +592,9 @@ async function generateHandoffArtifacts(options) {
     files_count: fileEntries.length,
     files: fileEntries
   };
+  if (gitBlobs.degraded) {
+    manifest.git_blob_degraded = gitBlobs.degraded;
+  }
 
   const markdownTable = renderMarkdownTable(manifest);
 
@@ -662,6 +770,8 @@ async function verifyHandoffManifest(options) {
   // 逐一核验清单中声明的实物
   const seenPaths = new Set();
   const seenLowerPaths = new Set();
+  const needsGitBlob = manifestObj.files.some((file) => file && Object.prototype.hasOwnProperty.call(file, 'git_blob_id'));
+  const gitBlobLookup = needsGitBlob ? createGitBlobLookup(absRoot) : null;
 
   for (let i = 0; i < manifestObj.files.length; i++) {
     const file = manifestObj.files[i];
@@ -725,6 +835,12 @@ async function verifyHandoffManifest(options) {
       }
     }
 
+    if (Object.prototype.hasOwnProperty.call(file, 'git_blob_id')) {
+      if (typeof file.git_blob_id !== 'string' || !/^[0-9a-f]{40}$/.test(file.git_blob_id)) {
+        mismatches.push({ relative_path: norm, reason: 'INVALID_GIT_BLOB_ID_FORMAT', actual: file.git_blob_id });
+      }
+    }
+
     // 磁盘实物对比
     const absPath = path.resolve(absRoot, norm);
     const relFromRoot = path.relative(absRoot, absPath);
@@ -763,7 +879,30 @@ async function verifyHandoffManifest(options) {
       continue;
     }
 
-    if (buf.length !== file.size_bytes) {
+    const currentRawSha = crypto.createHash('sha256').update(buf).digest('hex');
+    let lineEndingExplains = false;
+    if (currentRawSha !== file.sha256_raw && typeof file.sha256_lf_normalized === 'string') {
+      try {
+        const currentLfSha = computeLfNormalizedSha256(buf, norm);
+        if (currentLfSha === file.sha256_lf_normalized) {
+          lineEndingExplains = true;
+          mismatches.push({
+            relative_path: norm,
+            reason: 'LINE_ENDING_NORMALIZATION_EXPLAINABLE',
+            message: '换行规范化可解释差异',
+            expected_line_endings: file.line_endings,
+            actual_line_endings: detectLineEndings(buf),
+            sha256_lf_normalized: currentLfSha,
+            expected_sha256_raw: file.sha256_raw,
+            actual_sha256_raw: currentRawSha
+          });
+        }
+      } catch (_) {
+        lineEndingExplains = false;
+      }
+    }
+
+    if (!lineEndingExplains && buf.length !== file.size_bytes) {
       mismatches.push({
         relative_path: norm,
         reason: 'SIZE_MISMATCH',
@@ -772,8 +911,7 @@ async function verifyHandoffManifest(options) {
       });
     }
 
-    const currentRawSha = crypto.createHash('sha256').update(buf).digest('hex');
-    if (currentRawSha !== file.sha256_raw) {
+    if (!lineEndingExplains && currentRawSha !== file.sha256_raw) {
       mismatches.push({
         relative_path: norm,
         reason: 'SHA256_RAW_MISMATCH',
@@ -798,6 +936,24 @@ async function verifyHandoffManifest(options) {
           relative_path: norm,
           reason: 'LF_NORMALIZATION_VERIFICATION_FAILED',
           error: err.message
+        });
+      }
+    }
+
+    if (typeof file.git_blob_id === 'string' && /^[0-9a-f]{40}$/.test(file.git_blob_id)) {
+      const found = gitBlobLookup(norm);
+      if (!found.ok) {
+        mismatches.push({
+          relative_path: norm,
+          reason: 'GIT_BLOB_UNAVAILABLE',
+          message: found.reason
+        });
+      } else if (found.id !== file.git_blob_id) {
+        mismatches.push({
+          relative_path: norm,
+          reason: 'GIT_BLOB_ID_MISMATCH',
+          expected: file.git_blob_id,
+          actual: found.id
         });
       }
     }
@@ -835,12 +991,13 @@ async function runCli() {
     const filesJsonPath = getOption('--files-json');
     const outDir = getOption('--out-dir');
     const includeLfNormalized = hasFlag('--include-lf-normalized');
+    const includeGitBlob = hasFlag('--include-git-blob');
 
     if (!root || !filesJsonPath || !outDir) {
       console.error(JSON.stringify({
         success: false,
         code: ERROR_CODES.CLI_ARGUMENT_ERROR,
-        message: 'Usage: generate --root <base_root> --files-json <files_array_json> --out-dir <new_out_dir> [--include-lf-normalized]'
+        message: 'Usage: generate --root <base_root> --files-json <files_array_json> --out-dir <new_out_dir> [--include-lf-normalized] [--include-git-blob]'
       }, null, 2));
       process.exit(1);
     }
@@ -850,15 +1007,20 @@ async function runCli() {
         root,
         filesJsonPath,
         outDir,
-        includeLfNormalized
+        includeLfNormalized,
+        includeGitBlob
       });
-      console.log(JSON.stringify({
+      const summary = {
         success: true,
         out_dir: result.outDir,
         files_count: result.manifest.files_count,
         manifest: result.manifestPath,
         table: result.tablePath
-      }, null, 2));
+      };
+      if (result.manifest.git_blob_degraded) {
+        summary.git_blob_degraded = result.manifest.git_blob_degraded;
+      }
+      console.log(JSON.stringify(summary, null, 2));
       process.exit(0);
     } catch (err) {
       console.error(JSON.stringify({

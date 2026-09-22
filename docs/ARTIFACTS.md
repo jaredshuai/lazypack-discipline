@@ -40,7 +40,8 @@
 | [ARTIFACTS.md](ARTIFACTS.md) | 本仓文档归属 | current | 本轮补齐的内容分类、维护触发和入口登记 |
 | [../AGENTS.md](../AGENTS.md) | 本仓 AI 入口 | current | 本轮新建；只提供读取指针 |
 | [../README.md](../README.md) | 对外导航 | current | 仓库总入口；能力说明不代替验收 |
-| [agents/handoff-verification.md](agents/handoff-verification.md) | 给 agent 的按需说明 | current | 按固定层 §4.1 由 docs/ 根部规范迁移至 docs/agents/；同源核验流程基准保持唯一 |
+| [agents/handoff-verification.md](agents/handoff-verification.md) | 给 agent 的按需说明 | current | 按固定层 §4.1 迁至 docs/agents/。raw 字节仍是第一权威；可选 git_blob_id 只记录本机 git 规范化结果，拿不到则字段缺席并写明降级原因 |
+| [../scripts/handoff_manifest.js](../scripts/handoff_manifest.js) | 本仓执行辅助 | current | 只读生成与核验交接清单。`--include-git-blob` 调用本机 git hash-object，不伪造 blob id。仅换行差异单独分类且仍非通过。未接 hook/CI |
 | [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层 §7.2 第一批对子（P1–P5、P8）。不是跨项目固定层 |
 | [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述对子。手动运行。未接 hook/CI。不宣称门禁已生效 |
 | [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。手动运行。未接 hook/CI。格式通过不等于语义已验证。不是门禁 |
@@ -88,5 +89,7 @@
 2026-09-21（#4）：块外种子增补「本机试打、发版与版本标签」：本机试打不等于发版、不发版不打版本标签、标签由谁打、与 CI 的先后。固定层 §5.7 条文未改。验收限于本机 Windows 契约沙箱；#3 与 #4 之间已编译仓的块外旧种子按不覆盖原则保留、不会自动补上试打指引。不代表完整 setup 访谈或跨宿主生产验证。
 
 2026-09-21（#12）：新增本仓项目层对子清单 [agents/doc-pairs.md](agents/doc-pairs.md) 与只读检查脚本 [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs)（P1–P5、P8）。固定层条文未改。检查器可手动运行，未接线到 pre-commit / CI，不宣称门禁已生效。验收限于本机 Windows 工作区：首次全过、负例检出后恢复、运行前后 git status 一致。
+
+2026-09-22（#11）：`handoff_manifest.js` 的 generate 增加可选 `--include-git-blob`。blob id 只来自本机 `git hash-object`，不传 `-w`，不在 Node 里模拟。verify 在 raw 哈希不同但 LF 规范化哈希相同时记为换行规范化可解释差异，退出码仍非零。固定层未改。§3 原先没有该脚本登记行，本轮补上，并更新交接指引那一行的边界。验收在本机 Windows、临时仓 `core.autocrlf=true`：CRLF 与 LF 的 raw 哈希不同而 `git_blob_id` 相同；LF、MIXED、带 BOM 的 `line_endings` 分别为 LF、MIXED、LF；字节一致为通过，仅换行差异为可解释分类，改内容为 `SHA256_RAW_MISMATCH`，篡改 blob 字段可检出；非工作树与 PATH 中无 git 时字段缺席并写明降级原因。`git count-objects` 在调用前后都是 0 objects。#15 旧清单在本段写入前用新脚本 verify 通过。`check_doc_pairs` 在本段登记后仍为 6/6 PASS。未接 hook/CI。
 
 2026-09-22（#15）：新增本仓提交说明格式只读检查器 [agents/commit-msg-check.md](agents/commit-msg-check.md) 与 [../scripts/check_commit_msg.mjs](../scripts/check_commit_msg.mjs)。type 词表在运行时从固定层 §5.1 抽出，脚本内不另写清单。固定层条文未改。未接线 hook/CI，不宣称门禁已生效。验收限于本机 Windows：含 scope、含 `!`、无 scope 三种标题为 format-pass（退出码 0）；`fix bug` 与 `wip: temp` 为 format-fail（退出码 1，输出写明命中规则）；消息文件缺失为 not-run（退出码 2）；临时副本上词表数量不符、以及副本中条文文件缺失，均为 exec-failed（退出码 3）。四态字面量与退出码两两可区分。检查器运行前后 git status 一致，本仓 `docs/DECISIONS.md` 未被改写。同轮 `node scripts/check_doc_pairs.mjs` 为 6/6 PASS。脚注与正文是否非空只作信息行，不计入失败。格式通过不等于语义已验证。

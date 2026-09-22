@@ -7,8 +7,9 @@
 ## 1. 原则与背景
 
 - **单一事实源与推导一致性**: 严格遵循 [DECISIONS.md §4.1](../DECISIONS.md)“能推出来的不手写”与 [§7.5](../DECISIONS.md)“交接只写亲自验证过的事实”。交付报告中的文件大小、哈希和换行类型必须由统一工具同源采样生成，杜绝任何人工二次转录或独立脚本差异。
-- **物理实物为第一权威**: 默认哈希均为文件在磁盘上的原始字节 SHA256（`sha256_raw`）；LF 规范化哈希（`sha256_lf_normalized`）仅在显式要求下作为辅助字段提供，二者严禁混淆。
-- **零依赖与可重现**: 核心工具 `scripts/handoff_manifest.js` 基于纯 Node.js 标准库构建，无需安装第三方依赖，开箱即用。
+- **物理实物为第一权威**: 默认哈希均为文件在磁盘上的原始字节 SHA256（`sha256_raw`）。`size_bytes` 是同一份原始字节的长度，不随换行规范化改变。LF 规范化哈希（`sha256_lf_normalized`）仅在显式要求下作为辅助字段提供，二者严禁混淆。
+- **Git 规范化指纹是辅助视角**: 可选字段 `git_blob_id` 是本机 `git hash-object` 在当前工作树里给出的 blob id，含 `core.autocrlf` 与 `.gitattributes` 的效果。它不代替 `sha256_raw`。拿不到真实 git 结果时字段缺席，并在清单根写明 `git_blob_degraded`，不伪造 id。
+- **零 npm 依赖与可重现**: 核心工具 `scripts/handoff_manifest.js` 基于纯 Node.js 标准库构建，无需安装第三方 npm 包。只有显式加上 `--include-git-blob` 时才额外调用本机已有的 `git` 可执行文件。
 
 ---
 
@@ -21,13 +22,15 @@ node scripts/handoff_manifest.js generate \
   --root <工作区基准根目录> \
   --files-json <显式相对路径字符串数组JSON文件> \
   --out-dir <尚不存在的新交付目录> \
-  [--include-lf-normalized]
+  [--include-lf-normalized] \
+  [--include-git-blob]
 ```
 
 - `--root`: 待测文件的基准根目录（如当前仓库根目录或目标工作区）。
 - `--files-json`: 包含显式相对路径字符串数组的 JSON 文件绝对或相对路径。不支持通配符隐式遍历，必须显式指定。
 - `--out-dir`: 本次交接产物的目标输出目录。**必须为一个尚不存在的新目录**；若目标已存在，工具强制拒绝执行以保护历史归档。
 - `--include-lf-normalized`（可选）: 仅在所有输入文件均为合法的 UTF-8 文本时可用。会将 `\r\n` 规范化为 `\n` 后计算辅助哈希，遇二进制或非法 UTF-8 会明确阻断。
+- `--include-git-blob`（可选）: 对每个输入文件调用本机 `git hash-object`，把 40 位 blob id 写入 `git_blob_id`。git 不可用、根目录不在工作树内或调用失败时，该字段缺席，清单根写入 `git_blob_degraded` 说明原因。不使用纯 Node 哈希冒充。
 
 **输出物**:
 在指定的 `--out-dir` 下原子生成：
@@ -44,7 +47,7 @@ node scripts/handoff_manifest.js verify \
 ```
 
 - `--manifest`: 待核验的机器清单。工具将其视为不可信输入，首先严格检查其 JSON 语法、Schema 结构、字段类型与文件计数。
-- `--root`: 待校验的工作区根目录。工具依据清单逐一重读磁盘物理文件，核验大小、`sha256_raw` 及可选的 `sha256_lf_normalized`。
+- `--root`: 待校验的工作区根目录。工具依据清单逐一重读磁盘物理文件，核验大小、`sha256_raw`、可选的 `sha256_lf_normalized`，以及清单里已经写出的 `git_blob_id`。旧清单没有 `git_blob_id` 时不补算、不因此失败。
 - `--table`（可选）: 若提供，工具使用生产相同的纯渲染逻辑重新渲染预期 Markdown 表格，并与该文件进行逐字节比对，防止表格被手工篡改。
 
 ---
@@ -92,7 +95,9 @@ node scripts/handoff_manifest.js verify \
 5. **去敏要求**:
    - 清单与表格中仅记录统一的正斜杠相对路径（如 `docs/foo.md`），绝不输出本地绝对路径或敏感用户名；
    - 相对路径本身若含有敏感命名，由调用方在提供清单前自行泛化，工具不自动证明业务语义脱敏。
-6. **相对路径表格渲染安全**:
+6. **本机 git 可执行文件**: `--include-git-blob` 与带 `git_blob_id` 的 `verify` 会调用本机 `git hash-object`，不传 `-w`，不把对象写入对象库，也不修改输入文件。这不是 npm 依赖。git 不在 PATH、`--root` 不在工作树内、或 `hash-object` 失败时，生成侧省略 `git_blob_id` 并写下 `git_blob_degraded`；核验侧若清单声明了 id 却无法再次调用 git，记为 `GIT_BLOB_UNAVAILABLE`，退出码非零。
+7. **换行差异仍是不一致**: `sha256_raw` 不同，但清单中的 `sha256_lf_normalized` 与当前文件做同样的 LF 规范化后相等时，`verify` 将该条记为 `LINE_ENDING_NORMALIZATION_EXPLAINABLE`（换行规范化可解释差异），并给出两端 `line_endings` 与那份 LF 哈希。退出码仍为非零，不计通过。LF 规范化后仍不相等的，维持 `SHA256_RAW_MISMATCH`。
+8. **相对路径表格渲染安全**:
    - 摘要表中的普通相对路径默认采用 CommonMark 规范行内代码围栏，安全转义独立管道符（`\|`），并通过动态反引号围栏与空格填充保障反引号与尖括号原样展示；
    - 针对反斜杠紧邻管道（`\+|`）的特殊边界，采用固定 `<code>` 容器结合 Unicode 码点数字字符引用（NCR）整体纯文本编码，杜绝表格列被意外拆分、Markdown 内联语法干扰与 HTML 节点注入，确保渲染后可见文本与原路径严格 100% 往返保真。
 
@@ -131,7 +136,8 @@ node scripts/handoff_manifest.js verify \
       "size_bytes": 2048,
       "sha256_raw": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
       "line_endings": "LF",
-      "sha256_lf_normalized": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+      "sha256_lf_normalized": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+      "git_blob_id": "0123456789abcdef0123456789abcdef01234567"
     }
   ]
 }
@@ -139,7 +145,7 @@ node scripts/handoff_manifest.js verify \
 
 ### 6.2 同源渲染的 Markdown 摘要表样例
 
-| 相对路径 | 大小 (bytes) | SHA256 (Raw) | 换行类型 | SHA256 (LF规范化) |
-|---|---|---|---|---|
-| `docs/example-spec.md` | 1024 | `0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef` | LF | `-` |
-| `scripts/demo_helper.js` | 2048 | `fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210` | LF | `fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210` |
+| 相对路径 | 大小 (bytes) | SHA256 (Raw) | 换行类型 | SHA256 (LF规范化) | Git blob |
+|---|---|---|---|---|---|
+| `docs/example-spec.md` | 1024 | `0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef` | LF | `-` | `-` |
+| `scripts/demo_helper.js` | 2048 | `fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210` | LF | `fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210` | `0123456789abcdef0123456789abcdef01234567` |
