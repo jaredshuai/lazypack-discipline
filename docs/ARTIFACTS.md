@@ -43,6 +43,8 @@
 | [agents/handoff-verification.md](agents/handoff-verification.md) | 给 agent 的按需说明 | current | 按固定层 §4.1 由 docs/ 根部规范迁移至 docs/agents/；同源核验流程基准保持唯一 |
 | [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层 §7.2 第一批对子（P1–P5、P8）。不是跨项目固定层 |
 | [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述对子。手动运行。未接 hook/CI。不宣称门禁已生效 |
+| [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。手动运行。未接 hook/CI。格式通过不等于语义已验证。不是门禁 |
+| [../scripts/check_commit_msg.mjs](../scripts/check_commit_msg.mjs) | 本仓执行辅助 | current | 只读检查候选提交说明的标题格式。词表从固定层 §5.1 抽取。手动运行。未接 hook/CI。不宣称门禁已生效 |
 | [../skills/lazypack-setup/SKILL.md](../skills/lazypack-setup/SKILL.md) | setup 执行入口 | current | 以本仓磁盘正文为准；不代表所有宿主或目标仓实测通过 |
 | [../skills/lazypack-setup/references/document-routing.md](../skills/lazypack-setup/references/document-routing.md) | 文档路由规范 | current | S1 产物：既有文档 8 大知识区归属规范、原位保留登记与同主题判定；首期 preserve-existing 在当前 AGY/Windows 限定沙箱验收完成（见 §4）。Phase 2 受控迁移规约已合入本文件；通用生产迁移仍 UNPROVEN |
 | [../skills/lazypack-setup/scripts/doc_scanner.mjs](../skills/lazypack-setup/scripts/doc_scanner.mjs) | setup 执行辅助 | current | 有界 Markdown 扫描与引用图构建器。证据：Phase 2 主仓应用收尾与本仓只读 scan。已验证：当前 Windows/AGY 隔离沙箱与本仓只读扫描。不代表外部目标仓生产级自动迁移 |
@@ -86,3 +88,5 @@
 2026-09-21（#4）：块外种子增补「本机试打、发版与版本标签」：本机试打不等于发版、不发版不打版本标签、标签由谁打、与 CI 的先后。固定层 §5.7 条文未改。验收限于本机 Windows 契约沙箱；#3 与 #4 之间已编译仓的块外旧种子按不覆盖原则保留、不会自动补上试打指引。不代表完整 setup 访谈或跨宿主生产验证。
 
 2026-09-21（#12）：新增本仓项目层对子清单 [agents/doc-pairs.md](agents/doc-pairs.md) 与只读检查脚本 [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs)（P1–P5、P8）。固定层条文未改。检查器可手动运行，未接线到 pre-commit / CI，不宣称门禁已生效。验收限于本机 Windows 工作区：首次全过、负例检出后恢复、运行前后 git status 一致。
+
+2026-09-22（#15）：新增本仓提交说明格式只读检查器 [agents/commit-msg-check.md](agents/commit-msg-check.md) 与 [../scripts/check_commit_msg.mjs](../scripts/check_commit_msg.mjs)。type 词表在运行时从固定层 §5.1 抽出，脚本内不另写清单。固定层条文未改。未接线 hook/CI，不宣称门禁已生效。验收限于本机 Windows：含 scope、含 `!`、无 scope 三种标题为 format-pass（退出码 0）；`fix bug` 与 `wip: temp` 为 format-fail（退出码 1，输出写明命中规则）；消息文件缺失为 not-run（退出码 2）；临时副本上词表数量不符、以及副本中条文文件缺失，均为 exec-failed（退出码 3）。四态字面量与退出码两两可区分。检查器运行前后 git status 一致，本仓 `docs/DECISIONS.md` 未被改写。同轮 `node scripts/check_doc_pairs.mjs` 为 6/6 PASS。脚注与正文是否非空只作信息行，不计入失败。格式通过不等于语义已验证。
