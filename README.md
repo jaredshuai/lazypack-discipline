@@ -6,7 +6,7 @@
 
 ## 两层结构
 
-- **固定层**：跨项目不变的条文，当前版本为 0.3.0，见 [docs/DECISIONS.md](docs/DECISIONS.md)。改它要走多 AI 讨论章程。
+- **固定层**：跨项目不变的条文，当前版本为 0.4.0，见 [docs/DECISIONS.md](docs/DECISIONS.md)。改它要走多 AI 讨论章程。
 - **项目层**：每个仓库编译一次的平台细节（打包上传、lint/format/类型工具、验证命令、访谈材料留存策略）。由 [skills/lazypack-setup](skills/lazypack-setup/) skill 生成。
 
 ## 目录
@@ -16,7 +16,7 @@
 | `docs/VISION.md` | 产品核心思想与设计判断，当前产品方向的正文 |
 | `docs/ARTIFACTS.md` | 本仓文档归属、更新触发、入口状态与维护流程 |
 | `AGENTS.md` | 维护本仓的 AI 读取入口 |
-| `docs/DECISIONS.md` | 固定层条文，当前版本 0.3.0，唯一事实源 |
+| `docs/DECISIONS.md` | 固定层条文，当前版本 0.4.0，唯一事实源 |
 | `docs/agents/handoff-verification.md` | 多 Agent 跨阶段交接清单与核验指引 |
 | `docs/agents/doc-pairs.md` | 本仓文档关系声明：来源、目标范围、检查方式、处理权限 |
 | `docs/agents/freshness-check.md` | 本仓开工与收尾的文档防腐检查；写明流程不等于自动维护已交付 |

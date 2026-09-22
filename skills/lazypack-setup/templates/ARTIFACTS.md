@@ -1,7 +1,7 @@
-<!-- lazypack:start block=artifacts-register src=DECISIONS.md@0.3.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
+<!-- lazypack:start block=artifacts-register src=DECISIONS.md@0.4.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
 # 产物登记册 (ARTIFACTS)
 
-> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.3.0（依据 lazypack-setup 内置快照编译，来源内容标识: 1c78a216d27b82666c9724701f858f2bafe2b10d；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§4。
+> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.4.0（依据 lazypack-setup 内置快照编译，来源内容标识: b0bfa054107a9a4c18d8e64a500b4db9bae059bb；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§4。
 > 原则：一个东西只有一个家；能推导出来的不手写；有生命周期的写清何时死。
 
 ## 1. 产物状态词与流转规则

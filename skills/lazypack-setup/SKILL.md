@@ -1,7 +1,7 @@
 ---
 name: lazypack-setup
 description: >-
-  Compiles project-layer engineering discipline from lazypack-discipline fixed layer (0.3.0)
+  Compiles project-layer engineering discipline from lazypack-discipline fixed layer (0.4.0)
   after Matt Pocock skills setup. Probes repository, asks only necessary unknowns, confirms
   changes once, and generates six managed artifacts with fingerprint protection.
 ---
@@ -251,7 +251,7 @@ description: >-
    - `RELEASE.md`（若未暂停）：
      * 托管块 `release-discipline` 只写入固定发版纪律；`fp` 仅覆盖 start/end 标记之间的固定段正文。
      * 「这个项目怎么打包」写在 end 标记之后的块外项目层区域。
-     * **`[NEW]`**：块外尚无正文时播种薄草稿，文案写明「打包方案未选定」，并区分「未选定」与「已选定未验证」；还须写明「本机试打不等于发版、不发版不打版本标签；标签由谁打、与 CI 的先后由项目层在本区写清」；不得残留 `__PLATFORM_NAME__`，不写完整厂商打包教程，不写完整 CI 流水线教程。
+     * **`[NEW]`**：块外尚无正文时播种薄草稿，文案写明「打包方案未选定」，并区分「未选定」与「已选定未验证」；还须写明「本机试打不等于发版、不发版不打版本标签；标签由谁打、与 CI 的先后由项目层在本区写清」；须含「发版完成认定」槽位（上传或交付如何算完成、再次上传或分渠道如何标注由项目层写明），并按意图表述写明本机执行的正式发布是发版、云端产出的测试包可以不是发版；不得残留 `__PLATFORM_NAME__`，不写完整厂商打包教程，不写完整 CI 流水线教程。
      * **重跑**：块外已有任何字节则按 [references/managed-blocks.md](references/managed-blocks.md) §5.3 逐字节保留，不得覆盖、不得重排、不得再播种。陈述打包现状时只依据块外现行段。
      * **`[UPGRADE]`**：仅替换标记行之间的受管范围；若 end 标记之后无正文，才允许一次性追加薄草稿；块外已有说明不改写。
      * **`[NO-OP]`**：整文件零写盘。
@@ -326,7 +326,7 @@ description: >-
 
 ## 参考文献与资源
 
-- [references/DECISIONS.md](references/DECISIONS.md)：本包固定层 0.3.0 派生快照（只读事实源）。
+- [references/DECISIONS.md](references/DECISIONS.md)：本包固定层 0.4.0 派生快照（只读事实源）。
 - [presets/python-uv-ruff.md](presets/python-uv-ruff.md)：首发 Python 质量门禁配方数据卡（只读源）。
 - [presets/ts-biome-vitest.md](presets/ts-biome-vitest.md)：TypeScript/JavaScript 质量门禁配方数据卡（只读源）。
 - [references/retention-sections.md](references/retention-sections.md)：规划者访谈与碎片想法留存指引正文库（单一事实源）。

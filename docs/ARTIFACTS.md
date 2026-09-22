@@ -37,7 +37,7 @@
 | 路径 | 类别 | 状态 | 依据与边界 |
 |---|---|---|---|
 | [VISION.md](VISION.md) | 产品愿景 | current | 2026-09-09 维护者明确方向；2026-09-22 确认提交历史的用户收益（#8 / #18），该句不表示 commit-msg 已在本仓或全部目标仓生效；2026-09-22 确认文档防腐产品目标（#9 / #20）：开发中检查受影响文档，能确定且已授权的同步，有疑问的指出，新决策交回用户。该段只记目标与取舍，不表示日常自动维护已交付 |
-| [DECISIONS.md](DECISIONS.md) | 固定层纪律 | current | 0.3.0；变更规则由正文自身定义 |
+| [DECISIONS.md](DECISIONS.md) | 固定层纪律 | current | 0.4.0；变更规则由正文自身定义 |
 | [ARTIFACTS.md](ARTIFACTS.md) | 本仓文档归属 | current | 本轮补齐的内容分类、维护触发和入口登记 |
 | [../AGENTS.md](../AGENTS.md) | 本仓 AI 入口 | current | 只提供读取指针。开工除登记册外，还指向文档防腐检查与文档关系声明 |
 | [../README.md](../README.md) | 对外导航 | current | 仓库总入口；能力说明不代替验收 |
@@ -59,7 +59,7 @@
 | [interviews/2026-09-04-founding-interview.md](interviews/2026-09-04-founding-interview.md) | 立项来源 | reference | 历史去敏访谈，不覆盖现行愿景与纪律 |
 | [reviews/](reviews/) | 讨论材料集合入口 | reference | 子文档各自状态需要核实，不将整个目录认作实施基线 |
 | [reviews/2026-09-10-document-homes-adoption/](reviews/2026-09-10-document-homes-adoption/) | 讨论留档 | current | 2026-09-10 文档归属正式采纳三轮会议留档、表决与维护者裁定，0.3.0 生效依据 |
-| [reviews/2026-09-22-release-tag-semantics/](reviews/2026-09-22-release-tag-semantics/) | 讨论留档 | in-progress | §5.7 发版与标签语义修订 §9 会议（源 issue #4）。三轮归档，维护者已裁定批准（round-3/tally.md §七），施工票 issue #22 进行中；生效提交落盘前固定层、快照与模板保持原样 |
+| [reviews/2026-09-22-release-tag-semantics/](reviews/2026-09-22-release-tag-semantics/) | 讨论留档 | current | §5.7 发版与标签语义修订 §9 会议留档，维护者已裁定批准（round-3/tally.md §七），0.4.0 生效依据。**本仓自生效提交起打 v0.4.0，0.3.0 不追溯补标** |
 | `docs/reviews/2026-09-07-lazypack-harvest/`（工作区未跟踪，不在 Git 树） | 讨论留档 | reference | 未完成的历史讨论材料（仅主持 README 与三份第一轮提示词，participants 为空）。不是现行 harvest 规范，不纳入 Git 树、不删除工作区副本。现行入口仍是已跟踪的 skills/lazypack-harvest/SKILL.md |
 
 ## 4. 本次补齐的范围
@@ -121,3 +121,13 @@
 开工时 `freshness-check.md` 还不存在。当时的识别依据是 #20 与 #9 裁定已经列出的任务、实际 diff、登记册和已有规则。本段按刚写入的流程记录五项。下一位 Agent 从 `AGENTS.md` 进入该流程。
 
 负例在系统临时目录改写声明后写回，写回后检查器为 6/6 PASS、退出码 0：去掉 P1 的处理权限时该条 FAIL 且 `check=PASS`（`declaration=missing:处理权限`），退出码 1；增加 P9 时为 `declaration=no-implementation`，退出码 1；把 `## 声明` 改成 `## 清单` 时 0/6 FAIL，摘要为 `error=未找到标题`，内容对照没有执行，记为失败而不是缺基线或未运行；把来源改回 `X` 时 P1 为 `missing:来源`，退出码 1。这些负例都不是未发现差异。本段不新增 Markdown 链接；写入后复跑仍为 6/6 PASS，P4 links=40，退出码 0。验收限于本机 Windows。
+
+2026-09-22（#22）：维护者已批准的 §5.7 发版与标签语义改定落盘，固定层升至 0.4.0。`docs/DECISIONS.md` 替换 §5.7 并加附注行，§4 发版规则行补上平台段定义，未定项新增两条仍标为待复审。setup 快照按字节复制。`templates/RELEASE.md` 块外薄草稿按发布意图改写，并增加「发版完成认定」槽位；块内固定段正文只改版本戳与来源内容标识。`SKILL.md` 的 `[NEW]` 播种句与参考文献里的快照版本号同步为 0.4.0。`[UPGRADE]` 与 `[NO-OP]` 未改。登记册把 `reviews/2026-09-22-release-tag-semantics/` 转为 current，并写明本仓自生效提交起打 `v0.4.0`，0.3.0 不追溯补标。未接 hook/CI。验收限于本机 Windows 的 `check_doc_pairs` 与随后的版本标签。
+
+本轮防腐检查记录：
+
+- 检查范围：机器检查 P1、P2、P3、P4、P5、P8。人工阅读了 §5.7 是否按裁定稿落盘、历史验收段有没有被改写、两条未定项有没有写成已决定、登记行有没有把施工写成已交付。
+- 依据版本：开工提交 `193d398`。声明正文为 `docs/agents/doc-pairs.md`。命令为仓库根 `node scripts/check_doc_pairs.mjs`。本段写入前工作区已含上述条文、快照、模板与登记行改动，检查器为 6/6 PASS、退出码 0（P1 sha256 `ca41a963da97487dee4f95660777b1fc48126405502ed768f205debe2a2a12fd`，P2 blob `b0bfa054107a9a4c18d8e64a500b4db9bae059bb`，P3 version `0.4.0`，P4 links=41 failures=0，P5 agents=6 readme=8）。收尾提交号随 `v0.4.0` 标签所指提交，本段写不进尚未产生的提交号。
+- 处理结果：P1、P2、P3 为已同步（本票授权改固定层、复制快照、升版本戳，并把五份模板的来源内容标识改到新 blob；收尾检查为 PASS，同一行没有 `declaration=`）。P4、P5、P8 为未发现差异。检查器运行前后 `git status` 一致。本段不新增 Markdown 链接。
+- 未覆盖：任意代码 diff 到文档段落的语义定位器未建设，也未运行。hook/CI 未接线，未运行。外部目标仓试用未授权。未跟踪目录 `docs/reviews/2026-09-07-lazypack-harvest/` 未纳入、未删除。`references/managed-blocks.md` 未改（:64 笔误属 #21；:34 的 `DECISIONS.md@0.3.0` 仍是格式示例）。#19、#5、#6、#7、#10 未做。块内固定段除版本戳与来源内容标识外未改写。
+- 未决：§5.4 两职张力，以及本仓钉版消费是否构成 §5.7 发布意图，仍写在固定层未定项，材料不足，不在本轮判决。phase-2b 与确定性检查接入门禁仍须另票授权。
