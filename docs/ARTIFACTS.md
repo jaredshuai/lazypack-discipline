@@ -100,3 +100,5 @@
 2026-09-22（#17 F1/F2）：`check_doc_pairs.mjs` 的 P8 改为动态抽取交接指引 §2 全部 `### 2.x` 子命令，与 `runCli` 双向比对，不再写死 generate/verify。P4/P5 抽链按 CommonMark 识别反引号与波浪号围栏，开闭须同一字符。固定层未改。未接 hook/CI。验收限于本机 Windows：基线 6/6 PASS；沙箱插入 `### 2.3 audit` 后 P8 为 FAIL（不再假 PASS）；`docs/ARTIFACTS.md` 末尾 `~~~` 围栏内的不存在链接不再令 P4 失败。
 
 2026-09-22（#17 F3）：`handoff_manifest.js` 的 LF 规范化哈希保留开头 UTF-8 BOM（`TextDecoder` `ignoreBOM: true`）。verify 把「其余字节相同、只多或只少开头 BOM」记为 `UTF8_BOM_ONLY_DIFFERENCE`，不再记成换行可解释。退出码仍为 1。换行可解释、字节一致通过、改内容为 `SHA256_RAW_MISMATCH` 保持不变。BOM 与换行同时变化时两种单独理由都不使用。固定层未改。未接 hook/CI。回归：`node scripts/handoff_bom_classify_repro.js`。验收限于本机 Windows。
+
+2026-09-22（#17 F4）：`templates/RELEASE.md` §2 导语改为与 setup `SKILL.md` 的播种条件一致：`[NEW]` 且块外无正文时播种；`[UPGRADE]` 且 end 标记之后无正文时允许一次性追加同一薄草稿；块外已有内容时不得覆盖、重排或再播种；`[NO-OP]` 不写盘。固定层未改。已编译仓的块外旧种子仍按不覆盖原则保留，不会因这次模板改字而重写。验收限于本机 Windows 的条文对照，不是完整 `/lazypack-setup` 访谈。
