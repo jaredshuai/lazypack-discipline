@@ -16,7 +16,7 @@
 | 访谈的来源、背景、当时的意见 | [interviews/](interviews/) | 经授权保留的去敏整理稿；现行结论链接到权威正文，历史原文不改成今天的决定 |
 | 多 AI 提案、互评与主持结论 | [reviews/](reviews/) 按议题归档 | 讨论收束时登记具体入口与采纳状态；集合中的一份报告不自动获得现行权威 |
 | 跨 Agent 交付与核验的操作指引 | [agents/handoff-verification.md](agents/handoff-verification.md) | 交接机制变动时维护；每轮临时报告仍按固定层放系统临时目录 |
-| 本仓 §7.2 机器对子清单 | [agents/doc-pairs.md](agents/doc-pairs.md) | 对子增删或判定方法变化时由本轮执行者更新；检查脚本只实现清单，不复述 |
+| 本仓文档关系声明（§7.2 对子） | [agents/doc-pairs.md](agents/doc-pairs.md) | 声明增删，或来源、目标范围、检查方式、处理权限变化时，由本轮执行者更新；检查脚本只实现清单并核对四要素在场，不复述正文 |
 | 术语、ADR、演变史、研究、规格草稿、参考素材、编码与发布规则 | [DECISIONS.md §4](DECISIONS.md) 已定义的位置 | 按已有分类执行；路径尚不存在时按任务需要创建，避免预先建空文档 |
 
 ## 2. 每轮如何执行
@@ -43,8 +43,8 @@
 | [agents/handoff-verification.md](agents/handoff-verification.md) | 给 agent 的按需说明 | current | 按固定层 §4.1 迁至 docs/agents/。raw 字节仍是第一权威；LF 规范化不剥离 UTF-8 BOM。仅换行与仅 BOM 各自分类，且都非通过。可选 git_blob_id 只记录本机 git 规范化结果，拿不到则字段缺席并写明降级原因 |
 | [../scripts/handoff_manifest.js](../scripts/handoff_manifest.js) | 本仓执行辅助 | current | 只读生成与核验交接清单。`--include-git-blob` 调用本机 git hash-object，不伪造 blob id。LF 规范化哈希保留开头 BOM。仅换行记为 `LINE_ENDING_NORMALIZATION_EXPLAINABLE`，仅 BOM 记为 `UTF8_BOM_ONLY_DIFFERENCE`，两者退出码仍非零。未接 hook/CI |
 | [../scripts/handoff_bom_classify_repro.js](../scripts/handoff_bom_classify_repro.js) | 本仓执行辅助 | current | 上述分类的手动回归。在系统临时目录写夹具，不改仓库。未接 hook/CI。不是门禁 |
-| [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层 §7.2 第一批对子（P1–P5、P8）。P8 动态抽取全部 `### 2.x`；P4/P5 围栏含反引号与波浪号。不是跨项目固定层 |
-| [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述对子。P8 不写死 generate/verify。P4/P5 按 CommonMark 跳过反引号与波浪号围栏，开闭须同字符。手动运行。未接 hook/CI。不宣称门禁已生效 |
+| [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层文档关系声明（P1–P5、P8）。每条只在本文件出现一次，并写明来源、目标范围、检查方式、处理权限。不是跨项目固定层，不要求其他仓手填同一批对子。P8 仍动态抽取交接指引全部 `### 2.x`；P4/P5 围栏含反引号与波浪号 |
+| [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述声明。先核对 `## 声明` 下的编号与四要素是否在场，再执行 P1–P5、P8。缺字段、未声明或没有实现的编号为 FAIL，不能记 PASS。旧的 X/Y/判定 标记不再被认作声明。P8 不写死 generate/verify。P4/P5 按 CommonMark 跳过反引号与波浪号围栏，开闭须同字符。手动运行。未接 hook/CI。不宣称门禁已生效 |
 | [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。本仓仍手动运行，未接 hook/CI。格式通过不等于语义已验证。不是门禁。2026-09-22 的隔离仓接线没有改这份口径 |
 | [../scripts/check_commit_msg.mjs](../scripts/check_commit_msg.mjs) | 本仓执行辅助 | current | 只读检查候选提交说明的标题格式。词表从固定层 §5.1 抽取。本仓仍手动运行，未接 hook/CI，不宣称门禁已生效。2026-09-22 只在本机 Git for Windows 隔离仓用未改行为的副本接通 commit-msg |
 | [../skills/lazypack-setup/SKILL.md](../skills/lazypack-setup/SKILL.md) | setup 执行入口 | current | 以本仓磁盘正文为准；不代表所有宿主或目标仓实测通过。第 2 步有界扫描的排除目录与敏感文件与 document-routing §2.2、doc_scanner 为同一显式集合 |

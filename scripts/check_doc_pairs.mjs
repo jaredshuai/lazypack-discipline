@@ -1,8 +1,10 @@
 /**
  * scripts/check_doc_pairs.mjs
  *
- * 本仓 §7.2 第一批对子的只读检查器（Node 标准库，零依赖）。
- * 对子定义、判定方法和层级以 docs/agents/doc-pairs.md 为唯一正文。
+ * 本仓文档关系声明的只读检查器（Node 标准库，零依赖）。
+ * 声明正文以 docs/agents/doc-pairs.md 为唯一权威。
+ * 脚本核对「## 声明」下的编号是否与已实现检查一一对应，并要求每条四要素都有正文。
+ * 判定算法不复述字段正文。
  *
  * 用法: node scripts/check_doc_pairs.mjs
  * 只读：不写盘、不接 hook/CI。存在本脚本不等于门禁已生效。
@@ -25,6 +27,10 @@ const AGENTS_REL = 'AGENTS.md';
 const ARTIFACTS_REL = 'docs/ARTIFACTS.md';
 const HANDOFF_DOC_REL = 'docs/agents/handoff-verification.md';
 const HANDOFF_SCRIPT_REL = 'scripts/handoff_manifest.js';
+const DOC_PAIRS_REL = 'docs/agents/doc-pairs.md';
+const DECLARATION_FIELDS = ['来源', '目标范围', '检查方式', '处理权限'];
+const FIELD_LINE_RE = /^-\s+\*\*(来源|目标范围|检查方式|处理权限)\*\*：(.*)$/;
+const PAIR_HEADING_RE = /^###\s+(P\d+)\s+(\S.*)$/;
 const PRECOMMIT_REL = 'skills/lazypack-setup/templates/pre-commit.sh';
 
 const TEMPLATE_MD_RELS = [
@@ -473,6 +479,116 @@ function extractImplCliSpec(source) {
 }
 
 /**
+ * 从文档关系声明的「## 声明」节抽出编号与四要素正文。
+ * 只认全角冒号字段；围栏内的标记不计入。这里不解释字段语义。
+ */
+function parseDeclarations(markdown) {
+  const section = sliceAtxSection(markdown, /^## 声明\s*$/, /^## /);
+  const lines = section.split(/\r?\n/);
+  const declarations = new Map();
+  let openFence = null;
+  let current = null;
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (openFence) {
+      if (isClosingFence(line, openFence)) {
+        openFence = null;
+      }
+      continue;
+    }
+    if (isOpeningFence(line)) {
+      openFence = matchFenceMarker(line);
+      continue;
+    }
+    const heading = PAIR_HEADING_RE.exec(line);
+    if (heading) {
+      const id = heading[1];
+      if (declarations.has(id)) {
+        declarations.get(id).duplicate = true;
+      } else {
+        const fields = {};
+        for (const name of DECLARATION_FIELDS) {
+          fields[name] = '';
+        }
+        declarations.set(id, {
+          id,
+          title: heading[2].trim(),
+          fields,
+          duplicateFields: [],
+          duplicate: false,
+          activeField: null
+        });
+      }
+      current = declarations.get(id);
+      current.activeField = null;
+      continue;
+    }
+    if (/^###\s+/.test(line)) {
+      throw new Error(`声明标题无法抽出编号: ${line}`);
+    }
+    const fieldMatch = FIELD_LINE_RE.exec(line);
+    if (fieldMatch) {
+      if (!current) {
+        throw new Error('四要素出现在首条声明之前');
+      }
+      const name = fieldMatch[1];
+      if (current.fields[name].trim()) {
+        current.duplicateFields.push(name);
+      }
+      current.fields[name] = fieldMatch[2].trim();
+      current.activeField = name;
+      continue;
+    }
+    if (current && current.activeField && line.trim() !== '' && !/^#{1,6}\s/.test(line)) {
+      current.fields[current.activeField] += `\n${line.trim()}`;
+    }
+  }
+  return declarations;
+}
+
+/**
+ * 列出一条声明相对四要素格式的问题；没有问题时返回空数组。
+ * 声明缺席时记为 undeclared。
+ */
+function declarationProblems(decl) {
+  if (!decl) {
+    return ['undeclared'];
+  }
+  const problems = [];
+  if (decl.duplicate) {
+    problems.push('duplicate');
+  }
+  for (const name of DECLARATION_FIELDS) {
+    if (!decl.fields[name] || !decl.fields[name].trim()) {
+      problems.push(`missing:${name}`);
+    }
+  }
+  for (const name of decl.duplicateFields) {
+    problems.push(`duplicate-field:${name}`);
+  }
+  return problems;
+}
+
+/**
+ * 声明格式有问题时把该条记为 FAIL，并保留原来的检查结果供对照。
+ */
+function applyDeclarationGate(checkRow, problems) {
+  if (problems.length === 0) {
+    return checkRow;
+  }
+  return {
+    id: checkRow.id,
+    status: 'FAIL',
+    evidence: {
+      ...checkRow.evidence,
+      declarationProblems: problems,
+      checkStatus: checkRow.status
+    }
+  };
+}
+
+/**
  * P1：固定层正文与 setup 快照原始字节 SHA-256 必须相等。
  */
 function checkP1() {
@@ -633,15 +749,16 @@ function runPair(id, fn) {
 }
 
 /**
- * 为单条对子结果生成摘要细节。
+ * 为单条对子结果生成摘要细节（不含声明格式问题）。
  */
-function renderPairDetail(row) {
+function renderPairDetailBody(row) {
   const ev = row.evidence || {};
   if (ev.error) {
     return ` error=${ev.error}`;
   }
   if (row.id === 'P1') {
-    if (row.status === 'PASS') {
+    const contentPassed = row.status === 'PASS' || ev.checkStatus === 'PASS';
+    if (contentPassed) {
       return ` sha256=${ev.sha256}`;
     }
     return ` left=${ev.leftSha256} right=${ev.rightSha256}`;
@@ -680,6 +797,19 @@ function renderPairDetail(row) {
 }
 
 /**
+ * 拼上声明格式问题，便于和内容检查失败分开看。
+ */
+function renderPairDetail(row) {
+  const detail = renderPairDetailBody(row);
+  const problems = row.evidence && row.evidence.declarationProblems;
+  if (!Array.isArray(problems) || problems.length === 0) {
+    return detail;
+  }
+  const checkNote = row.evidence.checkStatus ? ` check=${row.evidence.checkStatus}` : '';
+  return `${detail} declaration=${problems.join(',')}${checkNote}`;
+}
+
+/**
  * 渲染人类可读摘要（不含绝对路径）。
  */
 function renderSummary(report) {
@@ -694,17 +824,21 @@ function renderSummary(report) {
 }
 
 /**
- * 入口：依次跑 P1–P5、P8，向 stdout 写摘要与 JSON，按是否全过设置退出码。
+ * 已实现的声明编号与检查函数。新增编号时先改声明正文，再改这一张表。
  */
-function main() {
-  const pairs = [
-    runPair('P1', checkP1),
-    runPair('P2', checkP2),
-    runPair('P3', checkP3),
-    runPair('P4', checkP4),
-    runPair('P5', checkP5),
-    runPair('P8', checkP8)
-  ];
+const PAIR_CHECKS = [
+  ['P1', checkP1],
+  ['P2', checkP2],
+  ['P3', checkP3],
+  ['P4', checkP4],
+  ['P5', checkP5],
+  ['P8', checkP8]
+];
+
+/**
+ * 写出摘要与 JSON，并按是否全过设置退出码。
+ */
+function emitReport(pairs) {
   const report = {
     ok: pairs.every((row) => row.status === 'PASS'),
     pairs
@@ -712,6 +846,35 @@ function main() {
   const summary = renderSummary(report);
   process.stdout.write(`${summary}\n\n${JSON.stringify(report, null, 2)}\n`);
   process.exit(report.ok ? 0 : 1);
+}
+
+/**
+ * 入口：先核对声明编号与四要素，再跑对应检查。
+ * 声明读失败时，已实现的每条都记 FAIL，避免进程直接崩溃。
+ */
+function main() {
+  let declarations;
+  try {
+    declarations = parseDeclarations(readUtf8(DOC_PAIRS_REL));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    emitReport(PAIR_CHECKS.map(([id]) => pairResult(id, 'FAIL', { error: message })));
+    return;
+  }
+
+  const implemented = new Set(PAIR_CHECKS.map(([id]) => id));
+  const pairs = PAIR_CHECKS.map(([id, fn]) => {
+    const checkRow = runPair(id, fn);
+    return applyDeclarationGate(checkRow, declarationProblems(declarations.get(id)));
+  });
+
+  const extras = [...declarations.keys()].filter((id) => !implemented.has(id)).sort();
+  for (const id of extras) {
+    const problems = ['no-implementation', ...declarationProblems(declarations.get(id))];
+    pairs.push(pairResult(id, 'FAIL', { declarationProblems: problems }));
+  }
+
+  emitReport(pairs);
 }
 
 main();
