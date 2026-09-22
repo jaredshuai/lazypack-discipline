@@ -1,6 +1,6 @@
 # 顺序发送与生命周期控制契约（references/dispatch_lifecycle.md）
 
-本文档定义 `/lazypack-harvest` 的 7 阶段生命周期控制、顺序发送事务边界与 R1/R2 恢复机制，依据冻结规格 `SPEC.md` §2。
+本文档定义 `/lazypack-harvest` 的 7 阶段生命周期控制、顺序发送事务边界与 R1/R2 恢复机制。本仓没有冻结规格文件。现行入口是 [SKILL.md](../SKILL.md)「执行步骤与操作规范」：步骤 1–6 对应该七阶段。
 
 ---
 

@@ -1,6 +1,6 @@
 # 状态定义与优先级阶梯（references/status_ladder.md）
 
-本文档定义 `/lazypack-harvest` 的逐候选状态与批次唯一汇总状态，依据冻结规格 `SPEC.md` §5。
+本文档定义 `/lazypack-harvest` 的逐候选状态与批次唯一汇总状态。本仓没有冻结规格文件。现行入口是 [SKILL.md](../SKILL.md)「步骤 6：批次唯一汇总判定与呈现」；步骤 4–5 给逐候选状态赋值，8 级阶梯的细则在本文件第 1、2 节。
 
 ---
 

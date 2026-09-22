@@ -46,13 +46,13 @@
 | [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述对子。手动运行。未接 hook/CI。不宣称门禁已生效 |
 | [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。手动运行。未接 hook/CI。格式通过不等于语义已验证。不是门禁 |
 | [../scripts/check_commit_msg.mjs](../scripts/check_commit_msg.mjs) | 本仓执行辅助 | current | 只读检查候选提交说明的标题格式。词表从固定层 §5.1 抽取。手动运行。未接 hook/CI。不宣称门禁已生效 |
-| [../skills/lazypack-setup/SKILL.md](../skills/lazypack-setup/SKILL.md) | setup 执行入口 | current | 以本仓磁盘正文为准；不代表所有宿主或目标仓实测通过 |
-| [../skills/lazypack-setup/references/document-routing.md](../skills/lazypack-setup/references/document-routing.md) | 文档路由规范 | current | S1 产物：既有文档 8 大知识区归属规范、原位保留登记与同主题判定；首期 preserve-existing 在当前 AGY/Windows 限定沙箱验收完成（见 §4）。Phase 2 受控迁移规约已合入本文件；通用生产迁移仍 UNPROVEN |
-| [../skills/lazypack-setup/scripts/doc_scanner.mjs](../skills/lazypack-setup/scripts/doc_scanner.mjs) | setup 执行辅助 | current | 有界 Markdown 扫描与引用图构建器。证据：Phase 2 主仓应用收尾与本仓只读 scan。已验证：当前 Windows/AGY 隔离沙箱与本仓只读扫描。不代表外部目标仓生产级自动迁移 |
+| [../skills/lazypack-setup/SKILL.md](../skills/lazypack-setup/SKILL.md) | setup 执行入口 | current | 以本仓磁盘正文为准；不代表所有宿主或目标仓实测通过。第 2 步有界扫描的排除目录与敏感文件与 document-routing §2.2、doc_scanner 为同一显式集合 |
+| [../skills/lazypack-setup/references/document-routing.md](../skills/lazypack-setup/references/document-routing.md) | 文档路由规范 | current | S1 产物：既有文档 8 大知识区归属规范、原位保留登记与同主题判定；首期 preserve-existing 在当前 AGY/Windows 限定沙箱验收完成（见 §4）。Phase 2 受控迁移规约已合入本文件；通用生产迁移仍 UNPROVEN。§2.2 排除目录与敏感文件与 doc_scanner 为同一显式集合（含 `.DS_Store`；敏感文件为精确文件名或明确前后缀） |
+| [../skills/lazypack-setup/scripts/doc_scanner.mjs](../skills/lazypack-setup/scripts/doc_scanner.mjs) | setup 执行辅助 | current | 有界 Markdown 扫描与引用图构建器。证据：Phase 2 主仓应用收尾与本仓只读 scan。已验证：当前 Windows/AGY 隔离沙箱与本仓只读扫描。不代表外部目标仓生产级自动迁移。排除目录含 `.DS_Store`（路径小写化后按 `.ds_store` 匹配）；敏感文件仍为精确匹配 |
 | [../skills/lazypack-setup/scripts/doc_plan.mjs](../skills/lazypack-setup/scripts/doc_plan.mjs) | setup 执行辅助 | current | 迁移计划生成器（含双指纹与 Section 3 紧凑表修复）。证据：Phase 2 应用收尾与 fix2 回归。已验证：当前 Windows/AGY 隔离沙箱。不代表外部目标仓生产级自动迁移 |
 | [../skills/lazypack-setup/scripts/doc_executor.mjs](../skills/lazypack-setup/scripts/doc_executor.mjs) | setup 执行辅助 | current | 双指纹绑定的受控执行器（含补偿回滚）。证据：Phase 2 应用收尾与 S6 沙箱批次。已验证：当前 Windows/AGY 隔离沙箱。不宣称系统级抗崩溃原子性，不代表外部目标仓生产级自动迁移 |
 | [../skills/lazypack-setup/scripts/doc_helper.mjs](../skills/lazypack-setup/scripts/doc_helper.mjs) | setup 执行辅助 | current | scan/plan/exec 调度入口。证据：Phase 2 应用收尾与 3 个沙箱 fixture 的真实 Agent 验收。已验证：当前 Windows/AGY 隔离沙箱。不代表外部目标仓生产级自动迁移 |
-| [../skills/lazypack-harvest/SKILL.md](../skills/lazypack-harvest/SKILL.md) | harvest 执行入口 | current | 显式调用边界由该 skill 定义，本轮未触发 |
+| [../skills/lazypack-harvest/SKILL.md](../skills/lazypack-harvest/SKILL.md) | harvest 执行入口 | current | 显式调用边界由该 skill 定义。其 references 与 helper 注释改指本文件现存步骤；本仓没有冻结规格 SPEC.md |
 | [interviews/2026-09-04-founding-interview.md](interviews/2026-09-04-founding-interview.md) | 立项来源 | reference | 历史去敏访谈，不覆盖现行愿景与纪律 |
 | [reviews/](reviews/) | 讨论材料集合入口 | reference | 子文档各自状态需要核实，不将整个目录认作实施基线 |
 | [reviews/2026-09-10-document-homes-adoption/](reviews/2026-09-10-document-homes-adoption/) | 讨论留档 | current | 2026-09-10 文档归属正式采纳三轮会议留档、表决与维护者裁定，0.3.0 生效依据 |

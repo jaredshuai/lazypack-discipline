@@ -39,15 +39,19 @@
 ### 2.2 严格排除区、优先顺位与敏感边界 (Bounded Scanning)
 1. **通用排除区与声明优先顺位 (Precedence & Fail-safe Exclusions)**:
    - **声明在先优先于通用剪枝**: 项目已明确声明的合法仓内原件（例如 `docs/agents/issue-tracker.md` 明确声明的实际工单路径位于 `.scratch/tickets/`、或常驻入口指针明确指向的规格路径）**优先于通用目录剪枝规则**；对于已被权威指针声明的仓内路径，Agent 必须正常追踪纳入候选范围，绝不因目录名包含 `.scratch` 等被粗暴过滤；
-   - **未声明的通用排除区**:
-     * 依赖目录：`node_modules/`, `vendor/`；
-     * 版本控制元数据：`.git/`；
-     * 构建产物与缓存：`dist/`, `build/`, `target/`, `out/`, `.cache/`, `.pytest_cache/`, `__pycache__/`；
-     * 虚拟环境：`.venv/`, `venv/`；
-     * IDE 临时配置：`.idea/`, `.vscode/`, `.DS_Store`；
-     * 备份目录：`.lazypack-backup/`。
+   - **未声明的通用排除区**（路径段精确匹配，比较前路径已小写化，与 `doc_scanner.mjs` 的 `excludedDirs` 同一集合）:
+     * `node_modules`, `.git`, `vendor`, `dist`, `build`, `target`, `out`, `.cache`, `.pytest_cache`, `__pycache__`, `.venv`, `venv`, `.idea`, `.vscode`, `.lazypack-backup`, `.DS_Store`。
 2. **安全硬边界不可逾越 (Security Boundaries)**:
-   - 包含敏感密钥标识的文件路径（`.env*`, `credentials.json`, `client_secret.json`, `*.pem`, `*.key`, `id_rsa`, `id_ed25519`, `.ssh/`）**一律静默排除，绝对禁止读取其文件内容**，无论是否有指针指向；普通设计文档（如 `docs/credentials-architecture.md`）正常解析；
+   - 敏感文件按下列显式集合精确匹配，**一律静默排除，绝对禁止读取其文件内容**，无论是否有指针指向。匹配的是完整文件名或明确的前后缀，用来避免误杀普通设计文档（如 `docs/credentials-architecture.md` 仍正常解析）：
+     * `.env`（文件名恰好等于 `.env`）；
+     * `.env.*`（文件名以 `.env.` 开头）；
+     * `credentials.json`；
+     * `client_secret.json`；
+     * `*.pem`（文件名以 `.pem` 结尾）；
+     * `*.key`（文件名以 `.key` 结尾）；
+     * `id_rsa`；
+     * `id_ed25519`；
+     * `.ssh/`（路径以 `.ssh/` 开头，或路径中含有 `/.ssh/`）。
    - 扫描报告中概括声明“部分敏感配置与系统目录已按安全边界排除，本次探测属于有界扫描”，严禁静默跳过后声称“全仓无界 100% 完整覆盖”。
 3. **符号链接与 Junction 越界防御**:
    - 遇到符号链接（Symlink）或 Junction 时，必须检查其解析后的真实绝对路径（`fs.realpathSync`）；

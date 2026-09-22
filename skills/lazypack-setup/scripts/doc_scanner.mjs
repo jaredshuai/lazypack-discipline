@@ -83,18 +83,21 @@ export function extractHeadingsAndSlugs(content) {
 }
 
 /**
- * 检查路径是否属于禁区或敏感路径
- * 精确匹配敏感文件，避免误排除讨论安全架构/凭据指南的普通设计文档
+ * 检查路径是否属于禁区或敏感路径。
+ * 排除目录与敏感文件都是显式集合：目录按路径段精确匹配；敏感文件按完整文件名或明确前后缀匹配，避免误排除讨论安全架构的普通设计文档。
+ * 调用前会把整条相对路径小写化，因此集合字面量使用小写；`.DS_Store` 对应 `.ds_store`。
+ * @param {string} relPath 相对仓库根的路径
+ * @returns {{ excluded: boolean, reason?: string }} 命中时 reason 为 excluded_directory 或 sensitive_file
  */
 export function isExcludedOrSensitive(relPath) {
   const norm = normalizeRelPath(relPath).toLowerCase();
   const segments = norm.split('/');
 
-  // 排除目录
+  // 排除目录。路径已小写化，`.DS_Store` 以 `.ds_store` 入集。
   const excludedDirs = new Set([
     'node_modules', '.git', 'vendor', 'dist', 'build', 'target',
     'out', '.cache', '.pytest_cache', '__pycache__', '.venv', 'venv',
-    '.idea', '.vscode', '.lazypack-backup'
+    '.idea', '.vscode', '.lazypack-backup', '.ds_store'
   ]);
 
   for (const seg of segments) {

@@ -4,7 +4,9 @@
  * Deterministic batch rollup evaluation and temporary ledger management
  * for /lazypack-harvest.
  * 
- * Complies with SPEC.md §5.1 (Per-Candidate Status) and §5.2 (8-Level Batch Rollup Ladder).
+ * Per-candidate statuses follow SKILL.md 步骤 4–5 and references/status_ladder.md §1.
+ * The 8-level batch rollup follows SKILL.md「步骤 6：批次唯一汇总判定与呈现」 and references/status_ladder.md §2.
+ * This repository has no frozen specification file.
  * Zero external dependencies (Node.js standard library only).
  */
 
@@ -14,7 +16,7 @@ const os = require("os");
 const crypto = require("crypto");
 
 /**
- * Valid Per-Candidate Status Codes (SPEC §5.1)
+ * Valid Per-Candidate Status Codes (status_ladder.md §1; SKILL.md 步骤 4–5)
  */
 const CANDIDATE_STATUSES = Object.freeze([
   "CANDIDATE_PUBLISHED",
@@ -27,7 +29,7 @@ const CANDIDATE_STATUSES = Object.freeze([
 ]);
 
 /**
- * Valid Batch Rollup Status Codes (SPEC §5.2)
+ * Valid Batch Rollup Status Codes (status_ladder.md §2; SKILL.md 步骤 6)
  */
 const BATCH_ROLLUP_STATUSES = Object.freeze([
   "NO_CANDIDATE",
@@ -56,7 +58,7 @@ function generateCandidateFingerprint(clause, abstractPain) {
 }
 
 /**
- * Evaluates the unique batch rollup status based on the 8-level priority ladder (SPEC §5.2).
+ * Evaluates the unique batch rollup status based on the 8-level priority ladder (status_ladder.md §2; SKILL.md 步骤 6).
  * 
  * Ladder:
  * 1. NO_CANDIDATE: candidates count is 0

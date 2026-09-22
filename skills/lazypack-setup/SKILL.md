@@ -102,8 +102,9 @@ description: >-
      * 读取 `docs/agents/issue-tracker.md`，若明确声明工单路径在 `.scratch/`（如 `.scratch/tickets/`），该路径内的文件严格作为持久权威来源纳入候选；未在声明中的文件（如 `.scratch/cache/tmp.log`）仅作为不在本次已授权登记范围，不臆断为可丢弃缓存；
      * 读取常驻入口（`AGENTS.md` / `CLAUDE.md`）指针；
     - **有界扫描与安全边界**:
-      * **声明在先优先于通用剪枝**: 项目已明确声明的合法仓内路径（例如 `docs/agents/issue-tracker.md` 明确声明的 `.scratch/tickets/` 或常驻入口指向的规格文件）优先于通用剪枝，正常追踪纳入候选；未声明的依赖与构建目录（`node_modules/`, `vendor/`, `.git/`, `dist/`, `build/`, `.venv/` 等）严格排除；
-      * 敏感文件（`.env*`, `*secret*`, `*credential*`, `.ssh/`）一律静默排除且不读取，在扫描报告中概括说明“部分敏感与系统目录已按安全边界排除，本次探测属于有界扫描”，不虚报无界全覆盖；
+      * **声明在先优先于通用剪枝**: 项目已明确声明的合法仓内路径（例如 `docs/agents/issue-tracker.md` 明确声明的 `.scratch/tickets/` 或常驻入口指向的规格文件）优先于通用剪枝，正常追踪纳入候选；
+      * **未声明的排除目录**（路径段精确匹配，与 [document-routing.md](references/document-routing.md) §2.2 及 `doc_scanner.mjs` 同一集合）：`node_modules`, `.git`, `vendor`, `dist`, `build`, `target`, `out`, `.cache`, `.pytest_cache`, `__pycache__`, `.venv`, `venv`, `.idea`, `.vscode`, `.lazypack-backup`, `.DS_Store`；
+      * **敏感文件**（精确匹配，与上述两处同一集合，以免误杀设计文档）：`.env`（文件名恰好等于 `.env`）、`.env.*`（文件名以 `.env.` 开头）、`credentials.json`、`client_secret.json`、`*.pem`（文件名以 `.pem` 结尾）、`*.key`（文件名以 `.key` 结尾）、`id_rsa`、`id_ed25519`、`.ssh/`（路径以 `.ssh/` 开头，或路径中含有 `/.ssh/`）。一律静默排除且不读取。普通设计文档（如 `docs/credentials-architecture.md`）正常解析。在扫描报告中概括说明“部分敏感与系统目录已按安全边界排除，本次探测属于有界扫描”，不虚报无界全覆盖；
       * 符号链接指向工作区外时立即停止深入并报告，绝不自动穿透读取；外部网络资源与私有存储未获显式授权不读取；
       * 区分四类登记对象（本地文件/有效章节锚点、存在的目录索引入口、声明的外部 URL、留存种子/私有绑定），维持既有非空与授权契约；
     - **逻辑归属与权威范围**:

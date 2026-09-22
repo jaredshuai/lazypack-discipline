@@ -1,6 +1,6 @@
 # 深度脱敏规范与数据边界（references/sanitization.md）
 
-本文档定义 `/lazypack-harvest` 的脱敏规则、敏感片段处理策略与安全边界，依据冻结规格 `SPEC.md` §1.2 及 §2 阶段 4。
+本文档定义 `/lazypack-harvest` 的脱敏规则、敏感片段处理策略与安全边界。本仓没有冻结规格文件。现行入口是 [SKILL.md](../SKILL.md)「步骤 3：深度脱敏与五要素正文构造」。
 
 ---
 

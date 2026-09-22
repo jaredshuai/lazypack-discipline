@@ -3,7 +3,8 @@
  * 
  * Sanitization engine and verifier for /lazypack-harvest.
  * 
- * Complies with SPEC.md §1.2 (Principle 5) and §2 (Stage 4 & Sanitization).
+ * Follows SKILL.md「步骤 3：深度脱敏与五要素正文构造」 and references/sanitization.md.
+ * This repository has no frozen specification file.
  * Redacts absolute paths, credentials, tokens, private package names, internal emails, and IPs.
  * Zero external dependencies (Node.js standard library only).
  * 
