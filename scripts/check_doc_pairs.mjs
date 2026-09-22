@@ -142,19 +142,65 @@ function isNonRelativeUrl(url) {
 }
 
 /**
- * 从 Markdown 抽出内联链接的目标 URL（跳过围栏代码与行内反引号）。
+ * 识别一行是否为 CommonMark 围栏标记。
+ * 反引号与波浪号都算，缩进不超过 3；返回字符、长度和标记后的余文。
+ */
+function matchFenceMarker(line) {
+  const match = /^[ \t]{0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+  if (!match) {
+    return null;
+  }
+  const marker = match[1];
+  return {
+    char: marker[0],
+    length: marker.length,
+    rest: match[2]
+  };
+}
+
+/**
+ * 判断这一行能否关闭当前围栏：字符必须相同，长度不少于开启围栏，余文只能是空白。
+ */
+function isClosingFence(line, openFence) {
+  const marker = matchFenceMarker(line);
+  if (!marker || marker.char !== openFence.char || marker.length < openFence.length) {
+    return false;
+  }
+  return marker.rest.trim() === '';
+}
+
+/**
+ * 判断这一行能否开启围栏。反引号围栏的信息串里不能再出现反引号。
+ */
+function isOpeningFence(line) {
+  const marker = matchFenceMarker(line);
+  if (!marker) {
+    return false;
+  }
+  if (marker.char === '`' && marker.rest.includes('`')) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * 从 Markdown 抽出内联链接的目标 URL。
+ * 跳过 CommonMark 围栏（反引号与波浪号，开闭必须同一字符）和行内反引号。
  */
 function extractInlineLinks(content) {
   const links = [];
   const lines = content.split(/\r?\n/);
-  let inFence = false;
+  let openFence = null;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (/^\s*```/.test(line)) {
-      inFence = !inFence;
+    if (openFence) {
+      if (isClosingFence(line, openFence)) {
+        openFence = null;
+      }
       continue;
     }
-    if (inFence) {
+    if (isOpeningFence(line)) {
+      openFence = matchFenceMarker(line);
       continue;
     }
     const withoutInlineCode = line.replace(/`[^`]*`/g, (chunk) => ' '.repeat(chunk.length));
@@ -335,27 +381,60 @@ function normalizeCliSpec(spec) {
 }
 
 /**
- * 从交接文档 §2 抽出各子命令声明的 flag 集合。
+ * 从 `### 2.x` 标题抽出子命令名。
+ * 标题里恰好一个反引号命令名时用它；否则用编号后的第一个命令名标记。
+ */
+function extractDeclaredCommandName(headingLine) {
+  const backtickNames = [...headingLine.matchAll(/`([a-z][a-z0-9-]*)`/g)].map((match) => match[1]);
+  const unique = [...new Set(backtickNames)];
+  if (unique.length === 1) {
+    return unique[0];
+  }
+  if (unique.length > 1) {
+    throw new Error(`handoff-verification.md 子命令标题含多个命令名: ${headingLine}`);
+  }
+  const afterNumber = headingLine.replace(/^### 2\.\d+\s+/, '');
+  const token = afterNumber.split(/\s+/)[0];
+  if (/^[a-z][a-z0-9-]*$/.test(token)) {
+    return token;
+  }
+  throw new Error(`handoff-verification.md 未能从标题抽出子命令名: ${headingLine}`);
+}
+
+/**
+ * 从交接文档 §2 的全部 `### 2.x` 小节抽出子命令与 flag。
+ * 不写死小节编号或命令名；每个小节直到下一个同级或更高级标题为止。
  */
 function extractDocCliSpec(markdown) {
   const section2 = sliceAtxSection(markdown, /^## 2[\.\s]/, /^## [^2]/);
-  const generateText = sliceAtxSection(section2, /^### 2\.1\b/, /^### 2\.2\b|^## /);
-  const verifyText = sliceAtxSection(section2, /^### 2\.2\b/, /^### |^## /);
-  const generateFlags = new Set(generateText.match(FLAG_RE) || []);
-  const verifyFlags = new Set(verifyText.match(FLAG_RE) || []);
-  if (!/\bgenerate\b/.test(generateText)) {
-    throw new Error('handoff-verification.md §2.1 未声明 generate');
+  const lines = section2.split(/\r?\n/);
+  const starts = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (/^### 2\.\d+\s+/.test(lines[i])) {
+      starts.push(i);
+    }
   }
-  if (!/\bverify\b/.test(verifyText)) {
-    throw new Error('handoff-verification.md §2.2 未声明 verify');
+  if (starts.length === 0) {
+    throw new Error('handoff-verification.md §2 未找到 ### 2.x 子命令小节');
   }
-  if (generateFlags.size === 0 || verifyFlags.size === 0) {
-    throw new Error('handoff-verification.md §2 未能抽出 flag');
+  const spec = {};
+  for (let s = 0; s < starts.length; s++) {
+    const start = starts[s];
+    let end = lines.length;
+    for (let i = start + 1; i < lines.length; i++) {
+      if (/^### |^## /.test(lines[i])) {
+        end = i;
+        break;
+      }
+    }
+    const command = extractDeclaredCommandName(lines[start]);
+    if (Object.prototype.hasOwnProperty.call(spec, command)) {
+      throw new Error(`handoff-verification.md §2 子命令重复: ${command}`);
+    }
+    const body = lines.slice(start, end).join('\n');
+    spec[command] = new Set(body.match(FLAG_RE) || []);
   }
-  return {
-    generate: generateFlags,
-    verify: verifyFlags
-  };
+  return spec;
 }
 
 /**
@@ -387,8 +466,8 @@ function extractImplCliSpec(source) {
     spec[command] = flags;
     match = cmdRe.exec(runCliSource);
   }
-  if (!spec.generate || !spec.verify) {
-    throw new Error('runCli 未同时解析到 generate 与 verify');
+  if (Object.keys(spec).length === 0) {
+    throw new Error('runCli 未解析到任何子命令');
   }
   return spec;
 }
@@ -591,6 +670,11 @@ function renderPairDetail(row) {
   }
   if (row.id === 'P8' && ev.commands) {
     return ` commands=${ev.commands.join(',')}`;
+  }
+  if (row.id === 'P8' && ev.doc && ev.impl) {
+    const docCommands = Array.isArray(ev.doc.commands) ? ev.doc.commands.join(',') : '';
+    const implCommands = Array.isArray(ev.impl.commands) ? ev.impl.commands.join(',') : '';
+    return ` doc=${docCommands} impl=${implCommands}`;
   }
   return '';
 }
