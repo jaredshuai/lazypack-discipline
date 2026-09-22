@@ -40,8 +40,9 @@
 | [ARTIFACTS.md](ARTIFACTS.md) | 本仓文档归属 | current | 本轮补齐的内容分类、维护触发和入口登记 |
 | [../AGENTS.md](../AGENTS.md) | 本仓 AI 入口 | current | 本轮新建；只提供读取指针 |
 | [../README.md](../README.md) | 对外导航 | current | 仓库总入口；能力说明不代替验收 |
-| [agents/handoff-verification.md](agents/handoff-verification.md) | 给 agent 的按需说明 | current | 按固定层 §4.1 迁至 docs/agents/。raw 字节仍是第一权威；可选 git_blob_id 只记录本机 git 规范化结果，拿不到则字段缺席并写明降级原因 |
-| [../scripts/handoff_manifest.js](../scripts/handoff_manifest.js) | 本仓执行辅助 | current | 只读生成与核验交接清单。`--include-git-blob` 调用本机 git hash-object，不伪造 blob id。仅换行差异单独分类且仍非通过。未接 hook/CI |
+| [agents/handoff-verification.md](agents/handoff-verification.md) | 给 agent 的按需说明 | current | 按固定层 §4.1 迁至 docs/agents/。raw 字节仍是第一权威；LF 规范化不剥离 UTF-8 BOM。仅换行与仅 BOM 各自分类，且都非通过。可选 git_blob_id 只记录本机 git 规范化结果，拿不到则字段缺席并写明降级原因 |
+| [../scripts/handoff_manifest.js](../scripts/handoff_manifest.js) | 本仓执行辅助 | current | 只读生成与核验交接清单。`--include-git-blob` 调用本机 git hash-object，不伪造 blob id。LF 规范化哈希保留开头 BOM。仅换行记为 `LINE_ENDING_NORMALIZATION_EXPLAINABLE`，仅 BOM 记为 `UTF8_BOM_ONLY_DIFFERENCE`，两者退出码仍非零。未接 hook/CI |
+| [../scripts/handoff_bom_classify_repro.js](../scripts/handoff_bom_classify_repro.js) | 本仓执行辅助 | current | 上述分类的手动回归。在系统临时目录写夹具，不改仓库。未接 hook/CI。不是门禁 |
 | [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层 §7.2 第一批对子（P1–P5、P8）。P8 动态抽取全部 `### 2.x`；P4/P5 围栏含反引号与波浪号。不是跨项目固定层 |
 | [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述对子。P8 不写死 generate/verify。P4/P5 按 CommonMark 跳过反引号与波浪号围栏，开闭须同字符。手动运行。未接 hook/CI。不宣称门禁已生效 |
 | [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。手动运行。未接 hook/CI。格式通过不等于语义已验证。不是门禁 |
@@ -97,3 +98,5 @@
 2026-09-22（#13）：harvest 的三份 references 与两份 helper 注释改为指向 `skills/lazypack-harvest/SKILL.md` 的现存步骤（生命周期对应「执行步骤与操作规范」步骤 1–6；脱敏对应步骤 3；批次汇总对应步骤 6，逐候选状态在步骤 4–5 赋值）。本仓没有冻结规格文件，也没有新建该文件。`document-routing.md` §2.2、setup `SKILL.md` 第 2 步与 `doc_scanner.mjs` 使用同一显式集合：排除目录为原集合加上 `.DS_Store`；敏感文件为 `.env`、`.env.*`、`credentials.json`、`client_secret.json`、`*.pem`、`*.key`、`id_rsa`、`id_ed25519`、`.ssh/`。`.envrc` 不在集合内，本轮未加入。`doc_scanner.mjs` 在抽链前剥离围栏与行内反引号，并忽略带 scheme 的 URL（含 `file:`）与纯锚点；标题抽取仍读原始正文。本仓只读 scan：123 个文件，死链 17→0，新增 0。消除的 17 条都是误报（9 条 `docs/ARTIFACTS.md` 的 `file://`，5 条 `document-routing.md` 行内示例，1 条 `doc-pairs.md` 行内示例，`managed-blocks.md` 与 setup `SKILL.md` 各 1 条目标仓指针文案）。临时 fixture 仍检出真死链 `./does-not-exist.md`；围栏内 `[a](b)`、行内 `` `[a](b)` `` 与 `file://` 不产生链接记录；围栏内标题仍被抽出。`.DS_Store` 目录被排除，`docs/credentials-architecture.md` 仍解析出到 `./ok.md` 的链接。`doc_plan.mjs` 未改行为：它只按迁移源路径查 `inboundReferences`，上述伪链接与 `file://` 修复后不再进入该图；`rewriteMarkdownContent` 在文件因其他真实引用被选中时，仍会改写其中的 `file:`、围栏链接和行内代码链接。固定层未改。`scripts/handoff_manifest.js` 与 `docs/agents/handoff-verification.md` 未改。未接 hook/CI。验收限于本机 Windows。
 
 2026-09-22（#17 F1/F2）：`check_doc_pairs.mjs` 的 P8 改为动态抽取交接指引 §2 全部 `### 2.x` 子命令，与 `runCli` 双向比对，不再写死 generate/verify。P4/P5 抽链按 CommonMark 识别反引号与波浪号围栏，开闭须同一字符。固定层未改。未接 hook/CI。验收限于本机 Windows：基线 6/6 PASS；沙箱插入 `### 2.3 audit` 后 P8 为 FAIL（不再假 PASS）；`docs/ARTIFACTS.md` 末尾 `~~~` 围栏内的不存在链接不再令 P4 失败。
+
+2026-09-22（#17 F3）：`handoff_manifest.js` 的 LF 规范化哈希保留开头 UTF-8 BOM（`TextDecoder` `ignoreBOM: true`）。verify 把「其余字节相同、只多或只少开头 BOM」记为 `UTF8_BOM_ONLY_DIFFERENCE`，不再记成换行可解释。退出码仍为 1。换行可解释、字节一致通过、改内容为 `SHA256_RAW_MISMATCH` 保持不变。BOM 与换行同时变化时两种单独理由都不使用。固定层未改。未接 hook/CI。回归：`node scripts/handoff_bom_classify_repro.js`。验收限于本机 Windows。

@@ -261,8 +261,44 @@ function collectGitBlobIds(absRoot, relPaths) {
   };
 }
 
+const UTF8_BOM = Buffer.from([0xef, 0xbb, 0xbf]);
+
 /**
- * 对 UTF-8 文本执行 CRLF -> LF 规范化并计算 SHA256
+ * 判断缓冲区是否以 UTF-8 BOM（EF BB BF）开头。
+ */
+function hasLeadingUtf8Bom(buffer) {
+  return buffer.length >= 3
+    && buffer[0] === 0xef
+    && buffer[1] === 0xbb
+    && buffer[2] === 0xbf;
+}
+
+/**
+ * 去掉或补上开头的 UTF-8 BOM，其余字节保持原样。
+ */
+function toggleLeadingUtf8Bom(buffer) {
+  if (hasLeadingUtf8Bom(buffer)) {
+    return buffer.subarray(3);
+  }
+  return Buffer.concat([UTF8_BOM, buffer]);
+}
+
+/**
+ * 若当前字节与期望 raw 哈希的唯一差别是开头的 UTF-8 BOM，返回说明；否则返回 null。
+ * 不把换行规范化算进这一判断。
+ */
+function matchUtf8BomOnly(buffer, expectedRawSha) {
+  const variant = toggleLeadingUtf8Bom(buffer);
+  const variantSha = crypto.createHash('sha256').update(variant).digest('hex');
+  if (variantSha !== expectedRawSha) {
+    return null;
+  }
+  return { actualHasLeadingBom: hasLeadingUtf8Bom(buffer) };
+}
+
+/**
+ * 对 UTF-8 文本执行 CRLF -> LF 规范化并计算 SHA256。
+ * 开头的 UTF-8 BOM 保留在哈希里（ignoreBOM: true），不把它当成换行差异吞掉。
  */
 function computeLfNormalizedSha256(buffer, relPath) {
   // 检查是否含 0x00 空字节（二进制特征）
@@ -273,10 +309,10 @@ function computeLfNormalizedSha256(buffer, relPath) {
     );
   }
 
-  // 严格 UTF-8 解码
+  // 严格 UTF-8 解码；保留 BOM，使「仅删 BOM」改变本哈希
   let text;
   try {
-    const decoder = new TextDecoder('utf-8', { fatal: true });
+    const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
     text = decoder.decode(buffer);
   } catch (err) {
     throw new HandoffError(
@@ -880,8 +916,23 @@ async function verifyHandoffManifest(options) {
     }
 
     const currentRawSha = crypto.createHash('sha256').update(buf).digest('hex');
+    const bomOnly = currentRawSha === file.sha256_raw
+      ? null
+      : matchUtf8BomOnly(buf, file.sha256_raw);
     let lineEndingExplains = false;
-    if (currentRawSha !== file.sha256_raw && typeof file.sha256_lf_normalized === 'string') {
+    if (bomOnly) {
+      mismatches.push({
+        relative_path: norm,
+        reason: 'UTF8_BOM_ONLY_DIFFERENCE',
+        message: '仅 UTF-8 BOM 差异',
+        expected_line_endings: file.line_endings,
+        actual_line_endings: detectLineEndings(buf),
+        actual_has_leading_bom: bomOnly.actualHasLeadingBom,
+        expected_sha256_raw: file.sha256_raw,
+        actual_sha256_raw: currentRawSha
+      });
+    }
+    if (!bomOnly && currentRawSha !== file.sha256_raw && typeof file.sha256_lf_normalized === 'string') {
       try {
         const currentLfSha = computeLfNormalizedSha256(buf, norm);
         if (currentLfSha === file.sha256_lf_normalized) {
@@ -902,7 +953,7 @@ async function verifyHandoffManifest(options) {
       }
     }
 
-    if (!lineEndingExplains && buf.length !== file.size_bytes) {
+    if (!bomOnly && !lineEndingExplains && buf.length !== file.size_bytes) {
       mismatches.push({
         relative_path: norm,
         reason: 'SIZE_MISMATCH',
@@ -911,7 +962,7 @@ async function verifyHandoffManifest(options) {
       });
     }
 
-    if (!lineEndingExplains && currentRawSha !== file.sha256_raw) {
+    if (!bomOnly && !lineEndingExplains && currentRawSha !== file.sha256_raw) {
       mismatches.push({
         relative_path: norm,
         reason: 'SHA256_RAW_MISMATCH',
@@ -920,7 +971,7 @@ async function verifyHandoffManifest(options) {
       });
     }
 
-    if (file.sha256_lf_normalized) {
+    if (!bomOnly && file.sha256_lf_normalized) {
       try {
         const currentLfSha = computeLfNormalizedSha256(buf, norm);
         if (currentLfSha !== file.sha256_lf_normalized) {
