@@ -4,7 +4,7 @@
 议题：固定层 `docs/DECISIONS.md` §5.7 修订（来源：issue #4 裁定记录，草案见第一轮提示词）
 主持方：指挥 AI（§9.2：不投票、不提方案，只生成提示词、分配对手、汇总）
 参与席位：devin（席位 1）、grok（席位 2）、qoder（席位 3）
-状态：**进行中**——第一轮独立意见已收齐归档；第二轮互评已分发。
+状态：**进行中**——第一、二轮已归档；第三轮投票文本已冻结分发，待收票。
 
 ---
 
@@ -31,3 +31,14 @@
 
 - 提示词：[round-2/prompts/](round-2/prompts/)（每人一份，含对手分配）
 - 规则：每人至少驳一人、至少认一人；回应别人点名自己的问题；对开放问题表逐项表态。
+
+## 第二轮：互评（已归档）
+
+- devin：[round-2/devin/result.md](round-2/devin/result.md)——让步与采纳清单，终稿含「已推送标签不得移动或复用」入固定层
+- grok：[round-2/grok/result.md](round-2/grok/result.md)——「发布成功」术语折中句、§5.4 关系句、再次上传不强制新标签
+- qoder：[round-2/qoder/result.md](round-2/qoder/result.md)——撤回改名主张，采纳 grok 句式，本仓标签收口方案
+
+## 第三轮：修订后投票（进行中）
+
+- 冻结选票：[round-3/ballot.md](round-3/ballot.md)（B1–B12 共 12 项）
+- 投票提示词：[round-3/prompts/](round-3/prompts/)
