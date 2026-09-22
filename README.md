@@ -18,6 +18,8 @@
 | `AGENTS.md` | 维护本仓的 AI 读取入口 |
 | `docs/DECISIONS.md` | 固定层条文，当前版本 0.3.0，唯一事实源 |
 | `docs/agents/handoff-verification.md` | 多 Agent 跨阶段交接清单与核验指引 |
+| `docs/agents/doc-pairs.md` | 本仓文档关系声明：来源、目标范围、检查方式、处理权限 |
+| `docs/agents/freshness-check.md` | 本仓开工与收尾的文档防腐检查；写明流程不等于自动维护已交付 |
 | `docs/interviews/` | 立项访谈的去敏整理稿；原始记录在私有 vault |
 | `docs/reviews/` | 多 AI 讨论留档（按 `<日期>-<议题>/`）；使用具体材料前按登记册核实其状态 |
 | `scripts/` | 通用辅助脚本；`scripts/handoff_manifest.js` 提供跨阶段交接同源清单生成与核验 |

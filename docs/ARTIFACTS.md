@@ -17,6 +17,7 @@
 | 多 AI 提案、互评与主持结论 | [reviews/](reviews/) 按议题归档 | 讨论收束时登记具体入口与采纳状态；集合中的一份报告不自动获得现行权威 |
 | 跨 Agent 交付与核验的操作指引 | [agents/handoff-verification.md](agents/handoff-verification.md) | 交接机制变动时维护；每轮临时报告仍按固定层放系统临时目录 |
 | 本仓文档关系声明（§7.2 对子） | [agents/doc-pairs.md](agents/doc-pairs.md) | 声明增删，或来源、目标范围、检查方式、处理权限变化时，由本轮执行者更新；检查脚本只实现清单并核对四要素在场，不复述正文 |
+| 本仓开工/收尾的文档防腐检查 | [agents/freshness-check.md](agents/freshness-check.md) | 识别步骤或五态用词变化时更新。每轮记录写在本册当轮说明；长证据放系统临时目录。不在本文件复述关系声明 |
 | 术语、ADR、演变史、研究、规格草稿、参考素材、编码与发布规则 | [DECISIONS.md §4](DECISIONS.md) 已定义的位置 | 按已有分类执行；路径尚不存在时按任务需要创建，避免预先建空文档 |
 
 ## 2. 每轮如何执行
@@ -38,12 +39,13 @@
 | [VISION.md](VISION.md) | 产品愿景 | current | 2026-09-09 维护者明确方向；2026-09-22 确认提交历史的用户收益（#8 / #18），该句不表示 commit-msg 已在本仓或全部目标仓生效；2026-09-22 确认文档防腐产品目标（#9 / #20）：开发中检查受影响文档，能确定且已授权的同步，有疑问的指出，新决策交回用户。该段只记目标与取舍，不表示日常自动维护已交付 |
 | [DECISIONS.md](DECISIONS.md) | 固定层纪律 | current | 0.3.0；变更规则由正文自身定义 |
 | [ARTIFACTS.md](ARTIFACTS.md) | 本仓文档归属 | current | 本轮补齐的内容分类、维护触发和入口登记 |
-| [../AGENTS.md](../AGENTS.md) | 本仓 AI 入口 | current | 本轮新建；只提供读取指针 |
+| [../AGENTS.md](../AGENTS.md) | 本仓 AI 入口 | current | 只提供读取指针。开工除登记册外，还指向文档防腐检查与文档关系声明 |
 | [../README.md](../README.md) | 对外导航 | current | 仓库总入口；能力说明不代替验收 |
 | [agents/handoff-verification.md](agents/handoff-verification.md) | 给 agent 的按需说明 | current | 按固定层 §4.1 迁至 docs/agents/。raw 字节仍是第一权威；LF 规范化不剥离 UTF-8 BOM。仅换行与仅 BOM 各自分类，且都非通过。可选 git_blob_id 只记录本机 git 规范化结果，拿不到则字段缺席并写明降级原因 |
 | [../scripts/handoff_manifest.js](../scripts/handoff_manifest.js) | 本仓执行辅助 | current | 只读生成与核验交接清单。`--include-git-blob` 调用本机 git hash-object，不伪造 blob id。LF 规范化哈希保留开头 BOM。仅换行记为 `LINE_ENDING_NORMALIZATION_EXPLAINABLE`，仅 BOM 记为 `UTF8_BOM_ONLY_DIFFERENCE`，两者退出码仍非零。未接 hook/CI |
 | [../scripts/handoff_bom_classify_repro.js](../scripts/handoff_bom_classify_repro.js) | 本仓执行辅助 | current | 上述分类的手动回归。在系统临时目录写夹具，不改仓库。未接 hook/CI。不是门禁 |
-| [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层文档关系声明（P1–P5、P8）。每条只在本文件出现一次，并写明来源、目标范围、检查方式、处理权限。不是跨项目固定层，不要求其他仓手填同一批对子。P8 仍动态抽取交接指引全部 `### 2.x`；P4/P5 围栏含反引号与波浪号 |
+| [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层文档关系声明（P1–P5、P8）。每条只在本文件出现一次，并写明来源、目标范围、检查方式、处理权限。不是跨项目固定层，不要求其他仓手填同一批对子。P8 仍动态抽取交接指引全部 `### 2.x`；P4/P5 围栏含反引号与波浪号。开工收尾的使用步骤不在本文件，见 freshness-check.md |
+| [agents/freshness-check.md](agents/freshness-check.md) | 给 agent 的按需说明 | current | 本仓开工识别核对范围、收尾留下五态记录的流程。不复述六条声明，不新建角色。检查器仍手动运行，未接 hook/CI。流程已写明不等于日常自动维护已交付 |
 | [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述声明。先核对 `## 声明` 下的编号与四要素是否在场，再执行 P1–P5、P8。缺字段、未声明或没有实现的编号为 FAIL，不能记 PASS。旧的 X/Y/判定 标记不再被认作声明。P8 不写死 generate/verify。P4/P5 按 CommonMark 跳过反引号与波浪号围栏，开闭须同字符。手动运行。未接 hook/CI。不宣称门禁已生效 |
 | [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。本仓仍手动运行，未接 hook/CI。格式通过不等于语义已验证。不是门禁。2026-09-22 的隔离仓接线没有改这份口径 |
 | [../scripts/check_commit_msg.mjs](../scripts/check_commit_msg.mjs) | 本仓执行辅助 | current | 只读检查候选提交说明的标题格式。词表从固定层 §5.1 抽取。本仓仍手动运行，未接 hook/CI，不宣称门禁已生效。2026-09-22 只在本机 Git for Windows 隔离仓用未改行为的副本接通 commit-msg |
@@ -104,3 +106,17 @@
 2026-09-22（#17 F4）：`templates/RELEASE.md` §2 导语改为与 setup `SKILL.md` 的播种条件一致：`[NEW]` 且块外无正文时播种；`[UPGRADE]` 且 end 标记之后无正文时允许一次性追加同一薄草稿；块外已有内容时不得覆盖、重排或再播种；`[NO-OP]` 不写盘。固定层未改。已编译仓的块外旧种子仍按不覆盖原则保留，不会因这次模板改字而重写。验收限于本机 Windows 的条文对照，不是完整 `/lazypack-setup` 访谈。
 
 2026-09-22（#18）：`docs/VISION.md` 写入已确认的用户收益：任务交给 AI 之后，用户不必再替它整理提交；接续者应能从 Git 历史读懂改了什么、为什么改、影响哪里，以及哪些事项尚未完成。句子不指定工具。本仓 `scripts/check_commit_msg.mjs` 的行为未改，本仓仍未接 hook/CI。隔离验证限于本机 Git for Windows 2.54.0 与 Node v24.19.0 的临时仓：默认 `.git/hooks` 里预置 post-commit 探针，另有一个退出码 0 的 pre-commit；`commit-msg` 调用检查器的字节副本；全程未设置 `core.hooksPath`。`wip: temp` 的真实 `git commit` 被阻断（检查器 `format-fail`，退出码 1）。合法候选在 pre-commit 通过且格式通过后提交成功，探针记下新提交，`NOTES.md` 仍为未暂存修改。临时移走隔离仓 `docs/DECISIONS.md` 时检查器为 `exec-failed`（其 JSON 退出码 3），`git commit` 退出码 1，HEAD 不变。把钩子改去调用不存在的 node 时，没有检查器状态行，归类 `not-run`，提交未发生。暂存范围加入 `NOTES.md` 后，上一次 `format-pass` 作废并重新检查。格式通过但说明只谈 README 拼写的候选由审查记为语义不符，没有提交。规则来源是本仓 `docs/DECISIONS.md` 的 §5.1 行按字节复制到隔离仓同路径，type 仍由检查器运行时抽出，没有第二份手写词表。固定层与 `templates/RELEASE.md` 第 12 行未改。不表示其他宿主或其他提交入口已被阻断。
+
+2026-09-22（#20）：`docs/VISION.md` 写入 #9 裁定确认的文档防腐目标与取舍，并在本节登记行写明这不是日常自动维护已交付。文档关系声明仍只在 `docs/agents/doc-pairs.md`：P1–P5、P8 改为来源、目标范围、检查方式、处理权限；`scripts/check_doc_pairs.mjs` 先核对 `## 声明` 的编号与四要素是否在场，再执行原来的内容检查。旧的 X/Y/判定 标记不再算声明。开工与收尾流程写在 `docs/agents/freshness-check.md`，`AGENTS.md` 增加指针。固定层、`templates/` 与 harvest skill 未改。未接 hook/CI，未建通用语义定位器。
+
+本轮防腐检查记录：
+
+- 检查范围：机器检查 P1、P2、P3、P4、P5、P8。人工阅读了愿景是否只写目标、流程文档是否把「流程已写」当成「自动维护已交付」、既有登记段是否被改写。
+- 依据版本：开工提交 `ab1ca80`。声明正文为 `docs/agents/doc-pairs.md`。命令为仓库根 `node scripts/check_doc_pairs.mjs`。本段写入前工作区已含上述文档与检查器改动。
+- 处理结果：P1–P5、P8 为未发现差异（写入前 6/6 PASS，退出码 0；P1 sha256 仍为 `e75802d27e4516f0492ab8bc910bfb68960fcffe2506c58a14cb6faf5a9054a7`，P4 links=40 failures=0，P5 agents=6 readme=8）。检查器运行前后 `git status` 一致。愿景句子与本册登记行为已同步。固定层正文与 setup 快照为未发现差异（P1，且上述路径的 `git diff` 为空）。
+- 未覆盖：任意代码 diff 到文档段落的语义定位器未建设，也未运行。hook/CI 未接线，未运行。外部目标仓试用未授权。愿景措辞与登记册之间没有机器声明，本轮只人工阅读。未跟踪目录 `docs/reviews/2026-09-07-lazypack-harvest/` 未纳入。#14 隔离原型本轮未复跑。
+- 未决：phase-2b 须维护者另行授权目标仓。确定性检查接入门禁须另开实施票。
+
+开工时 `freshness-check.md` 还不存在。当时的识别依据是 #20 与 #9 裁定已经列出的任务、实际 diff、登记册和已有规则。本段按刚写入的流程记录五项。下一位 Agent 从 `AGENTS.md` 进入该流程。
+
+负例在系统临时目录改写声明后写回，写回后检查器为 6/6 PASS、退出码 0：去掉 P1 的处理权限时该条 FAIL 且 `check=PASS`（`declaration=missing:处理权限`），退出码 1；增加 P9 时为 `declaration=no-implementation`，退出码 1；把 `## 声明` 改成 `## 清单` 时 0/6 FAIL，摘要为 `error=未找到标题`，内容对照没有执行，记为失败而不是缺基线或未运行；把来源改回 `X` 时 P1 为 `missing:来源`，退出码 1。这些负例都不是未发现差异。本段不新增 Markdown 链接；写入后复跑仍为 6/6 PASS，P4 links=40，退出码 0。验收限于本机 Windows。

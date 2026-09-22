@@ -17,7 +17,7 @@
 
 ## 何时运行
 
-增删声明或修改任一字段后，先改本文件，再改 `scripts/check_doc_pairs.mjs` 里对应的实现。六个编号都是 PASS，只表示这些机器检查未发现差异；FAIL 不是已核验。
+开工和收尾是否把这些声明列入检查，只写在 [freshness-check.md](freshness-check.md)。增删声明或修改任一字段后，先改本文件，再改 `scripts/check_doc_pairs.mjs` 里对应的实现。六个编号都是 PASS，只表示这些机器检查未发现差异；FAIL 不是已核验。
 
 ## 声明
 
