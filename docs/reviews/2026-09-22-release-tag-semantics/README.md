@@ -4,7 +4,7 @@
 议题：固定层 `docs/DECISIONS.md` §5.7 修订（来源：issue #4 裁定记录，草案见第一轮提示词）
 主持方：指挥 AI（§9.2：不投票、不提方案，只生成提示词、分配对手、汇总）
 参与席位：devin（席位 1）、grok（席位 2）、qoder（席位 3）
-状态：**进行中**——第一、二轮已归档；第三轮投票文本已冻结分发，待收票。
+状态：**三轮结束，待维护者裁定**——第一、二、三轮已归档；计票与多数条文合并稿见 [round-3/tally.md](round-3/tally.md)，已呈维护者最终裁定。
 
 ---
 
@@ -38,7 +38,11 @@
 - grok：[round-2/grok/result.md](round-2/grok/result.md)——「发布成功」术语折中句、§5.4 关系句、再次上传不强制新标签
 - qoder：[round-2/qoder/result.md](round-2/qoder/result.md)——撤回改名主张，采纳 grok 句式，本仓标签收口方案
 
-## 第三轮：修订后投票（进行中）
+## 第三轮：修订后投票（已归档）
 
 - 冻结选票：[round-3/ballot.md](round-3/ballot.md)（B1–B12 共 12 项）
 - 投票提示词：[round-3/prompts/](round-3/prompts/)
+- devin：[round-3/devin/result.md](round-3/devin/result.md)
+- grok：[round-3/grok/result.md](round-3/grok/result.md)
+- qoder：[round-3/qoder/result.md](round-3/qoder/result.md)
+- 计票书与多数条文合并稿：[round-3/tally.md](round-3/tally.md)——B1/B2/B5/B7/B8/B12 全票通过，B3/B6/B9/B10/B11 多数通过，B4 翻转为 grok 案；含选票误述记录与呈维护者裁定的 §5.7 候选全文
