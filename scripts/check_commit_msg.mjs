@@ -2,7 +2,7 @@
  * scripts/check_commit_msg.mjs
  *
  * 判定口径以 docs/agents/commit-msg-check.md 为唯一正文。
- * 用法: node scripts/check_commit_msg.mjs <message-file>
+ * 用法: node scripts/check_commit_msg.mjs <message-file> [--rules <path>]
  * 未接 hook/CI。本脚本不是门禁。格式通过不等于语义已验证，不等于代码正确或需求完成。
  */
 
@@ -160,13 +160,92 @@ function collectInfo(lines) {
 }
 
 /**
+ * 解析命令行。没有 --rules 时仍要求恰好一个消息文件路径。
+ * 有 --rules 时，消息文件是唯一位置参数，规则路径跟在该标记后面；标记可在消息文件前或后。
+ * 认不出消息文件时只返回空路径，调用方按 not-run 结束，不读规则文件。
+ */
+function parseInvocation(argv) {
+  const args = argv.slice(2);
+  const rulesIndexes = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '--rules') {
+      rulesIndexes.push(i);
+    }
+  }
+  if (rulesIndexes.length === 0) {
+    if (args.length !== 1 || args[0] === '') {
+      return { messagePath: null, rulesPath: null, rulesError: null };
+    }
+    return { messagePath: args[0], rulesPath: null, rulesError: null };
+  }
+
+  const consumed = new Set();
+  let rulesPath = null;
+  let rulesError = null;
+  if (rulesIndexes.length > 1) {
+    rulesError = '--rules 出现了多次';
+    for (const index of rulesIndexes) {
+      consumed.add(index);
+      if (args[index + 1] !== undefined) {
+        consumed.add(index + 1);
+      }
+    }
+  } else {
+    const index = rulesIndexes[0];
+    consumed.add(index);
+    const next = args[index + 1];
+    if (next === undefined || next === '') {
+      rulesError = '--rules 缺少路径';
+    } else {
+      rulesPath = next;
+      consumed.add(index + 1);
+    }
+  }
+  const positionals = args.filter((_, index) => !consumed.has(index));
+  if (positionals.length !== 1 || positionals[0] === '') {
+    return { messagePath: null, rulesPath: null, rulesError: null };
+  }
+  return { messagePath: positionals[0], rulesPath, rulesError };
+}
+
+/**
+ * 从规则文件抽出 type 词表。
+ * explicitRules 为真时，失败原因写「规则文件」，不写入调用方路径。
+ * 缺省调用仍写出「docs/DECISIONS.md」，与改参之前的原因句相同。
+ */
+function loadTypes(filePath, explicitRules) {
+  let buf;
+  try {
+    buf = fs.readFileSync(filePath);
+  } catch (error) {
+    const code = error && (error.code || error.message) ? error.code || error.message : 'unknown';
+    const reason = explicitRules
+      ? `无法读取规则文件: ${code}`
+      : `无法读取 docs/DECISIONS.md: ${code}`;
+    return { ok: false, reason };
+  }
+  const text = decodeUtf8(buf);
+  if (text === null) {
+    const reason = explicitRules ? '规则文件不是合法 UTF-8' : 'docs/DECISIONS.md 不是合法 UTF-8';
+    return { ok: false, reason };
+  }
+  try {
+    return { ok: true, types: extractTypes(text.replace(/^\uFEFF/, '')) };
+  } catch (error) {
+    return { ok: false, reason: error.message };
+  }
+}
+
+/**
  * 读取消息文件与 §5.1 词表，只对标题做格式判定。
+ * 不传 --rules 时规则文件仍是脚本所在仓的 docs/DECISIONS.md。
  */
 function main() {
-  const given = process.argv[2];
-  if (process.argv.length !== 3 || given === undefined || given === '') {
+  const parsed = parseInvocation(process.argv);
+  if (parsed.messagePath === null) {
     finish('not-run', { reason: '未提供消息文件路径' });
   }
+  const given = parsed.messagePath;
   let stat;
   try {
     stat = fs.statSync(given);
@@ -185,24 +264,17 @@ function main() {
   if (!message.ok) {
     finish('exec-failed', { reason: message.reason });
   }
-
-  let decisions;
-  try {
-    decisions = fs.readFileSync(DECISIONS_PATH);
-  } catch (error) {
-    finish('exec-failed', { reason: `无法读取 docs/DECISIONS.md: ${error.code || error.message}` });
-  }
-  const decisionsText = decodeUtf8(decisions);
-  if (decisionsText === null) {
-    finish('exec-failed', { reason: 'docs/DECISIONS.md 不是合法 UTF-8' });
+  if (parsed.rulesError) {
+    finish('exec-failed', { reason: parsed.rulesError });
   }
 
-  let types;
-  try {
-    types = extractTypes(decisionsText.replace(/^\uFEFF/, ''));
-  } catch (error) {
-    finish('exec-failed', { reason: error.message });
+  const explicitRules = parsed.rulesPath !== null;
+  const rulesPath = explicitRules ? parsed.rulesPath : DECISIONS_PATH;
+  const loaded = loadTypes(rulesPath, explicitRules);
+  if (!loaded.ok) {
+    finish('exec-failed', { reason: loaded.reason });
   }
+  const types = loaded.types;
 
   const lines = message.text.split('\n');
   const subject = (lines[0] || '').replace(/\r$/, '');

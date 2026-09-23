@@ -47,8 +47,8 @@
 | [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层文档关系声明（P1–P5、P8）。每条只在本文件出现一次，并写明来源、目标范围、检查方式、处理权限。不是跨项目固定层，不要求其他仓手填同一批对子。P8 仍动态抽取交接指引全部 `### 2.x`；P4/P5 围栏含反引号与波浪号。开工收尾的使用步骤不在本文件，见 freshness-check.md |
 | [agents/freshness-check.md](agents/freshness-check.md) | 给 agent 的按需说明 | current | 本仓开工识别核对范围、收尾留下五态记录的流程。不复述六条声明，不新建角色。检查器仍手动运行，未接 hook/CI。流程已写明不等于日常自动维护已交付 |
 | [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述声明。先核对 `## 声明` 下的编号与四要素是否在场，再执行 P1–P5、P8。缺字段、未声明或没有实现的编号为 FAIL，不能记 PASS。旧的 X/Y/判定 标记不再被认作声明。P8 不写死 generate/verify。P4/P5 按 CommonMark 跳过反引号与波浪号围栏，开闭须同字符。手动运行。未接 hook/CI。不宣称门禁已生效 |
-| [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。本仓仍手动运行，未接 hook/CI。格式通过不等于语义已验证。不是门禁。2026-09-22 的隔离仓接线没有改这份口径 |
-| [../scripts/check_commit_msg.mjs](../scripts/check_commit_msg.mjs) | 本仓执行辅助 | current | 只读检查候选提交说明的标题格式。词表从固定层 §5.1 抽取。本仓仍手动运行，未接 hook/CI，不宣称门禁已生效。2026-09-22 只在本机 Git for Windows 隔离仓用未改行为的副本接通 commit-msg |
+| [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。缺省仍读脚本所在仓的 `docs/DECISIONS.md`；`--rules <path>` 只改读哪一份含 §5.1 行的文件。本仓仍手动运行，未接 hook/CI。格式通过不等于语义已验证。不是门禁。2026-09-22 的隔离仓接线没有改这份口径 |
+| [../scripts/check_commit_msg.mjs](../scripts/check_commit_msg.mjs) | 本仓执行辅助 | current | 只读检查候选提交说明的标题格式。不传 `--rules` 时，词表仍从脚本所在仓的固定层 §5.1 在运行时抽取，脚本内不另写清单。传入 `--rules <path>` 时用同一抽法读该文件；文件缺失或抽不出词表为 exec-failed。本仓仍手动运行，未接 hook/CI，不宣称门禁已生效。2026-09-22 只在本机 Git for Windows 隔离仓用未改行为的副本接通 commit-msg |
 | [../skills/lazypack-setup/SKILL.md](../skills/lazypack-setup/SKILL.md) | setup 执行入口 | current | 以本仓磁盘正文为准；不代表所有宿主或目标仓实测通过。第 2 步有界扫描的排除目录与敏感文件与 document-routing §2.2、doc_scanner 为同一显式集合 |
 | [../skills/lazypack-setup/references/document-routing.md](../skills/lazypack-setup/references/document-routing.md) | 文档路由规范 | current | S1 产物：既有文档 8 大知识区归属规范、原位保留登记与同主题判定；首期 preserve-existing 在当前 AGY/Windows 限定沙箱验收完成（见 §4）。Phase 2 受控迁移规约已合入本文件；通用生产迁移仍 UNPROVEN。§2.2 排除目录与敏感文件与 doc_scanner 为同一显式集合（含 `.DS_Store`；敏感文件为精确文件名或明确前后缀） |
 | [../skills/lazypack-setup/scripts/doc_scanner.mjs](../skills/lazypack-setup/scripts/doc_scanner.mjs) | setup 执行辅助 | current | 有界 Markdown 扫描与引用图构建器。证据：Phase 2 主仓应用收尾与本仓只读 scan。已验证：当前 Windows/AGY 隔离沙箱与本仓只读扫描；本机 Windows 上 #13 复跑死链 17→0（消除项均为 `file:` 与代码语境伪链接），临时 fixture 仍检出真死链。不代表外部目标仓生产级自动迁移。排除目录含 `.DS_Store`（路径小写化后按 `.ds_store` 匹配）；敏感文件仍为精确匹配。忽略带 scheme 的 URL（含 `file:`）与纯锚点；抽链前剥离围栏与行内反引号，标题抽取仍用原始正文 |
@@ -173,3 +173,13 @@
 - 处理结果：P1、P2、P3、P5、P8 为未发现差异。P4 为未发现差异（本段不新增 Markdown 链接，写入后仍为 6/6 PASS、退出码 0）。固定层正文与 setup 快照为未发现差异（P1，且本轮未授权改这两份文件）。检查器运行前后 `git status` 一致（除本轮两处文档改动与既有未跟踪目录外无其他变化）。
 - 未覆盖：yifangbao 仓内产物不在本仓任何声明的来源或目标范围。语义定位器未建设、未运行。hook/CI 未接线、未运行。未跟踪目录 `docs/reviews/2026-09-07-lazypack-harvest/` 未纳入。#6 关票不代表 OCR 成为默认实现，也不代表安全审查能力已在其他仓交付。
 - 未决：#7 试点（yanxue #28）与 #10 的 #19 开工授权待推进，由 #26 跟进。yifangbao#4 凭据作废第一步须维护者本人操作。GBK 控制台编码下 yifangbao 两条 import-linter 红线测试误炸为既有环境脆弱点，是否开票修由维护者决定。
+
+2026-09-23（#19）：给 `scripts/check_commit_msg.mjs` 增加可选 `--rules <path>`。不传该参数时仍从脚本所在仓读 `docs/DECISIONS.md`，运行时抽出 §5.1 type，脚本内没有第二份词表。四态与退出码仍是 `format-pass` 0、`format-fail` 1、`not-run` 2、`exec-failed` 3。传入 `--rules` 时用同一抽法读指定文件；文件缺失、不是合法 UTF-8 或抽不出词表为 `exec-failed`。未给出消息文件，或消息文件不存在、不是普通文件时仍是 `not-run`，此时不读规则文件。`docs/agents/commit-msg-check.md` 写明用法与上述边界。固定层、setup 快照、模板、skill 未改。未接 hook/CI，不是门禁，格式通过不等于语义已验证。不表示通用规则引擎或跨仓装配已交付。本段是施工记录，不是验收结论。
+
+本轮防腐检查记录：
+
+- 检查范围：机器检查 P1、P2、P3、P4、P5、P8。人工阅读了 `--rules` 有没有被写成通用规则引擎、hook/CI 或跨仓装配已交付，历史验收段有没有被改写，登记行有没有把格式检查写成门禁，以及有没有新的纪律决策。
+- 依据版本：开工提交 `6ec1badd2db2110d3c7ce8abe4abfe55c682c72f`。收尾核对在包含本段的工作区；本轮不提交，所以还没有收尾提交号。声明正文为 `docs/agents/doc-pairs.md`。命令为仓库根 `node scripts/check_doc_pairs.mjs`。Node v24.19.0。本段写入前检查器为 6/6 PASS、退出码 0（P1 sha256 `ca41a963da97487dee4f95660777b1fc48126405502ed768f205debe2a2a12fd`，P2 blob `b0bfa054107a9a4c18d8e64a500b4db9bae059bb`，P3 version `0.4.0`，P4 links=41 failures=0，P5 agents=6 readme=8 failures=0，P8 commands=generate,verify）。当时 `git status` 只有 `docs/agents/commit-msg-check.md`、`scripts/check_commit_msg.mjs` 与既有未跟踪目录。写入本段后复跑仍为 6/6 PASS、退出码 0，P4 links=41 failures=0。
+- 处理结果：P1、P2、P3、P4、P5、P8 为未发现差异。P4 登记行只改了既有两行的边界说明，本段不新增 Markdown 链接。固定层正文与 setup 快照为未发现差异（P1，且本轮未授权改这两份文件）。检查器运行前后没有额外改动。
+- 未覆盖：任意代码 diff 到文档段落的语义定位器未建设，也未运行。hook/CI 未接线，未运行。未跟踪目录 `docs/reviews/2026-09-07-lazypack-harvest/` 未纳入、未删除。#15 指挥沙箱的 21 项与 #18 隔离仓真实 `git commit` 未整包复跑。外部目标仓未装配。跨会话恢复未测。
+- 未决：提交与推送不在本轮授权。`docs/VISION.md` 的 #10 句仍写试点尚未开展；改那一句不在本轮三份文件的授权里，本轮证据也不能写成自动接续已经交付。#10 不因这次施工自动收尾。
