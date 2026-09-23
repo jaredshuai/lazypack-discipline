@@ -61,7 +61,7 @@
 采集以下探测事实，构造规范键名字典。
 
 #### 3.1.1 基础序列化结构（无条件依赖托管块）
-适用于独立产物托管块（如 `CODING_STANDARDS.md` 的 `coding-standards`、`RELEASE.md` 的 `release-standards`、`docs/agents/roles.md` 的 `roles-mapping`、`.githooks/pre-commit` 的 `pre-commit` 等）：
+适用于独立产物托管块（如 `CODING_STANDARDS.md` 的 `coding-standards`、`RELEASE.md` 的 `release-discipline`、`docs/agents/roles.md` 的 `roles-mapping`、`.githooks/pre-commit` 的 `pre-commit` 等）：
 
 ```json
 {
