@@ -60,6 +60,7 @@
 | [reviews/](reviews/) | 讨论材料集合入口 | reference | 子文档各自状态需要核实，不将整个目录认作实施基线 |
 | [reviews/2026-09-10-document-homes-adoption/](reviews/2026-09-10-document-homes-adoption/) | 讨论留档 | current | 2026-09-10 文档归属正式采纳三轮会议留档、表决与维护者裁定，0.3.0 生效依据 |
 | [reviews/2026-09-22-release-tag-semantics/](reviews/2026-09-22-release-tag-semantics/) | 讨论留档 | current | §5.7 发版与标签语义修订 §9 会议留档，维护者已裁定批准（round-3/tally.md §七），0.4.0 生效依据。**本仓自生效提交起打 v0.4.0，0.3.0 不追溯补标** |
+| [research/2026-09-28-project-profile.md](research/2026-09-28-project-profile.md) | 研究笔记 | current | 本次仓库画像：目标、目录、能力边界、验证证据、风险与看板重构建议；依据当前 Git 树和本轮实际命令，不替代愿景、固定层或验收记录 |
 | `docs/reviews/2026-09-07-lazypack-harvest/`（工作区未跟踪，不在 Git 树） | 讨论留档 | reference | 未完成的历史讨论材料（仅主持 README 与三份第一轮提示词，participants 为空）。不是现行 harvest 规范，不纳入 Git 树、不删除工作区副本。现行入口仍是已跟踪的 skills/lazypack-harvest/SKILL.md |
 
 ## 4. 本次补齐的范围
