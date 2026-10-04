@@ -31,6 +31,8 @@ const DOC_PAIRS_REL = 'docs/agents/doc-pairs.md';
 const CHANGELOG_TOOL_REL = 'skills/lazypack-setup/templates/changelog.mjs';
 const CHANGELOG_TOOL_DOC_REL = 'docs/agents/changelog-tool.md';
 const ROLES_TEMPLATE_REL = 'skills/lazypack-setup/templates/roles.md';
+const REPORT_LAYERS_TOOL_REL = 'skills/lazypack-setup/templates/check_report_layers.mjs';
+const REPORT_LAYERS_DOC_REL = 'docs/agents/report-layers.md';
 const DECLARATION_FIELDS = ['来源', '目标范围', '检查方式', '处理权限'];
 const FIELD_LINE_RE = /^-\s+\*\*(来源|目标范围|检查方式|处理权限)\*\*：(.*)$/;
 const PAIR_HEADING_RE = /^###\s+(P\d+)\s+(\S.*)$/;
@@ -787,6 +789,54 @@ function checkP9() {
 }
 
 /**
+ * P10：报告分层表述与随包校验器一致。
+ * 判定口径正文（report-layers.md）、交接指引指针、SKILL 播种表述与工具实现按声明的标记核对。
+ */
+function checkP10() {
+  const checks = [];
+  const note = (label, ok, detail) => checks.push({ label, ok, detail });
+
+  let toolSrc = null;
+  try {
+    toolSrc = readUtf8(REPORT_LAYERS_TOOL_REL);
+  } catch (err) {
+    note('tool-exists', false, `${REPORT_LAYERS_TOOL_REL}: ${err.code || err.message}`);
+  }
+  if (toolSrc !== null) {
+    const missingCmd = ['init', 'check'].filter((cmd) => !toolSrc.includes(`'${cmd}'`));
+    note('tool-subcommands', missingCmd.length === 0, missingCmd.length === 0 ? 'init/check' : `missing=${missingCmd.join(',')}`);
+  }
+
+  let docText = null;
+  try {
+    docText = readUtf8(REPORT_LAYERS_DOC_REL);
+  } catch (err) {
+    note('doc-exists', false, `${REPORT_LAYERS_DOC_REL}: ${err.code || err.message}`);
+  }
+  if (docText !== null) {
+    const fields = [
+      'product_user_flow', 'operator_or_maintainer_flow', 'test_harness_prerequisite',
+      'environment_limitation', 'control_logic_status', 'user_experience_status',
+      'reference_product', 'observed_difference', 'evidence', 'unverified_boundary'
+    ];
+    const missingFields = fields.filter((s) => !docText.includes(s));
+    note('doc-fields', missingFields.length === 0, missingFields.length === 0 ? '十标记在场' : `missing=${missingFields.join(',')}`);
+    const states = ['created', 'exists-kept', 'format-pass', 'format-fail', 'not-run', 'exec-failed'];
+    const missingStates = states.filter((s) => !docText.includes(s));
+    note('doc-states', missingStates.length === 0, missingStates.length === 0 ? '六状态词在场' : `missing=${missingStates.join(',')}`);
+  }
+
+  const handoffText = readUtf8(HANDOFF_DOC_REL);
+  note('handoff-md', handoffText.includes('report-layers.md'), 'handoff-verification.md 含 report-layers.md 指针');
+
+  const skillText = readUtf8(SKILL_REL);
+  note('skill-md', skillText.includes('check_report_layers.mjs'), 'SKILL.md 含 check_report_layers.mjs 播种表述');
+
+  const failed = checks.filter((row) => !row.ok);
+  return pairResult('P10', failed.length === 0 ? 'PASS' : 'FAIL', { checks });
+}
+
+/**
  * 运行一条对子；实现抛错时记为 FAIL 而不是让进程未处理崩溃。
  */
 function runPair(id, fn) {
@@ -851,6 +901,13 @@ function renderPairDetailBody(row) {
     }
     return ` failed=${failed.map((check) => check.label).join(',')}`;
   }
+  if (row.id === 'P10' && Array.isArray(ev.checks)) {
+    const failed = ev.checks.filter((check) => !check.ok);
+    if (failed.length === 0) {
+      return ` checks=${ev.checks.length}`;
+    }
+    return ` failed=${failed.map((check) => check.label).join(',')}`;
+  }
   return '';
 }
 
@@ -891,7 +948,8 @@ const PAIR_CHECKS = [
   ['P4', checkP4],
   ['P5', checkP5],
   ['P8', checkP8],
-  ['P9', checkP9]
+  ['P9', checkP9],
+  ['P10', checkP10]
 ];
 
 /**

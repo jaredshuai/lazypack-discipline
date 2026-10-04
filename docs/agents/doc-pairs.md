@@ -73,6 +73,13 @@
 - **检查方式**：从 §2 下全部 `### 2.x` 小节动态抽出子命令，不写死 2.1 / 2.2 或命令名。命令名取标题中恰好一个反引号命令名；否则取编号后的第一个命令名标记。该小节内的 `--flag` 组成该命令的 flag 集合。与实现侧集合双向比对：子命令集合相等，且每个子命令的 flag 集合相等。多余或缺失任一侧即失败
 - **处理权限**：只读报告。集合不一致时记失败。不因本条自动改交接文档或脚本
 
+### P10 报告分层表述与随包校验器一致
+
+- **来源**：`skills/lazypack-setup/templates/check_report_layers.mjs`（本仓唯一的报告分层校验器实现）与其被派发到目标仓 `scripts/check_report_layers.mjs` 的约定
+- **目标范围**：四处表述与一处实现——`docs/agents/report-layers.md` 的字段/状态/规则正文、`docs/agents/handoff-verification.md` 中的分层指针、`skills/lazypack-setup/SKILL.md` 中的播种表述，以及 `templates/check_report_layers.mjs` 本身。不判断任一报告或任一目标仓的实际填写质量
+- **检查方式**：1) `templates/check_report_layers.mjs` 存在且含 `init`、`check` 两个子命令分支；2) `docs/agents/report-layers.md` 存在且含全部十个必需标记（`product_user_flow`、`operator_or_maintainer_flow`、`test_harness_prerequisite`、`environment_limitation`、`control_logic_status`、`user_experience_status`、`reference_product`、`observed_difference`、`evidence`、`unverified_boundary`）与六个状态词（`created`、`exists-kept`、`format-pass`、`format-fail`、`not-run`、`exec-failed`）；3) `docs/agents/handoff-verification.md` 含 `report-layers.md` 指针；4) `SKILL.md` 含 `check_report_layers.mjs` 播种表述。任一不满足即失败
+- **处理权限**：只读报告。任一不满足记失败。本条不授权修改任何文件；机制或表述变化时先改声明再改实现
+
 ### P9 CHANGELOG 表述与随包机制一致
 
 - **来源**：`skills/lazypack-setup/templates/changelog.mjs`（本仓唯一的 CHANGELOG 机制实现）与其被派发到目标仓 `scripts/changelog.mjs` 的约定
