@@ -817,10 +817,12 @@ function checkP10() {
     const fields = [
       'product_user_flow', 'operator_or_maintainer_flow', 'test_harness_prerequisite',
       'environment_limitation', 'control_logic_status', 'user_experience_status',
-      'reference_product', 'observed_difference', 'evidence', 'unverified_boundary'
+      'reference_product', 'observed_difference', 'evidence', 'unverified_boundary',
+      'harness_paths', 'maintainer_paths', 'layer_review_status', 'control_evidence',
+      'ux_evidence', '双方步骤对照'
     ];
     const missingFields = fields.filter((s) => !docText.includes(s));
-    note('doc-fields', missingFields.length === 0, missingFields.length === 0 ? '十标记在场' : `missing=${missingFields.join(',')}`);
+    note('doc-fields', missingFields.length === 0, missingFields.length === 0 ? '十六标记在场' : `missing=${missingFields.join(',')}`);
     const states = ['created', 'exists-kept', 'format-pass', 'format-fail', 'not-run', 'exec-failed'];
     const missingStates = states.filter((s) => !docText.includes(s));
     note('doc-states', missingStates.length === 0, missingStates.length === 0 ? '六状态词在场' : `missing=${missingStates.join(',')}`);

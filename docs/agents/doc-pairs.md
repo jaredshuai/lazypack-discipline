@@ -77,7 +77,7 @@
 
 - **来源**：`skills/lazypack-setup/templates/check_report_layers.mjs`（本仓唯一的报告分层校验器实现）与其被派发到目标仓 `scripts/check_report_layers.mjs` 的约定
 - **目标范围**：四处表述与一处实现——`docs/agents/report-layers.md` 的字段/状态/规则正文、`docs/agents/handoff-verification.md` 中的分层指针、`skills/lazypack-setup/SKILL.md` 中的播种表述，以及 `templates/check_report_layers.mjs` 本身。不判断任一报告或任一目标仓的实际填写质量
-- **检查方式**：1) `templates/check_report_layers.mjs` 存在且含 `init`、`check` 两个子命令分支；2) `docs/agents/report-layers.md` 存在且含全部十个必需标记（`product_user_flow`、`operator_or_maintainer_flow`、`test_harness_prerequisite`、`environment_limitation`、`control_logic_status`、`user_experience_status`、`reference_product`、`observed_difference`、`evidence`、`unverified_boundary`）与六个状态词（`created`、`exists-kept`、`format-pass`、`format-fail`、`not-run`、`exec-failed`）；3) `docs/agents/handoff-verification.md` 含 `report-layers.md` 指针；4) `SKILL.md` 含 `check_report_layers.mjs` 播种表述。任一不满足即失败
+- **检查方式**：1) `templates/check_report_layers.mjs` 存在且含 `init`、`check` 两个子命令分支；2) `docs/agents/report-layers.md` 存在且含全部十六个必需标记（`product_user_flow`、`operator_or_maintainer_flow`、`test_harness_prerequisite`、`environment_limitation`、`control_logic_status`、`user_experience_status`、`reference_product`、`observed_difference`、`evidence`、`unverified_boundary`、`harness_paths`、`maintainer_paths`、`layer_review_status`、`control_evidence`、`ux_evidence`、`双方步骤对照`）与六个状态词（`created`、`exists-kept`、`format-pass`、`format-fail`、`not-run`、`exec-failed`）；3) `docs/agents/handoff-verification.md` 含 `report-layers.md` 指针；4) `SKILL.md` 含 `check_report_layers.mjs` 播种表述。任一不满足即失败
 - **处理权限**：只读报告。任一不满足记失败。本条不授权修改任何文件；机制或表述变化时先改声明再改实现
 
 ### P9 CHANGELOG 表述与随包机制一致

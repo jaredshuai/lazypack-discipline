@@ -590,3 +590,13 @@
 - 处理结果：P1、P2、P3、P5、P8、P9 为未发现差异；P4 为未发现差异（登记行新增两个相对链接均解析有效，links=46 failures=0）；P10 为新实现项首次 PASS。固定层正文与 setup 快照为未发现差异（P1，本轮未改这两份文件）。写入本段后复跑仍为 8/8 PASS、退出码 0。
 - 未覆盖：完整 `/lazypack-setup` 访谈式装配未在真实目标仓实跑（沙箱按其规定步骤模拟随包播种段）；语义定位器未建设；hook/CI 未接线；分层词表的误伤率未做大规模样本；跨宿主（macOS/Linux）未验；`check` 只判结构不判报告语义真实。
 - 未决：#32/#33 是否关票由本票收尾评论与维护者判定为准；分层段落是否升格为固定层条文或第七类受管产物须走 §9，本轮未改固定层。
+
+2026-10-04（#32/#33 v2 加固）：v1 沙箱复现的五个绕行缺口全部转为确定性修复——1) 产品步骤改标 `test_harness_prerequisite` 绕过计数（S02b）；2) 维护者发版步骤标 `product_user_flow` 虚增用户步骤（S09b）；3) 中性措辞把编排前置条件写进产品步骤、词表拦不住（S03b）；4) `unverified` 状态正文写「已对齐」不在旧 FACT_CLAIM 词表（S08d）；5) `control_logic_status: verified` 无控制逻辑证据（S13c）。修复：`check_report_layers.mjs` 升为 v2——必填字段扩为 12 个（新增 `harness_paths`、`maintainer_paths`、`layer_review_status`、`layer_review_basis`、`control_evidence`、`ux_evidence`），步骤表改 5 列并明确拒绝旧格式（`legacy-steps-table-format`），新增「双方步骤对照」小节，来源格逐项做仓内相对路径存在性检查与路径类归属判定，状态证据分轴（control_evidence/ux_evidence），声称扫描前剥离代码块/引用行/行内代码/成对引号、FACT_CLAIM 新增 `已对齐` 含控制逻辑行豁免。`report-layers.md` 同步为 v2 判定口径正文，新增「机器判定与人工审查分工」一节：机器只判 R1–R9 确定性规则，层标签是否属实、路径声明是否如实划分、来源是否真支撑该行、参考产品侧是否亲自观察、自由文本语义、引号豁免是否被滥用均归人工并记录在 `layer_review_status`/`layer_review_basis`，`aligned` 以 reviewed 为前提。P10 声明与 `check_doc_pairs.mjs` 的必需标记从十个扩为十六个。固定层 `docs/DECISIONS.md` 与 setup 快照字节未改；未跟踪目录 `docs/reviews/2026-09-07-lazypack-harvest/` 未纳入、未删除。五只旧格式夹具在 v2 下全部 format-fail（含 `legacy-steps-table-format`）。复核又修掉三类确定性问题：`./`、`.//`、`/./` 与大小写变体能绕过路径类（改为 posix 规范化 + 不区分大小写比较）；路径类条目拼错不报错（新增 `path-class-entry-missing`）；围栏代码块内的示例标题被当成真实段落（段落定位与 init 跳过围栏内行）。未接 hook/CI。验收限于本机 Windows；目标仓内 v1 副本存在即保留不覆盖，无自动升级通道。
+
+本轮防腐检查记录：
+
+- 检查范围：机器检查 P1、P2、P3、P4、P5、P8、P9、P10。人工阅读了 spec-v2 与实现逐条对应、report-layers.md 是否把结构合规写成语义真实、登记行措辞、既有验收段有没有被改写。
+- 依据版本：开工提交 `023faab`。收尾核对在包含本段的工作区；提交号与本段同一提交，写入时还没有。声明正文为 `docs/agents/doc-pairs.md`。命令为仓库根 `node scripts/check_doc_pairs.mjs`。检查器运行前后 `git status` 一致。
+- 处理结果：机器检查按本段写入后的复跑结果为准；本段不新增 Markdown 链接。固定层正文与 setup 快照为未发现差异（P1，本轮未改这两份文件）。
+- 未覆盖：完整 `/lazypack-setup` 访谈式装配未实跑；v2 场景驱动器（58 个场景，含前轮 25 个回归与复核补充场景）只在本机临时证据目录运行，不进本仓；真实报告演练只在 xy-automation 隔离副本中进行，目标仓主工作区未接入；v2 校验器对真实报告的误伤率未做大规模样本；跨宿主未验；`check` 只判结构不判报告语义真实。
+- 未决：#32/#33 是否关票由维护者判定为准；v2 是否升为受管产物或固定层条文须走 §9。
