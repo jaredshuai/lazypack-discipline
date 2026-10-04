@@ -3,7 +3,8 @@ name: lazypack-setup
 description: >-
   Compiles project-layer engineering discipline from lazypack-discipline fixed layer (0.7.0)
   after Matt Pocock skills setup. Probes repository, asks only necessary unknowns, confirms
-  changes once, and generates six managed artifacts with fingerprint protection.
+  changes once, generates six managed artifacts with fingerprint protection, and seeds the
+  vendored changelog tool plus CHANGELOG.md skeleton (unmanaged, preserve-existing).
 ---
 
 # /lazypack-setup
@@ -74,6 +75,7 @@ description: >-
 6. **既有 Hook 管理器**：探测 `.husky/`、`lefthook.yml`、`package.json` 中的 `simple-git-hooks` 等。
 7. **既有产物状态与受管 Hook 出处读回**：
    - 检查根目录与 `docs/` 下是否已存在六类产物，解析是否存在有效 lazypack 托管标记（见 [references/managed-blocks.md](references/managed-blocks.md)）；
+   - 探测 `CHANGELOG.md` 与 `scripts/changelog.mjs`：两者均为**非受管对象**（无 lazypack 标记，不参与 fp/input 决策树）。`CHANGELOG.md` 存在即原位保留并记入 Section 3 登记候选；`scripts/changelog.mjs` 已存在时视为本地副本，不覆盖；
    - **受管 Hook 出处读回与重跑恢复 (Hook Provenance Read-back)**：
      * 探测目标 Hook（如 `.githooks/pre-commit`）是否存在；
      * 若存在有效 lazypack 托管块：比对 `current_fp === header.fp`；
@@ -247,7 +249,7 @@ description: >-
 
 #### 通用纪律产物（总是展示）
 
-1. **拟新建文件清单**：目标路径与完整拟写内容（使用 [templates/](templates/) 渲染，填入当前 `src`, `gen`, `input`, `fp`；其中 `docs/agents/roles.md` 依据探测到的环境可用证据如实填写状态说明，并在 §3 按 [references/retention-sections.md](references/retention-sections.md) 单一事实源与明确替换表渲染已确认的留存策略指引；若启用了想法池且目标文件不存在，列出新建非受管种子文件，其路径动态读取自 `retention.paths.ideas`，默认 `docs/ideas/inbox.md`；若启用了结构化纪要且入口目录不存在，列出新建空入口目录；若启用了原始问答且提供安全别名，列出私有存储安全引用，公开产物绝不出现本机绝对私有路径或凭据）。
+1. **拟新建文件清单**：目标路径与完整拟写内容（使用 [templates/](templates/) 渲染，填入当前 `src`, `gen`, `input`, `fp`；其中 `docs/agents/roles.md` 依据探测到的环境可用证据如实填写状态说明，并在 §3 按 [references/retention-sections.md](references/retention-sections.md) 单一事实源与明确替换表渲染已确认的留存策略指引；若启用了想法池且目标文件不存在，列出新建非受管种子文件，其路径动态读取自 `retention.paths.ideas`，默认 `docs/ideas/inbox.md`；若启用了结构化纪要且入口目录不存在，列出新建空入口目录；若启用了原始问答且提供安全别名，列出私有存储安全引用，公开产物绝不出现本机绝对私有路径或凭据；若为新仓初始化分支或清单字段缺失，列出经整体确认的最小清单文件与补缺字段，包含新仓 `package.json`、scripts 动态路径、`packageManager` 声明、双 tsconfig 即 `tsconfig.json` 与 `tsconfig.build.json`、以及单包自安装保护 `pnpm-workspace.yaml`）；另含 CHANGELOG 非受管种子对：`scripts/changelog.mjs`（`templates/changelog.mjs` 原样复制，仅在缺失时写入）与 `CHANGELOG.md`（仅在缺失时经 `node scripts/changelog.mjs init` 生成骨架；已存在则列为保留项不写入）。
 2. **拟修改既有文件 diff 与拟新建产物**：
    - 常驻入口（`CLAUDE.md` 或 `AGENTS.md`）：
      * **条件渲染指针 (F05, P7 稳定性规范)**：根据各类产物的实际托管状态渲染指针行。若 `roles.md`、`ARTIFACTS.md`、`CODING_STANDARDS.md`、`RELEASE.md` 处于正常受管状态（NEW / MANAGED / UPGRADE / DRIFT / NO-OP），渲染对应指针行。为避免留存策略调整导致常驻入口误报 `[DRIFT]`，`__ROLES_POINTER__` 采用稳定文本：`- **角色与职责**：查阅 [docs/agents/roles.md](docs/agents/roles.md)，遵循各角色防撞车边界与项目指引。`；若处于 `PAUSE`、`BROKEN` 或未托管状态，**彻底省略对应指针行**，并在完成报告中记录为未托管；其余已就绪指针仍保留，不阻断常驻入口自身生成，绝不产生死链接，亦不绕过保护去强改人工文件。所有指针条件替换必须在计算正文指纹 (`fp`) 前完成，严禁遗留任何未展开占位符。
@@ -342,6 +344,12 @@ description: >-
      * **重跑**：块外已有任何字节则按 [references/managed-blocks.md](references/managed-blocks.md) §5.3 逐字节保留，不得覆盖、不得重排、不得再播种。陈述打包现状时只依据块外现行段。
      * **`[UPGRADE]`**：仅替换标记行之间的受管范围；若 end 标记之后无正文，才允许一次性追加薄草稿；块外已有说明不改写。
      * **`[NO-OP]`**：整文件零写盘。
+   - `scripts/changelog.mjs` 与 `CHANGELOG.md`（非受管播种，不进托管块决策树）：
+     * 将 `templates/changelog.mjs` 原样复制为 `scripts/changelog.mjs`；目标已存在时不覆盖（本地副本优先），在报告中注明未更新；
+     * `CHANGELOG.md` 缺失时执行 `node scripts/changelog.mjs init` 生成骨架；已存在（含人工手写版）时 `init` 返回 `exists-kept`，字节不变，原位保留；
+     * 环境无法运行 Node 时不手写伪造骨架，完成报告如实记 `未执行` 并给出命令；
+     * setup **不生成任何版本区段**：版本区段只在发版时经 `node scripts/changelog.mjs release --version <x.y.z>` 编译；严禁把「骨架文件存在」陈述为「变更记录已由提交历史生成」；
+     * `CHANGELOG.md` 与 `scripts/changelog.mjs` 创建或原位保留成功后，在 `docs/ARTIFACTS.md` Section 3 按真实状态去重登记；判定口径以 lazypack-discipline 仓 `docs/agents/changelog-tool.md` 为准；
    - **留存协作文件与入口安全写盘 (P3, P4, P6, P8)**：
      * **ideas 种子 (P4)**：若确认启用了想法池，目标路径读取自 `retention.paths.ideas`（默认 `docs/ideas/inbox.md`）。写盘前严格遵循“先审查再落盘 (Pre-write Inspection & Sanitization)”，剔除密钥与敏感数据。若磁盘上该文件已存在，触发既有文件保护，绝对不覆盖已有正文；若不存在，写入非受管种子文件并校验非空；
      * **minutes 入口 (P8)**：若确认启用了纪要归档，目标目录读取自 `retention.paths.minutes`（默认 `docs/interviews`）。若磁盘上该目录不存在，经整体确认后在目标路径建立空目录或入口索引，**严禁虚构伪造任何虚假访谈纪要会议记录**；若已存在则保护引用；
@@ -394,6 +402,7 @@ description: >-
   * **登记册处于受管 NO-OP 时**：明确报告“登记册内容未变（未写盘）”，如实说明磁盘当前已有登记行，严禁虚报为本轮重写；
   * **常驻入口按实际状态报告**：仅在实际追加/更新托管块时报告“指针已按受管产物实际状态条件写入”；若常驻入口被保护、暂停或未写入，严禁声称已修改指针；
   * **部分失败或中断时**：分别记录实际成功写入项与保留未动项，严禁虚报交付状态。
+  * **CHANGELOG 播种事实**：如实报告 `scripts/changelog.mjs`（`copied` / `preserved` / `skipped`）与 `CHANGELOG.md`（`created` / `exists-kept` / `not-run` / `exec-failed`）的实际状态与 Section 3 登记结果；严禁把骨架文件存在描述为「版本区段已由提交生成」。
 - **文档归属与迁移事实 (Document Homes & Migration Facts)**：
   * 列出原位保留项与 Section 3 登记结果；
   * 列出物理迁移项（源路径、目标路径、预期 SHA256 核验结果、源文件删除核验）；
@@ -425,5 +434,6 @@ description: >-
 - [references/document-routing.md](references/document-routing.md)：既有文档归属与 8 大知识区路由规范（原位保留与安全登记）。
 - [references/managed-blocks.md](references/managed-blocks.md)：标记语法、换行/编码规范、指纹与输入摘要算法、重跑决策树。
 - [references/verification.md](references/verification.md)：前置检查规范、Hook 激活证据判定、门禁短路策略。
-- [templates/](templates/)：六类产物的最小种子模板。
+- [templates/](templates/)：六类产物的最小种子模板，以及随包派发的 `changelog.mjs`（复制至目标仓 `scripts/changelog.mjs`）。
+- [templates/changelog.mjs](templates/changelog.mjs)：CHANGELOG 播种（`init`）、结构校验（`check`）与发版编译（`release`）工具；判定口径唯一正文为 lazypack-discipline 仓 `docs/agents/changelog-tool.md`。
 - [scripts/doc_helper.mjs](scripts/doc_helper.mjs)：文档扫描、计划生成、迁移执行与物证校验辅助工具。

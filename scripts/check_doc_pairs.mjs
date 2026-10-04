@@ -28,6 +28,9 @@ const ARTIFACTS_REL = 'docs/ARTIFACTS.md';
 const HANDOFF_DOC_REL = 'docs/agents/handoff-verification.md';
 const HANDOFF_SCRIPT_REL = 'scripts/handoff_manifest.js';
 const DOC_PAIRS_REL = 'docs/agents/doc-pairs.md';
+const CHANGELOG_TOOL_REL = 'skills/lazypack-setup/templates/changelog.mjs';
+const CHANGELOG_TOOL_DOC_REL = 'docs/agents/changelog-tool.md';
+const ROLES_TEMPLATE_REL = 'skills/lazypack-setup/templates/roles.md';
 const DECLARATION_FIELDS = ['来源', '目标范围', '检查方式', '处理权限'];
 const FIELD_LINE_RE = /^-\s+\*\*(来源|目标范围|检查方式|处理权限)\*\*：(.*)$/;
 const PAIR_HEADING_RE = /^###\s+(P\d+)\s+(\S.*)$/;
@@ -736,6 +739,54 @@ function checkP8() {
 }
 
 /**
+ * P9：CHANGELOG 表述与随包机制一致。
+ * 四处表述（RELEASE 模板、roles 模板、SKILL.md、changelog-tool.md）与工具实现按声明的标记核对。
+ */
+function checkP9() {
+  const checks = [];
+  const note = (label, ok, detail) => checks.push({ label, ok, detail });
+
+  let toolSrc = null;
+  try {
+    toolSrc = readUtf8(CHANGELOG_TOOL_REL);
+  } catch (err) {
+    note('tool-exists', false, `${CHANGELOG_TOOL_REL}: ${err.code || err.message}`);
+  }
+  if (toolSrc !== null) {
+    const missingCmd = ['init', 'check', 'release'].filter((cmd) => !toolSrc.includes(`'${cmd}'`));
+    note('tool-subcommands', missingCmd.length === 0, missingCmd.length === 0 ? 'init/check/release' : `missing=${missingCmd.join(',')}`);
+  }
+
+  const releaseText = readUtf8('skills/lazypack-setup/templates/RELEASE.md');
+  const relMissing = ['changelog.mjs release', 'changelog.mjs check'].filter((token) => !releaseText.includes(token));
+  const relForbidden = ['自动编译生成', '自动生成 CHANGELOG'].filter((token) => releaseText.includes(token));
+  note('release-md', relMissing.length === 0 && relForbidden.length === 0,
+    `missing=${relMissing.join(',') || 'none'} forbidden=${relForbidden.join(',') || 'none'}`);
+
+  const skillText = readUtf8(SKILL_REL);
+  note('skill-md', skillText.includes('changelog.mjs init'), 'SKILL.md 含 changelog.mjs init 播种表述');
+
+  let toolDoc = null;
+  try {
+    toolDoc = readUtf8(CHANGELOG_TOOL_DOC_REL);
+  } catch (err) {
+    note('tool-doc', false, `${CHANGELOG_TOOL_DOC_REL}: ${err.code || err.message}`);
+  }
+  if (toolDoc !== null) {
+    const states = ['created', 'exists-kept', 'format-pass', 'refused', 'not-run', 'exec-failed'];
+    const missingStates = states.filter((s) => !toolDoc.includes(s));
+    note('tool-doc', missingStates.length === 0, missingStates.length === 0 ? '六状态词在场' : `missing=${missingStates.join(',')}`);
+  }
+
+  const rolesText = readUtf8(ROLES_TEMPLATE_REL);
+  const scribeLine = rolesText.split(/\r?\n/).some((line) => line.includes('书记员') && line.includes('CHANGELOG.md') && line.includes('changelog.mjs'));
+  note('roles-md', scribeLine, scribeLine ? '书记员行含 CHANGELOG.md 与 changelog.mjs' : '无书记员行同时含 CHANGELOG.md 与 changelog.mjs');
+
+  const failed = checks.filter((row) => !row.ok);
+  return pairResult('P9', failed.length === 0 ? 'PASS' : 'FAIL', { checks });
+}
+
+/**
  * 运行一条对子；实现抛错时记为 FAIL 而不是让进程未处理崩溃。
  */
 function runPair(id, fn) {
@@ -793,6 +844,13 @@ function renderPairDetailBody(row) {
     const implCommands = Array.isArray(ev.impl.commands) ? ev.impl.commands.join(',') : '';
     return ` doc=${docCommands} impl=${implCommands}`;
   }
+  if (row.id === 'P9' && Array.isArray(ev.checks)) {
+    const failed = ev.checks.filter((check) => !check.ok);
+    if (failed.length === 0) {
+      return ` checks=${ev.checks.length}`;
+    }
+    return ` failed=${failed.map((check) => check.label).join(',')}`;
+  }
   return '';
 }
 
@@ -832,7 +890,8 @@ const PAIR_CHECKS = [
   ['P3', checkP3],
   ['P4', checkP4],
   ['P5', checkP5],
-  ['P8', checkP8]
+  ['P8', checkP8],
+  ['P9', checkP9]
 ];
 
 /**

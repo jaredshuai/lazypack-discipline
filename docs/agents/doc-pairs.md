@@ -17,7 +17,7 @@
 
 ## 何时运行
 
-开工和收尾是否把这些声明列入检查，只写在 [freshness-check.md](freshness-check.md)。增删声明或修改任一字段后，先改本文件，再改 `scripts/check_doc_pairs.mjs` 里对应的实现。六个编号都是 PASS，只表示这些机器检查未发现差异；FAIL 不是已核验。
+开工和收尾是否把这些声明列入检查，只写在 [freshness-check.md](freshness-check.md)。增删声明或修改任一字段后，先改本文件，再改 `scripts/check_doc_pairs.mjs` 里对应的实现。七个编号都是 PASS，只表示这些机器检查未发现差异；FAIL 不是已核验。
 
 ## 声明
 
@@ -72,3 +72,10 @@
 - **目标范围**：`scripts/handoff_manifest.js` 的 CLI 解析分支（`command ===` + `getOption` / `hasFlag`）。§2 以外的章节和脚本里的其他函数不在本条内
 - **检查方式**：从 §2 下全部 `### 2.x` 小节动态抽出子命令，不写死 2.1 / 2.2 或命令名。命令名取标题中恰好一个反引号命令名；否则取编号后的第一个命令名标记。该小节内的 `--flag` 组成该命令的 flag 集合。与实现侧集合双向比对：子命令集合相等，且每个子命令的 flag 集合相等。多余或缺失任一侧即失败
 - **处理权限**：只读报告。集合不一致时记失败。不因本条自动改交接文档或脚本
+
+### P9 CHANGELOG 表述与随包机制一致
+
+- **来源**：`skills/lazypack-setup/templates/changelog.mjs`（本仓唯一的 CHANGELOG 机制实现）与其被派发到目标仓 `scripts/changelog.mjs` 的约定
+- **目标范围**：四处表述与一处实现——`skills/lazypack-setup/templates/RELEASE.md` 中的变更记录行、`skills/lazypack-setup/templates/roles.md` 中书记员行、`skills/lazypack-setup/SKILL.md` 中的播种与生成表述、`docs/agents/changelog-tool.md` 判定口径正文，以及 `templates/changelog.mjs` 本身。不判断条目内容质量，也不检查任一目标仓的实际装配结果
+- **检查方式**：1) `templates/changelog.mjs` 存在且含 `init`、`check`、`release` 三个子命令分支；2) `templates/RELEASE.md` 含 `changelog.mjs release` 与 `changelog.mjs check`，且不含 `自动编译生成` 或 `自动生成 CHANGELOG` 字样；3) `SKILL.md` 含 `changelog.mjs init` 表述；4) `docs/agents/changelog-tool.md` 存在且含 `created`、`exists-kept`、`format-pass`、`refused`、`not-run`、`exec-failed` 六个状态词；5) `templates/roles.md` 书记员行同时含 `CHANGELOG.md` 与 `changelog.mjs`。任一不满足即失败
+- **处理权限**：只读报告。任一不满足记失败。本条不授权修改任何文件；机制或表述变化时先改声明再改实现

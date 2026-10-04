@@ -21,7 +21,7 @@
 - `fix` / `perf` -> Patch 升级 (`v0.0.X`)
 - 其他 type 不触发版本发版。
 - 每次发版必须在 Git 打对应版本标签（如 `v1.2.0`）。
-- 变更记录遵循 Keep a Changelog 1.1.0 格式，由提交历史自动编译生成，禁止手写篡改。
+- 变更记录 `CHANGELOG.md` 遵循 Keep a Changelog 1.1.0 格式：版本区段由提交历史经 `node scripts/changelog.mjs release --version <x.y.z>` 在发版时编译生成，结构以 `node scripts/changelog.mjs check` 校验，不手写条目；文件缺失时经 `node scripts/changelog.mjs init` 播种一次（setup 或人工执行，已存在则不覆盖）。
 <!-- lazypack:end block=release-discipline -->
 
 ## 2. 项目打包与发布（项目层）
