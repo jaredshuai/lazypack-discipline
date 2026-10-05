@@ -77,6 +77,7 @@ node changelog.mjs release --version <x.y.z> [--cwd <dir>] [--path <file>]
 - 拒绝条件（`refused`，不写盘）：文件未通过 §3 结构子集判定（先人工修复再发版）；目标版本已存在；新版本不大于现有最新版本；缺少 `[Unreleased]` 区段。
 - 既有文件从不被 `init` 覆盖（`exists-kept`）；写盘一律临时文件 + rename + 写后读回核验；`--dry-run` 只打印拟写内容。
 - 文件原有换行符（CRLF/LF）按原样保持；`init` 新建文件用 LF。
+- 既有文件的 UTF-8 BOM 按原样保持：读取时从原始字节判定（`TextDecoder` 默认剥离 BOM，不能靠解码结果判断），写回时补回并在 info 记 `bom: 已保留原有 UTF-8 BOM`；原本无 BOM 的文件不会被加上 BOM。写后读回核验同时比对 BOM 有无发生变化。
 
 ## 5. setup 装配口径
 

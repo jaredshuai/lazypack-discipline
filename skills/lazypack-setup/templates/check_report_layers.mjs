@@ -170,13 +170,18 @@ function finish(command, status, detail) {
   process.exit(exitCode);
 }
 
-/** 严格 UTF-8 解码；非法字节返回 null。 */
+/** 严格 UTF-8 解码；非法字节返回 null。保留 BOM（需从原始字节判定是否存在）。 */
 function decodeUtf8(buf) {
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buf);
   } catch {
     return null;
   }
+}
+
+/** 原始字节是否以 UTF-8 BOM 开头。 */
+function hasUtf8Bom(buf) {
+  return buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
 }
 
 /** 解析命令行参数；未知 flag 或缺值记为错误。 */
@@ -323,12 +328,29 @@ function sourceItems(cell) {
   return cell.split(/[;；]/).map((s) => s.trim().replace(/`/g, '')).filter((s) => s !== '');
 }
 
-/** 来源项的路径记号：第一个空白前的部分，再去掉末尾 :<数字>(-<数字>)? 或 #<锚点>。 */
+/**
+ * 来源项的路径记号：第一个空白前的部分，再去掉末尾的行号与锚点后缀。
+ * 允许 `path:12`、`path:3-9`、`path#anchor`、`path:12#anchor` 四种后缀组合。
+ */
 function pathTokenOf(item) {
   let token = item.split(/\s+/)[0];
-  token = token.replace(/:\d+(-\d+)?$/, '');
   token = token.replace(/#.*$/, '');
+  token = token.replace(/:\d+(-\d+)?$/, '');
   return token;
+}
+
+/** 来源项的行号后缀（如 `:12`、`:3-9`、`:12#anchor`）；无则返回 ''。 */
+function lineSuffixOf(item) {
+  const token = item.split(/\s+/)[0];
+  const m = /:\d+(-\d+)?(?=#|$)/.exec(token);
+  return m ? m[0] : '';
+}
+
+/** 来源项的锚点后缀（如 `#anchor`）；无则返回 ''。 */
+function anchorSuffixOf(item) {
+  const token = item.split(/\s+/)[0];
+  const hash = token.indexOf('#');
+  return hash === -1 ? '' : token.slice(hash);
 }
 
 /** 绝对路径或不安全（.. 段）判定；用于来源项与路径类条目。 */
@@ -379,7 +401,8 @@ function checkSourceCell(cell, rowName, allowNone, cwd, failures) {
 /**
  * R5 路径类解析：none/占位/空 → null（无约束可命中）；否则按 , 或 ， 分项，
  * 每项须相对，否则 bad-path-class-entry；相对条目还须相对 cwd 存在，
- * 否则 path-class-entry-missing=<条目原文>。返回归一化匹配器列表。
+ * 否则 path-class-entry-missing=<条目原文>。条目可带 #锚点 后缀用于同文件按锚点分层。
+ * 返回归一化匹配器列表。
  */
 function parsePathClass(value, failures, cwd) {
   if (isEmptyValue(value)) {
@@ -392,28 +415,57 @@ function parsePathClass(value, failures, cwd) {
       failures.push(`bad-path-class-entry=${item}`);
       continue;
     }
-    if (!fs.existsSync(path.resolve(cwd, item))) {
+    // 路径类条目允许带 #锚点 后缀；存在性检查按去锚点后的路径部分进行。
+    const anchor = anchorSuffixOf(item);
+    const bare = pathTokenOf(item);
+    if (bare === '') {
+      failures.push(`bad-path-class-entry=${item}`);
+      continue;
+    }
+    if (!fs.existsSync(path.resolve(cwd, bare))) {
       failures.push(`path-class-entry-missing=${item}`);
       continue;
     }
-    const norm = normRel(item);
-    matchers.push({ raw: norm, prefix: norm.endsWith('/') });
+    const norm = normRel(bare);
+    matchers.push({ raw: norm, prefix: norm.endsWith('/'), anchor: anchor === '' ? null : normAnchor(anchor) });
   }
   return matchers;
 }
 
-/** 来源路径记号命中路径类：/ 结尾按前缀匹配，否则精确相等。 */
-function pathMatches(token, matchers) {
+/** 路径类解析后的匹配器：raw 为归一化前缀或精确路径，anchor 为可选锚点限定。 */
+function normAnchor(a) {
+  return (a || '').replace(/^#/, '').toLowerCase();
+}
+
+/**
+ * 来源路径记号命中路径类：
+ *  - 路径类条目带锚点时，来源也必须命中同一锚点（支持同文件按锚点分层的声明办法）；
+ *  - 路径类条目不带锚点时按前缀（/ 结尾）或精确相等匹配。
+ */
+function pathMatches(token, matchers, anchor) {
   if (!matchers) {
     return false;
   }
   const t = normRel(token);
-  return matchers.some((m) => (m.prefix ? t.startsWith(m.raw) : t === m.raw));
+  const a = normAnchor(anchor);
+  return matchers.some((m) => {
+    const byPath = m.prefix ? t.startsWith(m.raw) : t === m.raw;
+    if (!byPath) {
+      return false;
+    }
+    if (m.anchor === null) {
+      return true;
+    }
+    return m.anchor === a;
+  });
 }
 
-/** 步骤行各来源路径记号列表（不含 none 项）。 */
+/** 步骤行各来源的 {token, anchor} 列表（不含 none 项与空记号）。 */
 function sourceTokens(cell) {
-  return sourceItems(cell).filter((it) => it !== 'none').map(pathTokenOf).filter((t) => t !== '');
+  return sourceItems(cell)
+    .filter((it) => it !== 'none')
+    .map((it) => ({ token: pathTokenOf(it), anchor: anchorSuffixOf(it) }))
+    .filter((row) => row.token !== '');
 }
 
 /**
@@ -572,10 +624,13 @@ function cmdInit(flags) {
   if (lines.some((l, i) => !mask[i] && SECTION_HEADING.test(l))) {
     finish('init', 'exists-kept', { reason: 'layer section already present', info: { lines: [`path: ${fileRel}`] } });
   }
+  // 既有报告带 UTF-8 BOM 时原样写回（BOM 从原始字节判定，decode 已保留它）。
+  const hasBom = hasUtf8Bom(buf);
+  const body = hasBom && text.startsWith('\uFEFF') ? text.slice(1) : text;
   const crlf = (buf.toString('binary').match(/\r\n/g) || []).length;
   const loneLf = (buf.toString('binary').match(/(?<!\r)\n/g) || []).length;
   const eol = crlf > loneLf ? '\r\n' : '\n';
-  let out = text;
+  let out = body;
   if (!out.endsWith('\n')) {
     out += eol;
   }
@@ -583,15 +638,18 @@ function cmdInit(flags) {
     out += eol;
   }
   out += SECTION_SKELETON.join(eol);
+  const outText = hasBom ? `\uFEFF${out}` : out;
   const tmp = `${abs}.report-layers-tmp-${process.pid}`;
-  fs.writeFileSync(tmp, out);
+  fs.writeFileSync(tmp, outText);
   const reread = decodeUtf8(fs.readFileSync(tmp));
-  if (reread !== out) {
+  if (reread !== outText) {
     fs.rmSync(tmp, { force: true });
     finish('init', 'exec-failed', { reason: 'write-back verification failed' });
   }
   fs.renameSync(tmp, abs);
-  finish('init', 'created', { info: { lines: [`path: ${fileRel}`, 'layer section appended at end of file'] } });
+  finish('init', 'created', {
+    info: { lines: [`path: ${fileRel}`, 'layer section appended at end of file', ...(hasBom ? ['bom: 已保留原有 UTF-8 BOM'] : [])] }
+  });
 }
 
 function cmdCheck(flags) {
@@ -673,18 +731,18 @@ function cmdCheck(flags) {
     checkSourceCell(cells[4], rowName, tag === 'environment_limitation', cwd, failures);
     const tokens = sourceTokens(cells[4]);
     if (tag === 'test_harness_prerequisite') {
-      if (!tokens.some((t) => pathMatches(t, harnessMatchers))) {
+      if (!tokens.some((t) => pathMatches(t.token, harnessMatchers, t.anchor))) {
         failures.push(`harness-row-source-outside-harness-paths=${rowName}`);
       }
     } else if (tag === 'operator_or_maintainer_flow') {
-      if (!tokens.some((t) => pathMatches(t, maintainerMatchers))) {
+      if (!tokens.some((t) => pathMatches(t.token, maintainerMatchers, t.anchor))) {
         failures.push(`maintainer-row-source-outside-maintainer-paths=${rowName}`);
       }
     } else if (tag === 'product_user_flow') {
-      if (tokens.some((t) => pathMatches(t, harnessMatchers))) {
+      if (tokens.some((t) => pathMatches(t.token, harnessMatchers, t.anchor))) {
         failures.push(`product-row-source-in-harness-paths=${rowName}`);
       }
-      if (tokens.some((t) => pathMatches(t, maintainerMatchers))) {
+      if (tokens.some((t) => pathMatches(t.token, maintainerMatchers, t.anchor))) {
         failures.push(`product-row-source-in-maintainer-paths=${rowName}`);
       }
     }

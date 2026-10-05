@@ -255,6 +255,11 @@ function analyzeChangelog(lines) {
     problems.push('`## [Unreleased]` 区段出现多次');
   }
   const versions = headings.filter((h) => h.kind === 'version');
+  // §3 规则 2：[Unreleased] 必须出现在任何版本区段之前。
+  const firstVersionIdx = versions.length > 0 ? versions[0].index : null;
+  if (unreleased.length === 1 && firstVersionIdx !== null && unreleased[0].index > firstVersionIdx) {
+    problems.push(`第 ${unreleased[0].index + 1} 行：\`## [Unreleased]\` 必须出现在任何版本区段之前`);
+  }
   for (const h of headings.filter((x) => x.kind === 'bad-version')) {
     problems.push(`第 ${h.index + 1} 行：版本头必须是 \`## [x.y.z] - YYYY-MM-DD\` 形态：${h.raw}`);
   }
@@ -338,7 +343,10 @@ function analyzeChangelog(lines) {
   return { problems, info, titleIdx, headings, versions, unreleased: unreleased[0] || null };
 }
 
-/** 读取 CHANGELOG 文件；按 UTF-8 解码并剥离 BOM，统一为 LF 行数组与换行类型。 */
+/**
+ * 读取 CHANGELOG 文件；按 UTF-8 解码，统一为 LF 行数组与换行类型。
+ * hasBom 记录文件是否带 UTF-8 BOM，写回时原样保留（既有字节不被静默改写）。
+ */
 function readChangelog(absPath) {
   let buf;
   try {
@@ -350,9 +358,11 @@ function readChangelog(absPath) {
   if (text === null) {
     return { ok: false, code: 'invalid-utf8' };
   }
-  const stripped = text.replace(/^\uFEFF/, '');
+  const hasBom = buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
+  // TextDecoder 默认剥离 BOM，故 hasBom 必须从原始字节判定；写回时补回。
+  const stripped = hasBom ? text.slice(text.startsWith('\uFEFF') ? 1 : 0) : text;
   const eol = stripped.includes('\r\n') ? '\r\n' : '\n';
-  return { ok: true, lines: stripped.replace(/\r\n/g, '\n').split('\n'), eol };
+  return { ok: true, lines: stripped.replace(/\r\n/g, '\n').split('\n'), eol, hasBom };
 }
 
 /** 解析 --cwd 与 --path 为目标文件绝对路径；--cwd 必须是存在的目录。 */
@@ -764,10 +774,13 @@ function cmdRelease(flags) {
   }
 
   const newText = composed.newLines.join(read.eol);
+  // 既有文件带 UTF-8 BOM 时原样写回；writeFileSync 不自动补 BOM。
+  const outText = read.hasBom ? `\uFEFF${newText}` : newText;
   const infoLines = [
     `range: ${range}`,
     `commits: ${commits.length}（列入 ${composed.mappedCount}；内部 ${composed.buckets.internal}；非约定式 ${composed.buckets.nonconventional}；未映射 ${composed.buckets.unmapped}）`,
     `date: ${date}`,
+    ...(read.hasBom ? ['bom: 已保留原有 UTF-8 BOM'] : []),
     ...composed.linkNotes.map((n) => `links: ${n}`)
   ];
   if (flags['--dry-run']) {
@@ -776,7 +789,7 @@ function cmdRelease(flags) {
   }
   const tmp = `${target.abs}.changelog-tmp-${process.pid}`;
   try {
-    fs.writeFileSync(tmp, newText, 'utf8');
+    fs.writeFileSync(tmp, outText, 'utf8');
     fs.renameSync(tmp, target.abs);
   } catch (error) {
     try {
@@ -787,7 +800,7 @@ function cmdRelease(flags) {
     finish('release', 'exec-failed', { reason: `写入失败: ${error.code || error.message}` });
   }
   const verify = readChangelog(target.abs);
-  if (!verify.ok || verify.lines.join('\n') !== composed.newLines.join('\n')) {
+  if (!verify.ok || verify.lines.join('\n') !== composed.newLines.join('\n') || verify.hasBom !== read.hasBom) {
     finish('release', 'exec-failed', { reason: '写后读回核验失败' });
   }
   finish('release', 'released', {
