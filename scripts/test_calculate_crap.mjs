@@ -614,6 +614,43 @@ function caseTypescriptAlias(base) {
 }
 
 /**
+ * javascript 与 js 别名应与 ts 等价（VAL-CRAP-005），解析 c8/escomplex 夹具成功
+ * 且 CRAP 计算正确（VAL-TEST-006）；仅不支持的语言才报 unsupported language。
+ */
+function caseJavascriptAlias(base) {
+  const dir = makeCaseDir(base, 'javascript-alias');
+  const coverage = writeJson(dir, 'coverage.json', c8Coverage([
+    { name: 'clean', pct: 100 },
+    { name: 'parseTokens', pct: 60, file: 'src/parse.js' }
+  ]));
+  const complexity = writeJson(dir, 'complexity.json', escomplexReport([
+    { name: 'clean', cyclomatic: 2 },
+    { name: 'parseTokens', cyclomatic: 10 }
+  ]));
+  for (const lang of ['javascript', 'js']) {
+    const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', lang], dir);
+    assertCase(cli.status === 1, `${lang} 别名有违规时退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
+    assertCase(
+      !cli.stderr.includes('unsupported language'),
+      `${lang} 别名不应报 unsupported language，实际：${cli.stderr}`
+    );
+    const parts = splitOutput(cli.stdout);
+    assertCase(parts.json.ok === false, `${lang} 别名应正常解析 c8/escomplex 夹具并上报违规`);
+    assertCase(
+      parts.json.violations.length === 1,
+      `${lang} 别名应恰有 1 条违规，实际：${parts.json.violations.length}`
+    );
+    const row = parts.json.violations[0];
+    assertCase(row.function === 'parseTokens', `${lang} 别名违规函数应为 parseTokens，实际 ${row.function}`);
+    assertCase(Math.abs(row.crap - 16.4) <= 0.01, `${lang} 别名 CRAP 应为 16.4±0.01，实际 ${row.crap}`);
+    assertCase(row.complexity === 10, `${lang} 别名复杂度应为 10，实际 ${row.complexity}`);
+    assertCase(Math.abs(row.coverage - 0.6) <= 0.001, `${lang} 别名覆盖率应为 0.6，实际 ${row.coverage}`);
+    assertCase(parts.text.includes('violations=1'), `${lang} 别名文本摘要应含 violations=1，实际：${parts.text}`);
+  }
+  return dir;
+}
+
+/**
  * 依次跑全部用例，全过时向 stdout 写一行摘要。
  */
 function main() {
@@ -640,7 +677,8 @@ function main() {
     caseComplexityEdge,
     caseOutputFile,
     caseDefaultOutputFile,
-    caseTypescriptAlias
+    caseTypescriptAlias,
+    caseJavascriptAlias
   ];
   try {
     cases.forEach((runCase) => runCase(base));
