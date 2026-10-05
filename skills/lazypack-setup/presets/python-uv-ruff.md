@@ -170,7 +170,7 @@ config_owner: tool-or-user
 | 时机 | 检查内容 | 耗时预算 | 命令示例 | 处置人 |
 |---|---|---|---|---|
 | 本地提交前 (pre-commit) | 单元测试 + lint | 秒级 | `uv run --no-sync pytest tests/unit && uv run --no-sync ruff check --no-fix` | 开发者 |
-| PR / CI | 覆盖率门槛 + 增量变异测试（只变异改动文件） | ≤15 分钟 | `uv run --no-sync pytest --cov && uv run --no-sync mutmut run --paths-to-mutate=<changed>` | CI 阻断 PR 合并 |
+| PR / CI | 覆盖率门槛 + 增量变异测试（只变异改动文件） | ≤15 分钟 | `uv run --no-sync pytest --cov && uv run --no-sync mutmut run <改动模块通配>`（完整命令见 §7.2） | CI 阻断 PR 合并 |
 | 夜间定时 (nightly) | 全量变异测试 + 重型静态分析 | 不限 | `uv run --no-sync mutmut run && uv run --no-sync radon cc -a` | 晨会处置失败项 |
 
 **设计原则**：
@@ -182,15 +182,21 @@ config_owner: tool-or-user
 ### 7.1 工具对应关系 (Tool Mapping)
 
 - `pytest --cov`：内部调用 `pytest-cov` 插件产出覆盖率报告，供 PR/CI 门槛判定；
-- `mutmut run`：mutmut 变异测试 (mutation testing)；不带 `--paths-to-mutate` 即全量变异，携带该参数即增量变异；
+- `mutmut run`：mutmut 3.x 变异测试 (mutation testing)；3.x 已移除 `--paths-to-mutate` CLI 参数，选择性变异改用位置参数模块名通配（见 §7.2）或配置 `only_mutate` glob，全量变异直接 `mutmut run`；
 - `radon cc -a`：radon 圈复杂度 (cyclomatic complexity) 分析，`-a` 输出全仓平均等级，属重型静态分析候选。
 
 mutmut、pytest-cov、radon 属新增推荐候选，不在 §3 四门禁与 §4 批量安装计划范围内；采纳时需 `uv add --dev mutmut pytest-cov radon`，不改变 ruff / ty / pytest 基线。表格命令沿用 §3 的 `--no-sync` 约定。
 
 ### 7.2 增量变异测试命令示例 (Incremental Mutation Example)
 
-增量变异测试只对 git diff 改动的 Python 文件执行变异测试，mutmut `--paths-to-mutate` 接受逗号分隔的文件列表：
+增量变异测试只对 git diff 改动的 Python 文件执行变异测试。mutmut 3.x 已移除 `--paths-to-mutate` CLI 参数，现行选择性变异 API 是 `mutmut run` 的位置参数通配符：按模块名 (mutant name) fnmatch 过滤待测变异体，模块名由文件路径推导（`/` 换 `.`，剥离前导 `src.`，如 `src/api/service.py` → `api.service`）：
 
 ```sh
-mutmut run --paths-to-mutate=$(git diff --name-only HEAD origin/main | grep '\.py$' | tr '\n' ',')
+mutmut run $(git diff --name-only HEAD origin/main | grep '\.py$' | grep -v -E '^(tests?)/' | sed 's/\.py$//; s#/#.#g; s/^src\.//; s/\.__init__$//' | sed 's/$/*/' | tr '\n' ' ')
 ```
+
+- 转换流水线：`.py` 改动文件 → 剥扩展名 → 路径转模块名（`.__init__` 收敛到父包）→ 追加 `*` 通配 → 空格连接为多个位置参数；
+- 排除 `tests/` 与 `test/`：测试文件不产生待测变异体，混入通配会让 mutmut 以 "Filtered for specific mutants, but nothing matches" 断言失败；
+- 若 diff 未触及任何非测试源码（管道输出为空），命令退化为无参数的 `mutmut run` 全量变异，宁多勿漏；
+- 配置文件替代方案：setup.cfg `[mutmut]` 的 `only_mutate` / `do_not_mutate` glob（pyproject.toml 为 `[tool.mutmut]` 数组形式）；旧配置键 `paths_to_mutate` 已废弃，应改名为 `source_paths`；
+- mutmut 3.x 依赖 `fork`（Linux / macOS / WSL），原生 Windows 不受支持；本节命令面向 CI Linux 环境。

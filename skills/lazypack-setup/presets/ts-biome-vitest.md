@@ -311,15 +311,18 @@ config_owner: tool-or-user
 
 - `test:coverage`：内部调用 `vitest run --coverage`，产出覆盖率报告供门槛判定；
 - `depcruise`：内部调用 `dependency-cruiser`（CLI `depcruise`）执行依赖规则检查；
-- `mutate:incremental` / `mutate:full`：内部调用 `stryker run`（Stryker 变异测试），前者携带 `--mutate` 文件列表；
+- `mutate:incremental` / `mutate:full`：内部调用 `stryker run`（Stryker 变异测试），前者携带 `--mutate` 逗号分隔文件列表（命令行形式不接受空格分隔列表，见 §7.2）；
 - `analyze:deep`：重型静态分析（如 `knip`、`madge` 等全仓深度分析工具）。
 
 以上脚本名为推荐的 `package.json` scripts 字面量，项目可按需重命名；Stryker 与 dependency-cruiser 属新增推荐候选，不在 §1 工具锁定范围内，不改变 Biome / tsc / Vitest 基线。
 
 ### 7.2 增量变异测试命令示例 (Incremental Mutation Example)
 
-增量变异测试只对 git diff 改动的 TypeScript 文件执行变异测试，Stryker `--mutate` 接受文件列表：
+增量变异测试只对 git diff 改动的 TypeScript 文件执行变异测试。Stryker `--mutate` 的命令行形式只接受逗号分隔的 glob 列表（config 文件中才是数组语法），因此必须用 `tr '\n' ','` 把 git diff 输出按逗号连接；空格分隔会被 shell 拆成多个独立参数，导致变异目标解析失败：
 
 ```sh
-stryker run --mutate $(git diff --name-only HEAD origin/main | grep '\.ts$')
+stryker run --mutate $(git diff --name-only HEAD origin/main | grep '\.ts$' | tr '\n' ',')
 ```
+
+- 末尾残留的空项（最后一个文件后的逗号）Stryker 可正常解析（Stryker 10 实测验证），无需剥离；
+- 命令行 `--mutate` 会整体覆盖（而非补充）config 文件中的 `mutate` 数组；若增量运行需保留排除模式（如 `!*.spec.ts`），必须一并放进同一逗号列表。
