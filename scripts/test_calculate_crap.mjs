@@ -30,10 +30,11 @@ function assertCase(condition, message) {
 /**
  * 以子进程运行 CRAP 计算器，返回 status/stdout/stderr。
  */
-function runCli(args) {
+function runCli(args, cwd) {
   return spawnSync(process.execPath, [CLI, ...args], {
     encoding: 'utf8',
-    windowsHide: true
+    windowsHide: true,
+    cwd
   });
 }
 
@@ -100,7 +101,7 @@ function radonComplexity(file, blocks) {
  */
 function caseHelp(base) {
   const dir = makeCaseDir(base, 'help');
-  const cli = runCli(['--help']);
+  const cli = runCli(['--help'], dir);
   assertCase(cli.status === 0, `--help 退出码应为 0，实际 ${cli.status}: ${cli.stderr}`);
   for (const flag of ['--coverage', '--complexity', '--threshold', '--lang', '--output']) {
     assertCase(cli.stdout.includes(flag), `--help 输出应说明 ${flag}，实际：${cli.stdout}`);
@@ -114,7 +115,7 @@ function caseHelp(base) {
  */
 function caseMissingArgs(base) {
   const dir = makeCaseDir(base, 'missing-args');
-  const cli = runCli([]);
+  const cli = runCli([], dir);
   assertCase(cli.status === 1, `缺参退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
   assertCase(
     cli.stderr.includes('--coverage') && cli.stderr.includes('--complexity'),
@@ -130,7 +131,7 @@ function caseInvalidLang(base) {
   const dir = makeCaseDir(base, 'invalid-lang');
   const coverage = writeJson(dir, 'coverage.json', c8Coverage([{ name: 'foo', pct: 100 }]));
   const complexity = writeJson(dir, 'complexity.json', escomplexReport([{ name: 'foo', cyclomatic: 2 }]));
-  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ruby']);
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ruby'], dir);
   assertCase(cli.status === 1, `非法语言退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
   assertCase(cli.stderr.includes('ruby'), `报错应含非法语言名，实际：${cli.stderr}`);
   for (const lang of ['typescript', 'javascript', 'python']) {
@@ -146,7 +147,7 @@ function caseMissingCoverageFile(base) {
   const dir = makeCaseDir(base, 'missing-coverage');
   const complexity = writeJson(dir, 'complexity.json', escomplexReport([{ name: 'foo', cyclomatic: 2 }]));
   const missing = path.join(dir, 'nonexistent.json');
-  const cli = runCli(['--coverage', missing, '--complexity', complexity, '--lang', 'ts']);
+  const cli = runCli(['--coverage', missing, '--complexity', complexity, '--lang', 'ts'], dir);
   assertCase(cli.status === 1, `缺覆盖率文件退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
   assertCase(/not found/i.test(cli.stderr), `报错应说明文件未找到，实际：${cli.stderr}`);
   assertCase(cli.stderr.includes(missing), `报错应含缺失路径，实际：${cli.stderr}`);
@@ -160,7 +161,7 @@ function caseMissingComplexityFile(base) {
   const dir = makeCaseDir(base, 'missing-complexity');
   const coverage = writeJson(dir, 'coverage.json', c8Coverage([{ name: 'foo', pct: 100 }]));
   const missing = path.join(dir, 'nonexistent.json');
-  const cli = runCli(['--coverage', coverage, '--complexity', missing, '--lang', 'ts']);
+  const cli = runCli(['--coverage', coverage, '--complexity', missing, '--lang', 'ts'], dir);
   assertCase(cli.status === 1, `缺复杂度文件退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
   assertCase(/not found/i.test(cli.stderr), `报错应说明文件未找到，实际：${cli.stderr}`);
   return dir;
@@ -174,9 +175,24 @@ function caseMalformedCoverage(base) {
   const bad = path.join(dir, 'coverage.json');
   fs.writeFileSync(bad, '{ functions: [oops');
   const complexity = writeJson(dir, 'complexity.json', escomplexReport([{ name: 'foo', cyclomatic: 2 }]));
-  const cli = runCli(['--coverage', bad, '--complexity', complexity, '--lang', 'ts']);
+  const cli = runCli(['--coverage', bad, '--complexity', complexity, '--lang', 'ts'], dir);
   assertCase(cli.status === 1, `坏 JSON 退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
   assertCase(/json/i.test(cli.stderr), `报错应说明 JSON 解析失败，实际：${cli.stderr}`);
+  return dir;
+}
+
+/**
+ * 复杂度 JSON 语法错误时清晰报解析错误并指明报告名，退出码 1（VAL-CRAP-009）。
+ */
+function caseMalformedComplexity(base) {
+  const dir = makeCaseDir(base, 'malformed-complexity');
+  const coverage = writeJson(dir, 'coverage.json', c8Coverage([{ name: 'foo', pct: 100 }]));
+  const bad = path.join(dir, 'complexity.json');
+  fs.writeFileSync(bad, '{ reports: [nope');
+  const cli = runCli(['--coverage', coverage, '--complexity', bad, '--lang', 'ts'], dir);
+  assertCase(cli.status === 1, `坏复杂度 JSON 退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
+  assertCase(/json/i.test(cli.stderr), `报错应说明 JSON 解析失败，实际：${cli.stderr}`);
+  assertCase(/complexity/i.test(cli.stderr), `报错应指明是复杂度报告，实际：${cli.stderr}`);
   return dir;
 }
 
@@ -188,7 +204,7 @@ function casePartialCoverageTs(base) {
   const dir = makeCaseDir(base, 'partial-coverage-ts');
   const coverage = writeJson(dir, 'coverage.json', c8Coverage([{ name: 'parseTokens', pct: 60 }]));
   const complexity = writeJson(dir, 'complexity.json', escomplexReport([{ name: 'parseTokens', cyclomatic: 10 }]));
-  const passing = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts', '--threshold', '30']);
+  const passing = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts', '--threshold', '30'], dir);
   assertCase(passing.status === 0, `阈值 30 退出码应为 0，实际 ${passing.status}: ${passing.stderr}`);
   const passParts = splitOutput(passing.stdout);
   assertCase(passParts.json.ok === true, '阈值 30 时 ok 应为 true');
@@ -196,7 +212,7 @@ function casePartialCoverageTs(base) {
   assertCase(passParts.text.includes('violations=0'), `文本摘要应含 violations=0，实际：${passParts.text}`);
   assertCase(passParts.text.includes('No CRAP violations found'), `无违规应提示 No CRAP violations found，实际：${passParts.text}`);
 
-  const failing = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts', '--threshold', '6']);
+  const failing = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts', '--threshold', '6'], dir);
   assertCase(failing.status === 1, `阈值 6 退出码应为 1，实际 ${failing.status}: ${failing.stderr}`);
   const failParts = splitOutput(failing.stdout);
   assertCase(failParts.json.violations.length === 1, `阈值 6 应恰有 1 条违规，实际：${failing.stdout}`);
@@ -216,7 +232,7 @@ function caseZeroCoverageTs(base) {
   const dir = makeCaseDir(base, 'zero-coverage-ts');
   const coverage = writeJson(dir, 'coverage.json', c8Coverage([{ name: 'risky', pct: 0, file: 'src/risky.js' }]));
   const complexity = writeJson(dir, 'complexity.json', escomplexReport([{ name: 'risky', cyclomatic: 5 }]));
-  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts']);
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts'], dir);
   assertCase(cli.status === 1, `零覆盖退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
   const parts = splitOutput(cli.stdout);
   assertCase(parts.json.ok === false, '有违规时 ok 应为 false');
@@ -244,7 +260,7 @@ function caseFullCoverageTs(base) {
     { name: 'clean', cyclomatic: 5 },
     { name: 'tiny', cyclomatic: 1 }
   ]));
-  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts']);
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts'], dir);
   assertCase(cli.status === 0, `全覆盖退出码应为 0，实际 ${cli.status}: ${cli.stdout}`);
   const parts = splitOutput(cli.stdout);
   assertCase(parts.json.threshold === 6, `默认阈值应为 6，实际 ${parts.json.threshold}`);
@@ -269,7 +285,7 @@ function caseThresholdFiltering(base) {
     { name: 'calm', cyclomatic: 7 },
     { name: 'edge', cyclomatic: 50 }
   ]));
-  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts', '--threshold', '50']);
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts', '--threshold', '50'], dir);
   assertCase(cli.status === 1, `有违规退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
   const parts = splitOutput(cli.stdout);
   const names = parts.json.violations.map((row) => row.function).sort();
@@ -292,22 +308,193 @@ function caseThresholdFiltering(base) {
 function casePythonParser(base) {
   const dir = makeCaseDir(base, 'python-parser');
   const coverage = writeJson(dir, 'coverage.json', pytestCovCoverage('src/mod.py', {
-    alpha: { covered_lines: 0, total_lines: 10 }
+    alpha: { covered_lines: 0, total_lines: 10 },
+    beta: { covered_lines: 0, total_lines: 10 },
+    gamma: { covered_lines: 0, total_lines: 10 }
   }));
   const complexity = writeJson(dir, 'complexity.json', radonComplexity('src/mod.py', [
-    { name: 'alpha', complexity: 3, type: 'function' }
+    { name: 'alpha', complexity: 3, type: 'function' },
+    {
+      name: 'Klass',
+      complexity: 2,
+      type: 'class',
+      methods: [{ name: 'beta', complexity: 4, type: 'method' }],
+      closures: [{ name: 'gamma', complexity: 3, type: 'closure' }]
+    }
   ]));
-  const longForm = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'python']);
+  const longForm = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'python'], dir);
   assertCase(longForm.status === 1, `python 语言退出码应为 1，实际 ${longForm.status}: ${longForm.stdout}`);
   const parts = splitOutput(longForm.stdout);
-  assertCase(parts.json.violations.length === 1, `应恰有 1 条违规，实际：${longForm.stdout}`);
-  const row = parts.json.violations[0];
-  assertCase(row.function === 'alpha', `违规函数应为 alpha，实际 ${row.function}`);
-  assertCase(row.crap === 12, `CRAP=3²×1+3 应为 12，实际 ${row.crap}`);
-  assertCase(row.file === 'src/mod.py', `违规文件应为 radon 路径键，实际 ${row.file}`);
+  assertCase(parts.json.violations.length === 3, `应有 alpha/beta/gamma 三条违规，实际：${longForm.stdout}`);
+  const names = parts.json.violations.map((row) => row.function).sort();
+  assertCase(
+    JSON.stringify(names) === JSON.stringify(['alpha', 'beta', 'gamma']),
+    `违规应为 alpha(12)/beta(20)/gamma(12)，类块与闭包都应展开，实际 ${JSON.stringify(names)}`
+  );
+  const alpha = parts.json.violations.find((row) => row.function === 'alpha');
+  assertCase(alpha.crap === 12, `alpha CRAP=3²×1+3 应为 12，实际 ${alpha.crap}`);
+  assertCase(alpha.file === 'src/mod.py', `违规文件应为 radon 路径键，实际 ${alpha.file}`);
+  const beta = parts.json.violations.find((row) => row.function === 'beta');
+  assertCase(beta.crap === 20, `类方法 beta CRAP=4²×1+4 应为 20，实际 ${beta.crap}`);
 
-  const shortForm = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'py']);
+  const shortForm = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'py'], dir);
   assertCase(shortForm.status === 1, `py 别名退出码应为 1，实际 ${shortForm.status}: ${shortForm.stdout}`);
+  return dir;
+}
+
+/**
+ * c8/V8 原始数组格式（[{ url, functions: [{ functionName, ranges }] }]）应可解析，
+ * ranges[0].count>0 视为全覆盖、否则零覆盖（VAL-CRAP-021）。
+ */
+function caseC8V8RawCoverage(base) {
+  const dir = makeCaseDir(base, 'c8-v8-raw');
+  const coverage = writeJson(dir, 'coverage.json', [
+    {
+      url: 'file:///proj/src/raw.js',
+      functions: [
+        { functionName: 'uncovered', ranges: [{ startOffset: 0, endOffset: 12, count: 0 }] },
+        { functionName: 'covered', ranges: [{ startOffset: 20, endOffset: 40, count: 5 }] }
+      ]
+    }
+  ]);
+  const complexity = writeJson(dir, 'complexity.json', escomplexReport([
+    { name: 'uncovered', cyclomatic: 5 },
+    { name: 'covered', cyclomatic: 5 }
+  ]));
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts'], dir);
+  assertCase(cli.status === 1, `V8 原始格式退出码应为 1，实际 ${cli.status}: ${cli.stderr}`);
+  const parts = splitOutput(cli.stdout);
+  assertCase(parts.json.violations.length === 1, `应只有 uncovered 违规，实际：${cli.stdout}`);
+  const row = parts.json.violations[0];
+  assertCase(row.function === 'uncovered', `违规函数应为 uncovered，实际 ${row.function}`);
+  assertCase(row.crap === 30, `count=0 的 CRAP=5²×1+5 应为 30，实际 ${row.crap}`);
+  assertCase(row.coverage === 0, `count=0 折算覆盖率应为 0，实际 ${row.coverage}`);
+  assertCase(row.file === 'file:///proj/src/raw.js', `违规文件应取 url，实际 ${row.file}`);
+  return dir;
+}
+
+/**
+ * c8 --reporter json 的 istanbul 形态（files 对象映射 fnMap/f）应可解析，
+ * 函数命中计数 >0 视为全覆盖（VAL-CRAP-021）。
+ */
+function caseC8IstanbulFiles(base) {
+  const dir = makeCaseDir(base, 'c8-istanbul-files');
+  const coverage = writeJson(dir, 'coverage.json', {
+    total: { functions: { total: 2, covered: 1, pct: 50 } },
+    files: {
+      'src/istanbul.js': {
+        path: 'src/istanbul.js',
+        fnMap: { 0: { name: 'hot', decl: {}, loc: {} }, 1: { name: 'cold', decl: {}, loc: {} } },
+        f: { 0: 0, 1: 3 }
+      }
+    }
+  });
+  const complexity = writeJson(dir, 'complexity.json', escomplexReport([
+    { name: 'hot', cyclomatic: 8 },
+    { name: 'cold', cyclomatic: 2 }
+  ]));
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts'], dir);
+  assertCase(cli.status === 1, `istanbul 形态退出码应为 1，实际 ${cli.status}: ${cli.stderr}`);
+  const parts = splitOutput(cli.stdout);
+  assertCase(parts.json.violations.length === 1, `应只有 hot 违规，实际：${cli.stdout}`);
+  const row = parts.json.violations[0];
+  assertCase(row.function === 'hot', `违规函数应为 hot，实际 ${row.function}`);
+  assertCase(row.crap === 72, `未命中 hot CRAP=8²×1+8 应为 72，实际 ${row.crap}`);
+  assertCase(row.coverage === 0, `f=0 折算覆盖率应为 0，实际 ${row.coverage}`);
+  assertCase(row.file === 'src/istanbul.js', `违规文件应取 path，实际 ${row.file}`);
+  return dir;
+}
+
+/**
+ * typhonjs-escomplex 的 per-method 结构（reports[].methods）应可解析，
+ * 方法行优先于模块 aggregate 参与联表（VAL-CRAP-022）。
+ */
+function caseEscomplexPerMethod(base) {
+  const dir = makeCaseDir(base, 'escomplex-per-method');
+  const coverage = writeJson(dir, 'coverage.json', c8Coverage([
+    { name: 'handleRequest', pct: 50 },
+    { name: 'helper', pct: 100 }
+  ]));
+  const complexity = writeJson(dir, 'complexity.json', {
+    reports: [
+      {
+        filePath: 'src/service.js',
+        name: 'service',
+        aggregate: { cyclomatic: 3 },
+        methods: [
+          { name: 'handleRequest', cyclomatic: 9 },
+          { name: 'helper', cyclomatic: 2 }
+        ]
+      }
+    ]
+  });
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts'], dir);
+  assertCase(cli.status === 1, `per-method 结构退出码应为 1，实际 ${cli.status}: ${cli.stderr}`);
+  const parts = splitOutput(cli.stdout);
+  assertCase(parts.json.violations.length === 1, `应只有 handleRequest 违规，实际：${cli.stdout}`);
+  const row = parts.json.violations[0];
+  assertCase(row.function === 'handleRequest', `违规函数应为 handleRequest，实际 ${row.function}`);
+  assertCase(row.complexity === 9, `复杂度应取方法行 9，实际 ${row.complexity}`);
+  assertCase(Math.abs(row.crap - 19.13) <= 0.01, `CRAP=9²×0.5³+9 应为 19.13±0.01，实际 ${row.crap}`);
+  assertCase(row.file === 'src/service.js', `违规文件应取 filePath，实际 ${row.file}`);
+  return dir;
+}
+
+/**
+ * pytest-cov 真实形态：函数键带行号后缀，覆盖率取 summary 内的
+ * covered_lines/num_statements 或 covered_lines/missing_lines（VAL-CRAP-023）。
+ */
+function casePytestSummary(base) {
+  const dir = makeCaseDir(base, 'pytest-summary');
+  const coverage = writeJson(dir, 'coverage.json', {
+    files: {
+      'src/app.py': {
+        summary: { percent_covered: 25.0 },
+        functions: {
+          'run_report:10': { summary: { covered_lines: 0, num_statements: 8 } },
+          'tiny:20': { summary: { covered_lines: 4, missing_lines: 4 } }
+        }
+      }
+    }
+  });
+  const complexity = writeJson(dir, 'complexity.json', radonComplexity('src/app.py', [
+    { name: 'run_report', type: 'function', complexity: 8 },
+    { name: 'tiny', type: 'function', complexity: 1 }
+  ]));
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'python'], dir);
+  assertCase(cli.status === 1, `pytest-cov summary 形态退出码应为 1，实际 ${cli.status}: ${cli.stderr}`);
+  const parts = splitOutput(cli.stdout);
+  assertCase(parts.json.violations.length === 1, `应只有 run_report 违规，实际：${cli.stdout}`);
+  const row = parts.json.violations[0];
+  assertCase(row.function === 'run_report', `函数键应去掉行号后缀，实际 ${row.function}`);
+  assertCase(row.crap === 72, `run_report CRAP=8²×1+8 应为 72，实际 ${row.crap}`);
+  assertCase(row.coverage === 0, `covered_lines=0/num_statements=8 折算应为 0，实际 ${row.coverage}`);
+  return dir;
+}
+
+/**
+ * 复杂度边界：complexity=0 无论覆盖率如何 CRAP=0 不违规；
+ * complexity>100 部分覆盖也会产出超大 CRAP 并违规。
+ */
+function caseComplexityEdge(base) {
+  const dir = makeCaseDir(base, 'complexity-edge');
+  const coverage = writeJson(dir, 'coverage.json', c8Coverage([
+    { name: 'zero', pct: 0 },
+    { name: 'big', pct: 50 }
+  ]));
+  const complexity = writeJson(dir, 'complexity.json', escomplexReport([
+    { name: 'zero', cyclomatic: 0 },
+    { name: 'big', cyclomatic: 120 }
+  ]));
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts'], dir);
+  assertCase(cli.status === 1, `complexity>100 应违规退出 1，实际 ${cli.status}: ${cli.stdout}`);
+  const parts = splitOutput(cli.stdout);
+  assertCase(parts.json.violations.length === 1, `应只有 big 违规（zero 的 CRAP=0 不入选），实际：${cli.stdout}`);
+  const row = parts.json.violations[0];
+  assertCase(row.function === 'big', `违规函数应为 big，实际 ${row.function}`);
+  const expected = 120 * 120 * Math.pow(0.5, 3) + 120;
+  assertCase(Math.abs(row.crap - expected) <= 0.01, `big CRAP 应为 ${expected}±0.01，实际 ${row.crap}`);
+  assertCase(!parts.json.violations.some((item) => item.function === 'zero'), 'complexity=0 的函数不应违规');
   return dir;
 }
 
@@ -324,7 +511,7 @@ function caseOutputFile(base) {
     '--complexity', complexity,
     '--lang', 'ts',
     '--output', outPath
-  ]);
+  ], dir);
   assertCase(cli.status === 1, `有违规退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
   assertCase(fs.existsSync(outPath), '--output 应在指定路径创建 JSON 文件');
   const written = JSON.parse(fs.readFileSync(outPath, 'utf8'));
@@ -338,13 +525,37 @@ function caseOutputFile(base) {
 }
 
 /**
+ * 未指定 --output 时应在当前目录落盘 crap-report.json（VAL-CRAP-026）。
+ */
+function caseDefaultOutputFile(base) {
+  const dir = makeCaseDir(base, 'default-output-file');
+  const coverage = writeJson(dir, 'coverage.json', c8Coverage([{ name: 'hot', pct: 0, file: 'src/hot.js' }]));
+  const complexity = writeJson(dir, 'complexity.json', escomplexReport([{ name: 'hot', cyclomatic: 8 }]));
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts'], dir);
+  assertCase(cli.status === 1, `有违规退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
+  const defaultPath = path.join(dir, 'crap-report.json');
+  assertCase(fs.existsSync(defaultPath), '未指定 --output 时应在当前目录创建 crap-report.json');
+  const written = JSON.parse(fs.readFileSync(defaultPath, 'utf8'));
+  const parts = splitOutput(cli.stdout);
+  assertCase(
+    typeof written.ok === 'boolean' && typeof written.threshold === 'number' && Array.isArray(written.violations),
+    `默认落盘报告应含 ok/threshold/violations，实际：${defaultPath}`
+  );
+  assertCase(
+    JSON.stringify(written.violations) === JSON.stringify(parts.json.violations),
+    '默认落盘 JSON 违规应与 stdout 报告一致'
+  );
+  return dir;
+}
+
+/**
  * typescript 全名别名应与 ts 等价（VAL-CRAP-005）。
  */
 function caseTypescriptAlias(base) {
   const dir = makeCaseDir(base, 'typescript-alias');
   const coverage = writeJson(dir, 'coverage.json', c8Coverage([{ name: 'foo', pct: 100 }]));
   const complexity = writeJson(dir, 'complexity.json', escomplexReport([{ name: 'foo', cyclomatic: 2 }]));
-  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'typescript']);
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'typescript'], dir);
   assertCase(cli.status === 0, `typescript 别名退出码应为 0，实际 ${cli.status}: ${cli.stdout}`);
   const parts = splitOutput(cli.stdout);
   assertCase(parts.json.ok === true, 'typescript 别名应正常解析 c8/escomplex 夹具');
@@ -363,12 +574,19 @@ function main() {
     caseMissingCoverageFile,
     caseMissingComplexityFile,
     caseMalformedCoverage,
+    caseMalformedComplexity,
     casePartialCoverageTs,
     caseZeroCoverageTs,
     caseFullCoverageTs,
     caseThresholdFiltering,
     casePythonParser,
+    caseC8V8RawCoverage,
+    caseC8IstanbulFiles,
+    caseEscomplexPerMethod,
+    casePytestSummary,
+    caseComplexityEdge,
     caseOutputFile,
+    caseDefaultOutputFile,
     caseTypescriptAlias
   ];
   try {

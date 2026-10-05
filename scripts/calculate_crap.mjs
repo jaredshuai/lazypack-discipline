@@ -4,7 +4,8 @@
  * CRAP 计算器：读取覆盖率与圈复杂度 JSON 报告，按公式
  *   CRAP = complexity² × (1 − coverage)³ + complexity
  * 计算每个函数的 CRAP 值，上报达到或超过阈值的函数清单。
- * 输出为文本摘要 + JSON 报告；全部达标退出码 0，有违规或出错退出码 1。未接 hook/CI。
+ * 输出为文本摘要 + JSON 报告（默认同时落盘 crap-report.json，--output 可改路径）；
+ * 全部达标退出码 0，有违规或出错退出码 1。未接 hook/CI。
  *
  * 用法:
  *   node scripts/calculate_crap.mjs --coverage <path> --complexity <path> \
@@ -19,6 +20,9 @@ import fs from 'node:fs';
 
 /** 默认 CRAP 阈值（Uncle Bob 对 AI 生成代码的建议值）。 */
 const DEFAULT_THRESHOLD = 6;
+
+/** 未指定 --output 时 JSON 报告的默认落盘文件名。 */
+const DEFAULT_OUTPUT_NAME = 'crap-report.json';
 
 /** 语言别名到解析器族的映射。 */
 const LANG_ALIASES = {
@@ -155,26 +159,80 @@ function readJsonFile(filePath, label) {
 }
 
 /**
- * 从单个覆盖率条目折算 0-1 覆盖率分数，
- * 优先 pct/percent_covered（0-100），其次 covered_lines/total_lines。
+ * 从候选值里挑出第一个有限数值。
+ * @param {...(number|undefined)} candidates - 按优先级排列的候选值
+ * @returns {number|undefined} 首个有限数值，均无效时为 undefined
+ */
+function pickNumber(...candidates) {
+  for (const value of candidates) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 从候选值里挑出第一个非空字符串。
+ * @param {...(string|undefined)} candidates - 按优先级排列的候选值
+ * @returns {string|undefined} 首个非空字符串，均无效时为 undefined
+ */
+function pickString(...candidates) {
+  for (const value of candidates) {
+    if (typeof value === 'string' && value !== '') {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 取 V8 风格 ranges 首段的执行计数（count=0 表示从未执行）。
+ * @param {object} entry - 覆盖率条目
+ * @returns {number|undefined} 首段 count，结构不完整时为 undefined
+ */
+function firstRangeCount(entry) {
+  if (!Array.isArray(entry.ranges) || entry.ranges.length === 0) {
+    return undefined;
+  }
+  const first = entry.ranges[0];
+  return first && typeof first === 'object' && typeof first.count === 'number' ? first.count : undefined;
+}
+
+/**
+ * 从单个覆盖率条目折算 0-1 覆盖率分数，按优先级尝试：
+ *   pct / percent_covered（0-100，含 summary 内层）
+ *   → covered_lines / total_lines 或 num_statements
+ *   → covered_lines / (covered_lines + missing_lines)
+ *   → V8 ranges 首段 count（>0 即全覆盖）。
  * @param {object} entry - 覆盖率条目
  * @param {string} label - 报错用的条目标识
  * @returns {number} 0-1 的覆盖率分数
  */
 function coverageFractionOf(entry, label) {
-  const pct = entry.pct !== undefined ? entry.pct : entry.percent_covered;
-  if (typeof pct === 'number' && Number.isFinite(pct)) {
+  const summary = entry.summary && typeof entry.summary === 'object' ? entry.summary : {};
+  const pct = pickNumber(entry.pct, entry.percent_covered, summary.pct, summary.percent_covered);
+  if (pct !== undefined) {
     return clamp01(pct / 100);
   }
-  const covered = entry.covered_lines;
-  const total = entry.total_lines;
-  if (typeof covered === 'number' && typeof total === 'number' && total > 0) {
-    return clamp01(covered / total);
+  const covered = pickNumber(entry.covered_lines, summary.covered_lines);
+  const total = pickNumber(entry.total_lines, summary.num_statements);
+  const missing = pickNumber(entry.missing_lines, summary.missing_lines);
+  if (covered !== undefined && total !== undefined) {
+    return total > 0 ? clamp01(covered / total) : 1;
+  }
+  if (covered !== undefined && missing !== undefined) {
+    const denom = covered + missing;
+    return denom > 0 ? clamp01(covered / denom) : 1;
+  }
+  const rangeCount = firstRangeCount(entry);
+  if (rangeCount !== undefined) {
+    return rangeCount > 0 ? 1 : 0;
   }
   if (total === 0) {
     return 1;
   }
-  throw new CliError(`${label} has no usable coverage value (expected pct or covered_lines/total_lines)`);
+  throw new CliError(`${label} has no usable coverage value (expected pct, percent_covered, covered_lines/total_lines or covered_lines/missing_lines)`);
 }
 
 /**
@@ -192,15 +250,18 @@ function parseCoverageReport(data, lang, sourcePath) {
 }
 
 /**
- * 解析 c8 风格覆盖率：{ functions: [{ name, pct }] }，
- * 兼容 { files: [{ path|url, functions: [...] }] } 的分文件包装。
+ * 解析 c8 风格覆盖率，兼容四种形态：
+ *   { functions: [{ name, pct }] }（架构约定）
+ *   { files: [{ path|url, functions: [{ name|functionName, pct|ranges }] }] }
+ *   [{ url, functions: [{ functionName, ranges }] }]（V8 原始数组）
+ *   { files: { "<path>": { fnMap, f } } }（c8 --reporter json 的 istanbul 形态）
  * @param {unknown} data - 覆盖率 JSON
  * @param {string} sourcePath - 报错用的报告路径
  * @returns {{name: string, file: string, coverage: number}[]}
  */
 function parseTsCoverage(data, sourcePath) {
   if (!data || typeof data !== 'object') {
-    throw new CliError(`coverage report schema not recognized: expected { functions: [{ name, pct }] } (${sourcePath})`);
+    throw new CliError(`coverage report schema not recognized: expected c8 coverage JSON with functions or files (${sourcePath})`);
   }
   /** @type {{name: string, file: string, coverage: number}[]} */
   const entries = [];
@@ -208,37 +269,66 @@ function parseTsCoverage(data, sourcePath) {
     if (!item || typeof item !== 'object') {
       throw new CliError(`coverage entry is not an object (${sourcePath})`);
     }
-    // c8 会输出模块级匿名函数（name 为空串），跳过即可。
-    if (typeof item.name !== 'string' || item.name === '') {
+    // c8/V8 会输出模块级匿名函数（name 为空串），跳过即可。
+    const name = pickString(item.name, item.functionName);
+    if (name === undefined) {
       return;
     }
     entries.push({
-      name: item.name,
+      name,
       file: typeof item.file === 'string' ? item.file : file,
-      coverage: coverageFractionOf(item, `coverage entry "${item.name}"`)
+      coverage: coverageFractionOf(item, `coverage entry "${name}"`)
     });
   };
+  const pushFile = (item, fallbackFile) => {
+    if (!item || typeof item !== 'object') {
+      return;
+    }
+    const file = pickString(item.path, item.url, item.file) ?? (typeof fallbackFile === 'string' ? fallbackFile : '');
+    if (Array.isArray(item.functions)) {
+      item.functions.forEach((fn) => pushEntry(fn, file));
+      return;
+    }
+    // istanbul 形态：fnMap 声明函数，f 记录命中次数。
+    const fnMap = item.fnMap && typeof item.fnMap === 'object' ? item.fnMap : null;
+    const hits = item.f && typeof item.f === 'object' ? item.f : null;
+    if (!fnMap || !hits) {
+      return;
+    }
+    for (const [id, info] of Object.entries(fnMap)) {
+      const name = info && typeof info === 'object' ? pickString(info.name) : undefined;
+      if (name === undefined) {
+        continue;
+      }
+      const count = typeof hits[id] === 'number' ? hits[id] : 0;
+      entries.push({ name, file, coverage: count > 0 ? 1 : 0 });
+    }
+  };
+  if (Array.isArray(data)) {
+    data.forEach((item) => pushFile(item, ''));
+    return entries;
+  }
   if (Array.isArray(data.functions)) {
     const topFile = typeof data.file === 'string' ? data.file : '';
     data.functions.forEach((item) => pushEntry(item, topFile));
     return entries;
   }
   if (Array.isArray(data.files)) {
-    data.files.forEach((item) => {
-      if (!item || typeof item !== 'object' || !Array.isArray(item.functions)) {
-        return;
-      }
-      const file = item.path || item.url || item.file || '';
-      item.functions.forEach((fn) => pushEntry(fn, typeof file === 'string' ? file : ''));
-    });
+    data.files.forEach((item) => pushFile(item, ''));
     return entries;
   }
-  throw new CliError(`coverage report schema not recognized: expected { functions: [{ name, pct }] } (${sourcePath})`);
+  if (data.files && typeof data.files === 'object') {
+    Object.entries(data.files).forEach(([key, item]) => pushFile(item, key));
+    return entries;
+  }
+  throw new CliError(`coverage report schema not recognized: expected c8 coverage JSON with functions or files (${sourcePath})`);
 }
 
 /**
  * 解析 pytest-cov 风格覆盖率：
  * { files: { "<path>": { functions: { "<name>": { covered_lines, total_lines } } } } }
+ * 兼容真实 coverage.py 输出：函数键形如 "name:lineno"，覆盖率可取
+ * summary 内层的 percent_covered / covered_lines / num_statements / missing_lines。
  * @param {unknown} data - 覆盖率 JSON
  * @param {string} sourcePath - 报错用的报告路径
  * @returns {{name: string, file: string, coverage: number}[]}
@@ -258,7 +348,11 @@ function parsePyCoverage(data, sourcePath) {
     }
     const rows = Array.isArray(functions)
       ? functions
-      : Object.entries(functions).map(([name, fn]) => ({ ...(fn && typeof fn === 'object' ? fn : {}), name }));
+      : Object.entries(functions).map(([key, fn]) => ({
+        ...(fn && typeof fn === 'object' ? fn : {}),
+        // pytest-cov 的函数键形如 "name:lineno"，联表前去掉行号后缀。
+        name: fn && typeof fn === 'object' ? (pickString(fn.name) ?? key.replace(/:\d+$/, '')) : key.replace(/:\d+$/, '')
+      }));
     for (const row of rows) {
       if (!row || typeof row.name !== 'string' || row.name === '') {
         continue;
@@ -289,7 +383,8 @@ function parseComplexityReport(data, lang, sourcePath) {
 
 /**
  * 解析 typhonjs-escomplex 风格复杂度：{ reports: [{ name, cyclomatic }] }，
- * 兼容顶层报告数组与 aggregate.cyclomatic 聚合结构。
+ * 兼容顶层报告数组与 aggregate.cyclomatic 聚合结构；
+ * 报告内 methods 数组（真正函数粒度）一并展开。
  * @param {unknown} data - 复杂度 JSON
  * @param {string} sourcePath - 报错用的报告路径
  * @returns {{name: string, file: string, complexity: number}[]}
@@ -301,30 +396,48 @@ function parseTsComplexity(data, sourcePath) {
   }
   /** @type {{name: string, file: string, complexity: number}[]} */
   const entries = [];
+  const pushRow = (name, file, cyclomatic) => {
+    if (typeof cyclomatic !== 'number' || !Number.isFinite(cyclomatic) || cyclomatic < 0) {
+      throw new CliError(`complexity entry "${name}" has invalid cyclomatic value (${sourcePath})`);
+    }
+    entries.push({ name, file, complexity: cyclomatic });
+  };
   for (const row of reports) {
     if (!row || typeof row !== 'object') {
       throw new CliError(`complexity report entry is not an object (${sourcePath})`);
     }
-    const name = row.name !== undefined ? row.name : row.methodName;
-    if (typeof name !== 'string' || name === '') {
+    const file = pickString(row.filePath, row.file) ?? '';
+    if (Array.isArray(row.methods)) {
+      for (const method of row.methods) {
+        if (!method || typeof method !== 'object') {
+          throw new CliError(`complexity method entry is not an object (${sourcePath})`);
+        }
+        const methodName = pickString(method.name, method.methodName);
+        if (methodName === undefined) {
+          continue;
+        }
+        pushRow(methodName, file, pickNumber(method.cyclomatic, method.aggregate && method.aggregate.cyclomatic));
+      }
+    }
+    const name = pickString(row.name, row.methodName);
+    if (name === undefined) {
       continue;
     }
-    const cyclomatic = row.cyclomatic !== undefined ? row.cyclomatic : row.aggregate ? row.aggregate.cyclomatic : undefined;
-    if (typeof cyclomatic !== 'number' || !Number.isFinite(cyclomatic) || cyclomatic < 0) {
+    const cyclomatic = pickNumber(row.cyclomatic, row.aggregate && row.aggregate.cyclomatic);
+    if (cyclomatic === undefined) {
+      if (Array.isArray(row.methods)) {
+        continue; // 方法行已展开，模块行缺聚合值可容忍。
+      }
       throw new CliError(`complexity entry "${name}" has invalid cyclomatic value (${sourcePath})`);
     }
-    entries.push({
-      name,
-      file: typeof row.filePath === 'string' ? row.filePath : typeof row.file === 'string' ? row.file : '',
-      complexity: cyclomatic
-    });
+    pushRow(name, file, cyclomatic);
   }
   return entries;
 }
 
 /**
  * 解析 radon cc -j 风格复杂度：{ "<path>": [{ name, complexity }] }，
- * 类块内的 methods 会一并展开。
+ * 类块内的 methods 与嵌套 closures 会一并展开。
  * @param {unknown} data - 复杂度 JSON
  * @param {string} sourcePath - 报错用的报告路径
  * @returns {{name: string, file: string, complexity: number}[]}
@@ -343,7 +456,11 @@ function parsePyComplexity(data, sourcePath) {
       if (!block || typeof block !== 'object') {
         continue;
       }
-      const candidates = Array.isArray(block.methods) ? [block, ...block.methods] : [block];
+      const candidates = [
+        block,
+        ...(Array.isArray(block.methods) ? block.methods : []),
+        ...(Array.isArray(block.closures) ? block.closures : [])
+      ];
       for (const row of candidates) {
         if (!row || typeof row !== 'object' || typeof row.name !== 'string' || row.name === '') {
           continue;
@@ -431,7 +548,7 @@ function printHelp() {
     '  --complexity <path>   Path to the complexity report JSON (required)',
     '  --threshold <number>  CRAP threshold, default 6; a function violates when crap >= threshold',
     '  --lang <lang>         Report language/parser: typescript, javascript, python (aliases: ts, js, py); default ts',
-    '  --output <path>       Also write the JSON report to this file',
+    '  --output <path>       Write the JSON report to this file (default: crap-report.json in the current directory)',
     '  -h, --help            Show this help and exit',
     '',
     'Report formats:',
@@ -442,6 +559,7 @@ function printHelp() {
     '  Text summary line, violation details (or "No CRAP violations found"),',
     '  then the JSON report:',
     '  { ok, threshold, violations: [{ file, function, crap, complexity, coverage }] }',
+    '  The JSON report is also written to disk: --output path, or crap-report.json by default.',
     '',
     'Exit codes:',
     '  0  no violations',
@@ -474,12 +592,11 @@ function main(argv) {
   const report = { ok: violations.length === 0, threshold, violations };
   const fileCount = new Set(functions.map((row) => row.file)).size;
   process.stdout.write(renderReport(report, fileCount));
-  if (args.output) {
-    try {
-      fs.writeFileSync(args.output, `${JSON.stringify(report, null, 2)}\n`);
-    } catch (err) {
-      throw new CliError(`failed to write output file ${args.output}: ${err.message}`);
-    }
+  const outputPath = args.output || DEFAULT_OUTPUT_NAME;
+  try {
+    fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`);
+  } catch (err) {
+    throw new CliError(`failed to write output file ${outputPath}: ${err.message}`);
   }
   return violations.length > 0 ? 1 : 0;
 }
