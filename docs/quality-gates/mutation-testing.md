@@ -350,11 +350,13 @@ def main(argv: list[str]) -> int:
     "src/services/**/*.ts",
     "!src/**/*.spec.ts"
   ],
-  "ignorePatterns": ["dist", "coverage", "src/adapters"],
+  "ignorePatterns": ["dist", "coverage"],
   "reporters": ["clear-text", "html"],
   "thresholds": { "high": 80, "low": 42, "break": 42 }
 }
 ```
+
+> **`ignorePatterns` 与 `mutate` 的区别**：`ignorePatterns` 里的文件根本不会被拷进 Stryker 沙箱（`.stryker-tmp`），对工具而言等于不存在；`mutate` 只决定沙箱内哪些文件被变异。适配层绝不能进 `ignorePatterns`——测试 import 适配器时需要它真实存在，移出沙箱会直接报 missing module。适配器的豁免方式是：留在沙箱里作为测试的运行时依赖，仅靠不列入 `mutate` 白名单来排除变异。
 
 要点：
 
