@@ -192,10 +192,14 @@ mutmut、pytest-cov、radon 属新增推荐候选，不在 §3 四门禁与 §4 
 增量变异测试只对 git diff 改动的 Python 文件执行变异测试。mutmut 3.x 已移除 `--paths-to-mutate` CLI 参数，现行选择性变异 API 是 `mutmut run` 的位置参数通配符：按模块名 (mutant name) fnmatch 过滤待测变异体，模块名由文件路径推导（`/` 换 `.`，剥离前导 `src.`，如 `src/api/service.py` → `api.service`）：
 
 ```sh
-mutmut run $(git diff --name-only HEAD origin/main | grep '\.py$' | grep -v -E '^(tests?)/' | sed 's/\.py$//; s#/#.#g; s/^src\.//; s/\.__init__$//' | sed 's/$/*/' | tr '\n' ' ')
+set -f  # 关闭 shell pathname expansion，防止包名* 被展开成同名真实目录
+uv run --no-sync mutmut run $(git diff --name-only HEAD origin/main | grep '\.py$' | grep -v -E '^(tests?)/' | sed 's/\.py$//; s#/#.#g; s/^src\.//; s/\.__init__$//' | sed 's/$/*/' | tr '\n' ' ')
+set +f  # 恢复 pathname expansion
 ```
 
 - 转换流水线：`.py` 改动文件 → 剥扩展名 → 路径转模块名（`.__init__` 收敛到父包）→ 追加 `*` 通配 → 空格连接为多个位置参数；
+- `set -f` 防护是必需的而非可选项：命令替换结果分词后默认还会经历 shell 的 pathname expansion，只要仓库存在与通配同名的目录（如 `mypackage/`），`mypackage*` 就会被展开成 `mypackage`；mutmut 3.x 把每个位置参数当作一个完整 fnmatch 模式过滤变异体，展开后的精确名匹配不到任何变异体，触发 "Filtered for specific mutants, but nothing matches" 断言失败。`set -f`（等价 `set -o noglob`）只停用 globbing、不影响分词，各通配符仍按空格拆成独立位置参数原样传入；也不要改成整体加引号（`mutmut run "$(…)"`），那样全部通配符合并为单个参数，同样匹配不到任何变异体；
+- 等价替代形式：同一段管道接 xargs（xargs 不做 pathname expansion，通配符同样原样传入）：`git diff --name-only HEAD origin/main | grep '\.py$' | grep -v -E '^(tests?)/' | sed 's/\.py$//; s#/#.#g; s/^src\.//; s/\.__init__$//' | sed 's/$/*/' | xargs uv run --no-sync mutmut run`；
 - 排除 `tests/` 与 `test/`：测试文件不产生待测变异体，混入通配会让 mutmut 以 "Filtered for specific mutants, but nothing matches" 断言失败；
 - 若 diff 未触及任何非测试源码（管道输出为空），命令退化为无参数的 `mutmut run` 全量变异，宁多勿漏；
 - 配置文件替代方案：setup.cfg `[mutmut]` 的 `only_mutate` / `do_not_mutate` glob（pyproject.toml 为 `[tool.mutmut]` 数组形式）；旧配置键 `paths_to_mutate` 已废弃，应改名为 `source_paths`；
