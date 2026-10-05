@@ -302,6 +302,57 @@ function caseThresholdFiltering(base) {
 }
 
 /**
+ * 常规计算：complexity=5、coverage=80% → CRAP=5²×0.2³+5=5.2。
+ * 默认阈值 6 下达标退出 0；阈值 5 时违规且 crap=5.2±0.01。
+ */
+function caseNormalCalculationTs(base) {
+  const dir = makeCaseDir(base, 'normal-calculation-ts');
+  const coverage = writeJson(dir, 'coverage.json', c8Coverage([{ name: 'normal', pct: 80 }]));
+  const complexity = writeJson(dir, 'complexity.json', escomplexReport([{ name: 'normal', cyclomatic: 5 }]));
+  const passing = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts'], dir);
+  assertCase(passing.status === 0, `5.2 低于默认阈值 6 应退出 0，实际 ${passing.status}: ${passing.stderr}`);
+  const passParts = splitOutput(passing.stdout);
+  assertCase(passParts.json.ok === true, '默认阈值下 ok 应为 true');
+  assertCase(passParts.json.violations.length === 0, '默认阈值下不应有违规');
+
+  const failing = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts', '--threshold', '5'], dir);
+  assertCase(failing.status === 1, `5.2 高于阈值 5 应退出 1，实际 ${failing.status}: ${failing.stderr}`);
+  const failParts = splitOutput(failing.stdout);
+  assertCase(failParts.json.violations.length === 1, `阈值 5 应恰有 1 条违规，实际：${failing.stdout}`);
+  const row = failParts.json.violations[0];
+  assertCase(row.function === 'normal', `违规函数应为 normal，实际 ${row.function}`);
+  assertCase(Math.abs(row.crap - 5.2) <= 0.01, `CRAP=5²×0.2³+5 应为 5.2±0.01，实际 ${row.crap}`);
+  assertCase(row.complexity === 5, `复杂度应为 5，实际 ${row.complexity}`);
+  assertCase(Math.abs(row.coverage - 0.8) <= 0.001, `覆盖率应为 0.8，实际 ${row.coverage}`);
+  return dir;
+}
+
+/**
+ * 阈值 6 过滤：全覆盖 complexity=7 → CRAP=7 应入选违规，
+ * complexity=3 → CRAP=3 应被排除。
+ */
+function caseThresholdSixViolation(base) {
+  const dir = makeCaseDir(base, 'threshold-six');
+  const coverage = writeJson(dir, 'coverage.json', c8Coverage([
+    { name: 'seven', pct: 100, file: 'src/seven.js' },
+    { name: 'three', pct: 100, file: 'src/three.js' }
+  ]));
+  const complexity = writeJson(dir, 'complexity.json', escomplexReport([
+    { name: 'seven', cyclomatic: 7 },
+    { name: 'three', cyclomatic: 3 }
+  ]));
+  const cli = runCli(['--coverage', coverage, '--complexity', complexity, '--lang', 'ts', '--threshold', '6'], dir);
+  assertCase(cli.status === 1, `CRAP=7≥6 应退出 1，实际 ${cli.status}: ${cli.stdout}`);
+  const parts = splitOutput(cli.stdout);
+  assertCase(parts.json.violations.length === 1, `应只有 seven 入选违规，实际：${cli.stdout}`);
+  const row = parts.json.violations[0];
+  assertCase(row.function === 'seven', `违规函数应为 seven，实际 ${row.function}`);
+  assertCase(row.crap === 7, `全覆盖 CRAP 应等于复杂度 7，实际 ${row.crap}`);
+  assertCase(!parts.json.violations.some((item) => item.function === 'three'), 'CRAP=3<6 不应入选违规');
+  return dir;
+}
+
+/**
  * Python 解析器：pytest-cov + radon 夹具（VAL-CRAP-005），
  * --lang python 与 --lang py 均应走同一解析逻辑。
  */
@@ -579,6 +630,8 @@ function main() {
     caseZeroCoverageTs,
     caseFullCoverageTs,
     caseThresholdFiltering,
+    caseNormalCalculationTs,
+    caseThresholdSixViolation,
     casePythonParser,
     caseC8V8RawCoverage,
     caseC8IstanbulFiles,
