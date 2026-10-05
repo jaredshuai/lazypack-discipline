@@ -160,3 +160,37 @@ config_owner: tool-or-user
 6. **退出后再次 setup 的行为规范**：
    - 配方退出后，本地环境中遗留的工具（如仍存在于 PATH 或 `.venv/` 的 `ruff` 等）**不代表用户重新接受配方**；
    - 再次运行 setup 探测到这些工具时，将其报告为未接线的环境既有工具，绝不自动安装或自动接线回配方，必须经由用户显式选择才可重新接线。
+
+---
+
+## 7. 质检分层节奏 (Quality Check Rhythm)
+
+本节在 §3 门禁命令字面量基础上定义三层质检执行时机，确保快速反馈与深度保障并行。
+
+| 时机 | 检查内容 | 耗时预算 | 命令示例 | 处置人 |
+|---|---|---|---|---|
+| 本地提交前 (pre-commit) | 单元测试 + lint | 秒级 | `uv run --no-sync pytest tests/unit && uv run --no-sync ruff check --no-fix` | 开发者 |
+| PR / CI | 覆盖率门槛 + 增量变异测试（只变异改动文件） | ≤15 分钟 | `uv run --no-sync pytest --cov && uv run --no-sync mutmut run --paths-to-mutate=<changed>` | CI 阻断 PR 合并 |
+| 夜间定时 (nightly) | 全量变异测试 + 重型静态分析 | 不限 | `uv run --no-sync mutmut run && uv run --no-sync radon cc -a` | 晨会处置失败项 |
+
+**设计原则**：
+
+- 白天跑的一切必须快，慢检查一律夜间化；
+- 任何一层失败都有明确处置人：pre-commit 失败开发者本地修复，PR/CI 失败由 CI 阻断 PR 合并，夜间失败项晨会处置；
+- 增量变异测试：PR/CI 阶段只对 git diff 改动文件执行变异测试，全量变异留给夜间，保证 CI 时长预算不超限。
+
+### 7.1 工具对应关系 (Tool Mapping)
+
+- `pytest --cov`：内部调用 `pytest-cov` 插件产出覆盖率报告，供 PR/CI 门槛判定；
+- `mutmut run`：mutmut 变异测试 (mutation testing)；不带 `--paths-to-mutate` 即全量变异，携带该参数即增量变异；
+- `radon cc -a`：radon 圈复杂度 (cyclomatic complexity) 分析，`-a` 输出全仓平均等级，属重型静态分析候选。
+
+mutmut、pytest-cov、radon 属新增推荐候选，不在 §3 四门禁与 §4 批量安装计划范围内；采纳时需 `uv add --dev mutmut pytest-cov radon`，不改变 ruff / ty / pytest 基线。表格命令沿用 §3 的 `--no-sync` 约定。
+
+### 7.2 增量变异测试命令示例 (Incremental Mutation Example)
+
+增量变异测试只对 git diff 改动的 Python 文件执行变异测试，mutmut `--paths-to-mutate` 接受逗号分隔的文件列表：
+
+```sh
+mutmut run --paths-to-mutate=$(git diff --name-only HEAD origin/main | grep '\.py$' | tr '\n' ',')
+```
