@@ -46,11 +46,11 @@
 
 ### 与参考产品的差异
 
-| observed_difference | 影响 | 本轮范围 | 状态 |
-|---|---|---|---|
+| observed_difference | 影响 | 本轮范围 | 状态 | 是否违反已确认体验要求 |
+|---|---|---|---|---|
 ```
 
-十二个必填字段顺序即上表；`none` 是合法值不算缺失，占位开头（`待补充`、`未填写`、`todo`、`tbd`）按未填写判失败。旧版 4 列步骤表（`| 步骤或事项 | 层标签 | 说明 | 证据 |`）是非法格式，校验器以 `legacy-steps-table-format` 明确拒绝，不静默解析。校验器定位段落时跳过 ``` / ~~~ 围栏代码块内部的行：围栏内的 `## 用户体验与证据分层` 示例不计入段落，不触发 `duplicate-layer-section`，也不能代替真实填写。
+十二个必填字段顺序即上表；`none` 是合法值不算缺失，占位开头（`待补充`、`未填写`、`todo`、`tbd`）按未填写判失败。同一字段重复出现按 `duplicate-field`（值相同）或 `conflicting-field`（值矛盾）判失败，不再让后者静默覆盖前者；围栏代码块内的示例字段行不是本报告内容，不计入重复。旧版 4 列步骤表（`| 步骤或事项 | 层标签 | 说明 | 证据 |`）与旧版 4 列差异表都是非法格式，校验器明确拒绝，不静默解析。校验器定位段落时跳过 ``` / ~~~ 围栏代码块内部的行：围栏内的 `## 用户体验与证据分层` 示例不计入段落，不触发 `duplicate-layer-section`，也不能代替真实填写。
 
 ## 3. 字段与取值
 
@@ -65,7 +65,11 @@
 
 「路径」列含义：`normal` = 正常路径步骤，`exception` = 异常分支步骤；两者分开计数——`product_user_step_count` 是全部 `product_user_flow` 行数，而 `### 双方步骤对照` 中 `project` 一侧的交互点数按路径分开核对（`normal` 行对照正常路径的 product_user_flow 行数，`exception` 行对照异常分支行数）。非产品行一律填 `-`。
 
-「来源」列：按 `;` 或 `；` 分隔的仓内相对路径，可带 `:行号`、`:行号-行号` 或 `#锚点` 后缀与说明文字（路径记号取第一个空白前的部分）。行号与锚点可组合（`src/x.js:12#anchor`）；先剥锚点再剥行号，两种后缀同时出现也正确解析。只允许 `environment_limitation` 行写 `none`；绝对路径与含 `..` 的写法判失败；每个路径记号必须相对 `--cwd` 真实存在。
+「来源」列：按 `;` 或 `；` 分隔的仓内相对路径，可带 `:行号`、`:行号-行号` 或 `#锚点` 后缀与说明文字。行号与锚点可组合（`src/x.js:12#anchor`）；先剥锚点再剥行号，两种后缀同时出现也正确解析。
+
+**路径含空格或中文时用反引号包裹整项**（如 `` `src/my updater.js` ``、`` `src/更新器.js` ``），此时整项即路径，空格属于路径而不再与说明文字混淆。未加反引号时，校验器先剥行号与锚点，再取**相对 `--cwd` 真实存在的最长空白分隔前缀**作为路径，因此 `src/my updater.js line 12` 这类写法也能正确解析；没有任何前缀存在时退回第一个空白前的部分，由存在性检查如实报缺失。
+
+只允许 `environment_limitation` 行写 `none`；**绝对路径与含 `..` 的写法仍然判失败**（反引号不改变这一点）；每个解析出的路径必须相对 `--cwd` 真实存在。
 
 ### 3.2 双方步骤对照（「路径 | 一方 | 交互点数 | 步骤 | 来源」）
 
@@ -81,14 +85,15 @@
 ### 3.4 路径类与其余字段
 
 - `reference_product`：对标任务的参考产品名；无对标任务写 `none`。`none` 时 `user_experience_status` 只能是 `unverified` 或 `not-applicable`；有参考产品时不得写 `not-applicable`。
-- `harness_paths` / `maintainer_paths`：逗号或中文逗号分隔的仓内相对路径；每个条目必须相对 `--cwd` 真实存在；以 `/` 结尾的项按目录前缀匹配，否则精确相等；写 `none` 表示本轮不声明该路径类。路径比较统一做 `\`→`/`、posix 规范化（去掉 `./` 段、合并连续 `/`）与大小写不敏感归一化，`./tools/x`、`.//tools/./x`、`Tools/x` 与 `tools/x` 视为同一路径；来源路径含空格不受支持（路径记号取第一个空白前部分）。**条目可带 `#锚点` 后缀**（如 `src/updater.js#harness`），此时存在性检查按去锚点的文件部分进行，归属判定要求来源与该条目命中**同一锚点**；不带锚点的条目按前缀/精确匹配，可命中任何锚点。这是同一文件跨层引用时的声明办法：带锚点的条目只约束该锚点，同文件的另一个锚点不受约束。同一文件同时承载多层内容时不能整体列入路径类，需按更细的文件或锚点划分，属人工审查。**锚点是否存在不校验**（机器只比较字符串相等），属 §6 人工审查项。声明不实按 §6 人工审查发现，不由机器担保。
-- `observed_difference`：差异表行；`本轮范围` ∈ {`in-scope`, `out-of-scope`}，`状态` ∈ {`resolved`, `open`, `accepted`}。
+- **来源与路径类条目可以含空格**。`harness_paths` / `maintainer_paths`：逗号或中文逗号分隔的仓内相对路径；每个条目必须相对 `--cwd` 真实存在；以 `/` 结尾的项按目录前缀匹配，否则精确相等；写 `none` 表示本轮不声明该路径类。路径比较统一做 `\`→`/`、posix 规范化（去掉 `./` 段、合并连续 `/`）与大小写不敏感归一化，`./tools/x`、`.//tools/./x`、`Tools/x` 与 `tools/x` 视为同一路径。含空格的条目用**反引号包裹**（如 `` `src/my updater.js` ``），整项即路径。**条目可带 `#锚点` 后缀**（如 `src/updater.js#harness`），此时存在性检查按去锚点的文件部分进行，归属判定要求来源与该条目命中**同一锚点**；不带锚点的条目按前缀/精确匹配，可命中任何锚点。这是同一文件跨层引用时的声明办法：带锚点的条目只约束该锚点，同文件的另一个锚点不受约束。同一文件同时承载多层内容时不能整体列入路径类，需按更细的文件或锚点划分，属人工审查。**锚点是否存在不校验**（机器只比较字符串相等），属 §6 人工审查项。声明不实按 §6 人工审查发现，不由机器担保。
+- `observed_difference`：差异表行；`本轮范围` ∈ {`in-scope`, `out-of-scope`}，`状态` ∈ {`resolved`, `open`, `accepted`}，**第 5 列「是否违反已确认体验要求」∈ {`yes`, `no`}**。该列由人工填写：机器只按 `in-scope` + 未 `resolved` + `yes` 判定「存在违反验收要求且未解决的差异」。
 - `product_user_step_count`：必须等于分层表中 `product_user_flow` 行数；测试编排前置条件与维护者操作不计入。
 - `control_evidence`：控制逻辑证据（实跑命令、日志、工件）。`control_logic_status` 为 `verified`/`partial` 时必填；`verified` 时不得仅含「仅静态」「未实跑」「未验证」类表述。
-- `ux_evidence`：用户可见体验证据（实击观察、录屏、双方对照结果）。`user_experience_status` 为 `aligned`/`partial`/`different` 时必填；与 `control_evidence` 空白归一后不得相同——控制逻辑证据不能冒充体验证据。
+- `ux_evidence`：用户可见体验证据（实击观察、录屏、双方对照结果）。`user_experience_status` 为 `aligned`/`partial`/`different` 时必填。**允许与 `control_evidence` 指向同一份材料**——同一条日志、录像或测试记录可以同时支撑控制逻辑与用户可见体验两个维度，这是 #33 场景下的正常形态。只在两处**文本完全逐字相同且未写明维度或具体位置**时记 `evidence-not-distinguished` 要求补写；是否真的分别支撑两个结论属 §6 人工审查项。
 - `evidence`：其他证据索引；必填字段，`none` 合法，不再承担 aligned/partial/different 的证据判定。
 - `unverified_boundary`：本轮未覆盖范围，逐条写；确无写 `none`。占位开头按未填写判失败。
-- `aligned` 的附加条件：`reference_product` 非空、`ux_evidence` 非空且非静态、无 `in-scope` 且未 `resolved` 的差异、`layer_review_status: reviewed`、normal 路径双方均为整数交互点、任一路径一侧有整数另一侧也必须有整数、同路径双方整数相等。
+- `aligned` 的附加条件：`reference_product` 非空、`ux_evidence` 非空且非静态、**无 `in-scope` + 未 `resolved` + 违反验收要求（`yes`）的差异**、`layer_review_status: reviewed`、normal 路径双方均为整数交互点。**不要求双方点数相等**：点数不同必须有对应差异说明（`interaction-count-differs-without-difference-record`）；点数相等**也不足以**判定 `aligned`——是否真的对齐仍由人工审查与差异表记录。
+- 异常分支单侧存在是合法的：参考侧可如实写 `unobserved`，本产品侧写实际点数即可，不强行要求两边存在相同分支。关键分支未观察时**不得**写成已验证。
 - `partial`/`different` 且有参考产品时：normal 路径双方交互点数必须都是整数（reference 侧未观察时先标 `unverified`，不许写 `different`）。
 
 ## 4. 校验器行为、状态词与全部失败码
@@ -101,14 +106,14 @@
 `format-fail` 的 `reason` 由下列确定性失败码组成（分号分隔；`=` 后为违规实参）：
 
 - 段落与小节：`duplicate-layer-section`、`missing-steps-subsection`、`missing-steps-table`、`missing-compare-subsection`、`missing-compare-table`、`missing-diffs-subsection`、`missing-diffs-table`、`legacy-steps-table-format`。
-- 字段：`missing-or-unfilled-fields=`、`bad-control_logic_status=`、`bad-user_experience_status=`、`bad-layer_review_status=`、`bad-product_user_step_count=`。
+- 字段：`missing-or-unfilled-fields=`、`bad-control_logic_status=`、`bad-user_experience_status=`、`bad-layer_review_status=`、`bad-product_user_step_count=`、`duplicate-field=`（同值重复）、`conflicting-field=`（异值重复）。
 - 步骤行：`bad-step-row=`、`bad-layer-tag=`、`bad-step-path=`、`non-product-row-has-path=`、`suspicious-product-row=`。
 - 来源与路径类：`missing-source=`、`source-not-relative=`、`source-path-missing=`、`bad-path-class-entry=`、`path-class-entry-missing=`、`harness-row-source-outside-harness-paths=`、`maintainer-row-source-outside-maintainer-paths=`、`product-row-source-in-harness-paths=`、`product-row-source-in-maintainer-paths=`。
 - 计数：`product-step-count-mismatch`。
-- 对照表：`bad-compare-row=`、`bad-compare-path=`、`bad-compare-side=`、`bad-compare-count=`、`duplicate-compare-row=`、`reference-row-without-source=`、`project-count-mismatch`、`reference-none-but-reference-rows`。
-- 差异行：`bad-diff-row=`、`bad-diff-scope=`、`bad-diff-state=`。
-- 状态与证据：`control-verified-without-control-evidence`、`control-partial-without-control-evidence`、`control-verified-with-static-only-evidence`、`aligned-without-ux-evidence`、`partial-without-ux-evidence`、`different-without-ux-evidence`、`control-and-ux-evidence-identical`、`aligned-without-reference-product`、`aligned-with-static-only-evidence`、`aligned-with-unresolved-in-scope-diffs=`、`aligned-without-layer-review`、`aligned-without-two-sided-comparison`、`aligned-but-interaction-count-differs`、`partial-without-two-sided-comparison`、`different-without-two-sided-comparison`、`reference-none-but-ux-<状态>`、`reference-present-but-ux-not-applicable`、`layer-review-without-basis`。
-- 声称扫描：`ux-overclaim-outside-aligned-status`、`ux-fact-claim-while-unverified`、`missing-layer-section-with-ux-claims`。
+- 对照表：`bad-compare-row=`、`bad-compare-path=`、`bad-compare-side=`、`bad-compare-count=`、`duplicate-compare-row=`、`reference-row-without-source=`、`project-count-mismatch`、`reference-none-but-reference-rows`、`one-sided-branch-not-recorded`。
+- 差异行：`bad-diff-row=`、`bad-diff-scope=`、`bad-diff-state=`、`bad-diff-violation=`。
+- 状态与证据：`control-verified-without-control-evidence`、`control-partial-without-control-evidence`、`control-verified-with-static-only-evidence`、`aligned-without-ux-evidence`、`partial-without-ux-evidence`、`different-without-ux-evidence`、`evidence-not-distinguished`、`aligned-without-reference-product`、`aligned-with-static-only-evidence`、`aligned-with-unresolved-requirement-violations=`、`aligned-without-layer-review`、`aligned-without-two-sided-comparison`、`interaction-count-differs-without-difference-record`、`partial-without-two-sided-comparison`、`different-without-two-sided-comparison`、`reference-none-but-ux-<状态>`、`reference-present-but-ux-not-applicable`、`layer-review-without-basis`。
+- 声称扫描：否定句、条件句与引用不再产生失败码。自然语言声称**不再作为硬失败**：`user_experience_status` 非 `aligned` 时正文出现体验级对齐词，或 `unverified`/`not-applicable` 时出现体验级事实词，均以 `review-hint: …` 形式写入 `info.lines` 交人工审查，不改变 `format-pass`。只有 `missing-layer-section-with-ux-claims` 仍是硬失败——报告出现体验类声称词却没有分层段落属于结构缺失。
 
 ## 5. 示例
 
@@ -152,10 +157,10 @@
 
 ### 与参考产品的差异
 
-| observed_difference | 影响 | 本轮范围 | 状态 |
-|---|---|---|---|
-| 安装向导仍需点 5 次 | 无法一键完成 | in-scope | open |
-| 安装后需手动重启应用 | 多一次操作 | in-scope | resolved |
+| observed_difference | 影响 | 本轮范围 | 状态 | 是否违反已确认体验要求 |
+|---|---|---|---|---|
+| 安装向导仍需点 5 次 | 无法一键完成 | in-scope | open | yes |
+| 安装后需手动重启应用 | 多一次操作 | in-scope | resolved | no |
 ```
 
 反例（v1 已复现的五个绕行缺口，v2 全部判 `format-fail`）：
@@ -163,23 +168,29 @@
 - 产品步骤改标前置条件：「在 App 内点击检查更新」标 `test_harness_prerequisite`、来源写 `src/updater.js` → `harness-row-source-outside-harness-paths`（harness 行来源不在 `harness_paths` 内）。
 - 维护者发版标产品步骤：「维护者运行 build.ps1 打包」标 `product_user_flow`、来源 `tools/release/build.ps1` → `product-row-source-in-maintainer-paths`。
 - 中性措辞前置条件标产品步骤：「启动时确认一次授权」标 `product_user_flow`、来源 `tools/gui/gui_smoke.mjs` → `product-row-source-in-harness-paths`（措辞中性时仍被来源归属拦下）。
-- `user_experience_status: unverified` 但正文写「流程已对齐」 → `ux-fact-claim-while-unverified`（`已对齐` 已入 FACT_CLAIM 词表；仅当同一行在讲 `控制逻辑` 且不提 `体验` 时该次命中豁免）。
 - `control_logic_status: verified` 但 `control_evidence: none` → `control-verified-without-control-evidence`；`verified` 且证据只有「仅静态检查」 → `control-verified-with-static-only-evidence`。
+- `control_evidence` 与 `ux_evidence` 逐字相同且未写明维度或位置 → `evidence-not-distinguished`（共享同一份材料**允许**，只是要求说明它分别支撑哪个结论）。
 
-其余既有反例仍然拦截：`aligned` 但 `reference_product: none` → `aligned-without-reference-product` / `reference-none-but-ux-aligned`；`aligned` 但 `layer_review_status: not-reviewed` → `aligned-without-layer-review`；`aligned` 但 normal 路径任一方为 `unobserved` → `aligned-without-two-sided-comparison`；同路径双方交互点数不等 → `aligned-but-interaction-count-differs`；`in-scope` 差异仍为 `open` 但状态写 `aligned` → `aligned-with-unresolved-in-scope-diffs`。
+其余既有反例仍然拦截：`aligned` 但 `reference_product: none` → `aligned-without-reference-product` / `reference-none-but-ux-aligned`；`aligned` 但 `layer_review_status: not-reviewed` → `aligned-without-layer-review`；`aligned` 但 normal 路径任一方为 `unobserved` → `aligned-without-two-sided-comparison`；存在 `in-scope` + 未 `resolved` + `是否违反已确认体验要求 = yes` 的差异却写 `aligned` → `aligned-with-unresolved-requirement-violations=`；同路径双方点数不同却没有对应差异说明 → `interaction-count-differs-without-difference-record`。
+
+不再拦截的情形（v3 起）：双方点数不同但差异如实登记为不违反验收要求；异常分支单侧存在、参考侧如实写 `unobserved`；正文写否定句、条件句或引用历史结论。
 
 ## 6. 机器判定与人工审查分工
 
-机器：R1–R9（§4 全部失败码对应的确定性判定）。人工（记录在 `layer_review_status` / `layer_review_basis`）：每行层标签是否符合事实；`harness_paths`/`maintainer_paths` 声明是否如实划分；来源文件是否真的支撑该行；参考产品一侧步骤是否亲自观察；自由文本（说明、差异描述）的语义；引用豁免是否被滥用（把自己的结论包进引号）。
+机器：R1–R9（§4 全部失败码对应的确定性判定）。人工（记录在 `layer_review_status` / `layer_review_basis`）：每行层标签是否符合事实；`harness_paths`/`maintainer_paths` 声明是否如实划分；来源文件是否真的支撑该行；参考产品一侧步骤是否亲自观察；自由文本（说明、差异描述）的语义；**正文是否夸大体验**（自然语言声称只给提示，是否属实由人判断）。
 
 | 分工 | 范围 | 依据 |
 |---|---|---|
-| 机器（`check` 确定性判定） | R1–R9：字段与枚举、小节与表结构、层标签词法、路径列、来源存在性与路径类归属、计数一致、对照表形状、状态-证据组合、声称词扫描 | §4 全部失败码；`format-pass` 只表示这些结构判定未发现违规 |
+| 机器（`check` 确定性判定） | R1–R9：字段与枚举（含重复字段）、小节与表结构、层标签词法、路径列、来源解析与存在性、路径类归属、计数一致、对照表形状、差异表的范围/状态/是否违反验收要求、状态-证据组合 | §4 全部失败码；`format-pass` 只表示这些结构判定未发现违规 |
+| 机器（提示，不阻断） | 自然语言体验声称：否定句与条件句已豁免；仍命中的写 `review-hint`，不改判 `format-pass` | 词表是启发式，机器无法可靠判断一句话是结论还是如实降级 |
 | 人工（`layer_review_status: reviewed` 时须在 `layer_review_basis` 写明） | 每行层标签是否符合事实 | 机器只查词法与路径归属，行可以编造 |
 | 人工 | `harness_paths`/`maintainer_paths` 声明是否如实划分 | 路径存在不等于归类真实；带锚点的条目只按字符串比对，锚点是否存在不校验 |
 | 人工 | 来源文件是否真的支撑该行 | 存在性通过不等于内容支撑结论 |
 | 人工 | 参考产品一侧步骤是否亲自观察 | `reference` 行来源可为自由文本，机器不判真伪 |
+| 人工 | 同一份证据是否真的分别支撑两轴 | 机器只比对两处文本是否完全相同；共享材料合法，内容真伪由人判断 |
+| 人工 | 差异表的「是否违反已确认体验要求」是否属实 | 该列是人工判断，机器只按取值分流 |
 | 人工 | 自由文本（说明、差异描述）的语义 | 机器不理解自然语言含义 |
+| 人工 | 正文是否夸大体验（含把否定或条件句读成结论、把历史陈述读成本轮完成） | 声称扫描只给提示，见上一行 |
 | 人工 | 引用豁免是否被滥用（把自己的结论包进引号） | 成对引号内文本被剥离出声称扫描，可被故意利用 |
 
 `aligned` 必须以 `layer_review_status: reviewed` 为前提（`aligned-without-layer-review`）：没有人工审查记录时，机器结构合规不足以支撑体验级结论。
@@ -187,10 +198,13 @@
 ## 7. 边界（如实声明）
 
 1. 本规范与校验器只做结构与词表层面的机器判定：错层标签、路径类归属、状态-证据组合、声称-状态不一致可拦；无法证明表格内容在语义上真实（行可以编造）。
-2. 声称词与可疑词表是 lint 式启发式，否定语境已按「同句紧邻否定」豁免；仍可能误伤罕见措辞，误伤时按真实语意改写措辞或补层标签，不得为过检查而删去如实描述。
+2. 自然语言声称**不再是硬检查**：否定句、条件句与引用已豁免，仍命中的只以 `review-hint` 提示。代价是正文夸大不再被机器拦住，必须靠人工审查发现。可疑层标签词表仍是 lint 式启发式。
 3. 声称扫描前会剥离围栏代码块、`>` 引用行、行内代码与成对引号片段；引号豁免可被滥用——把自己的结论包进引号即可躲过扫描，该风险列入 §6 人工审查项。
 4. `harness_paths`/`maintainer_paths` 是声明式划分：存在性与归属匹配由机器判定，声明本身是否如实需人工核实。
 5. 来源路径存在不等于来源内容支撑该行结论；路径声明需人工核实后才算数。
 6. 校验器未接 hook/CI，是否纳入交付流程由项目层决定；本仓自身以手动运行收口。
 7. 「需要分层段落」的触发由 §1 规定；校验器只在无声声称词时对缺段报告放行，不替人判断报告是否涉及用户体验。
-8. 目标仓内派发的 `scripts/check_report_layers.mjs` 存在即保留不覆盖，本地副本与模板的版本差没有自动升级通道；v1 格式段落在 v2 校验器下以 `legacy-steps-table-format` 拒绝，需按 §2 迁移。
+8. 目标仓内派发的 `scripts/check_report_layers.mjs` 存在即保留不覆盖，本地副本与模板的版本差没有自动升级通道；v1 步骤表以 `legacy-steps-table-format` 拒绝，v2 差异表（4 列）以 `bad-diff-row=` 拒绝，均需按 §2 迁移。
+9. **点数相等不再是 `aligned` 的充分条件**：机器只要求点数不同必须有差异说明、有未解决且违反验收要求的差异时不得 `aligned`。两端体验是否真的对齐，机器无法判断——这是刻意让出的边界，由人工审查与差异表承担。
+10. **共享证据被允许**：同一份日志/录像/测试记录可同时支撑两轴，机器只检查两处是否完全相同且未写明维度。材料是否真的分别支撑两个结论，属人工审查。
+11. 路径含空格与中文靠反引号或最长存在前缀解析，仍有歧义时退回首词并按缺失报错；该启发式对「路径本身以空格分隔的多段目录且与说明文字同形」的场景可能误判，属已知局限。

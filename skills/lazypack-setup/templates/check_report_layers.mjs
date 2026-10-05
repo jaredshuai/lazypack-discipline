@@ -1,5 +1,5 @@
 /**
- * check_report_layers.mjs — 交付/验收报告「用户体验与证据分层」段落的播种与结构校验器（v2）
+ * check_report_layers.mjs — 交付/验收报告「用户体验与证据分层」段落的播种与结构校验器（v3）
  *
  * 判定口径唯一正文：lazypack-discipline 仓 docs/agents/report-layers.md。
  * 用法:
@@ -13,17 +13,20 @@
  *        报告没有分层段落但含用户体验类声称词时为 format-fail；
  *        无段落也无声称词时为 format-pass（本工具不判断报告是否需要该段落）。
  *
- * v2 相对 v1 的变化（全部确定性判定）：
- *   - 必填字段扩为 12 个（新增 harness_paths、maintainer_paths、layer_review_status、
- *     layer_review_basis、control_evidence、ux_evidence）；
- *   - 步骤表改为 5 列（步骤或事项 | 层标签 | 路径 | 说明 | 来源），旧 4 列格式
- *     以 legacy-steps-table-format 明确拒绝；
- *   - 新增「### 双方步骤对照」小节（路径 | 一方 | 交互点数 | 步骤 | 来源）；
- *   - 来源格逐项做仓内相对路径存在性检查（相对 --cwd，缺省进程 cwd）；
- *   - harness_paths / maintainer_paths 路径类约束各层标签的来源归属；
- *   - 状态判定改用 control_evidence / ux_evidence（旧 evidence 判定迁移）；
- *   - 声称扫描前剥离围栏代码、引用行、行内代码与成对引号片段；
- *     FACT_CLAIM_PHRASES 新增「已对齐」（含 控制逻辑 且无 体验 的行豁免）。
+ * v3 相对 v2 的变化（可用性修复，全部确定性判定）：
+ *   - 删除「双方交互点数必须相等才可 aligned」：点数不同改为必须有差异说明
+ *     （interaction-count-differs-without-difference-record），异常分支单侧存在不再阻断；
+ *   - 差异表新增第 5 列「是否违反已确认体验要求」（yes|no）；只有 in-scope、
+ *     未 resolved 且为 yes 的差异才阻断 aligned；
+ *   - 取消「control_evidence 与 ux_evidence 相同即判冒充」：共享同一份日志/录像/
+ *     测试记录是合法的，仅在两处文本完全逐字相同且未写明维度或位置时记
+ *     evidence-not-distinguished；
+ *   - 重复字段行不再静默覆盖：同值记 duplicate-field=，异值记 conflicting-field=；
+ *   - 来源与路径类支持含空格/中文的仓内相对路径：反引号包裹时整项即路径，
+ *     否则取相对 cwd 真实存在的最长空白分隔前缀；越界、绝对路径、缺失路径仍拒绝；
+ *   - 否定句、条件句按语境豁免（中文紧邻否定 + 英文否定 + 条件词整行生效）；
+ *     自然语言体验声称降为 info 中的 review-hint，不再作为 format-fail；
+ *   - 段落正文扫描跳过围栏代码块内的示例字段行。
  *
  * 未接 hook/CI。不是门禁。结构合规不等于报告陈述在语义上真实。
  * Node 标准库实现，零 npm 依赖。
@@ -78,6 +81,7 @@ const STEP_PATHS = new Set(['normal', 'exception']);
 const COMPARE_SIDES = new Set(['reference', 'project']);
 const SCOPE_VALUES = new Set(['in-scope', 'out-of-scope']);
 const DIFF_STATES = new Set(['resolved', 'open', 'accepted']);
+const VIOLATION_VALUES = new Set(['yes', 'no']);
 
 /** 无分层段落时触发 format-fail 的用户体验类声称词（区分中英文；拉丁词按词边界匹配）。 */
 const UX_TRIGGERS = [
@@ -141,8 +145,8 @@ const SECTION_SKELETON = [
   '',
   '### 与参考产品的差异',
   '',
-  '| observed_difference | 影响 | 本轮范围 | 状态 |',
-  '|---|---|---|---|',
+  '| observed_difference | 影响 | 本轮范围 | 状态 | 是否违反已确认体验要求 |',
+  '|---|---|---|---|---|',
   ''
 ];
 
@@ -217,36 +221,63 @@ function containsAny(text, tokens) {
   return tokens.some((token) => (token instanceof RegExp ? token.test(text) : text.includes(token)));
 }
 
+/** 否定词（中英文）。用于识别「本轮**未**做…」这类如实降级表述。 */
+const NEGATION_RE = /[不无未没勿非非]|not|never|cannot|can't|isn't|wasn't|without/i;
+const CONDITION_RE = /如果|假如|若|一旦|除非|待|之后才|条件是|前提是|\bif\b|\bwhen\b|\bonce\b|\bunless\b|\bprovided\b/i;
+
 /**
- * 同一行内紧邻匹配点前 4 字内出现否定字（不/无/未/没/勿）时，该次命中按否定表述处理。
- * exemptHit(line, token) 返回 true 时该次命中豁免（目前仅 FACT_CLAIM 的「已对齐」
- * 在行内含「控制逻辑」且不含「体验」时豁免）。
+ * 判断某次命中是否处在否定或条件语境。
+ *
+ * 语境判定分两级：
+ *  1. 否定：匹配点前若干字内出现否定词（中文紧邻、英文可隔一个词）；
+ *  2. 条件：整行含条件词（如果/若/待…才/if/when…）。
+ * 命中处于这两类语境时，视为如实表述，不作为「本轮已完成」的事实声称。
  */
-function hasClaimHit(text, tokens, exemptHit) {
+function isNegatedOrConditional(line, index, token) {
+  const head = line.slice(Math.max(0, index - 12), index);
+  const tail = line.slice(index, index + String(token).length + 12);
+  if (NEGATION_RE.test(head)) {
+    return true;
+  }
+  // 否定出现在结论词之后（“…并非已对齐”“…不是全自动”）也算否定语境
+  if (NEGATION_RE.test(tail) && /并非|不是|而非|not\b/i.test(tail)) {
+    return true;
+  }
+  return CONDITION_RE.test(line);
+}
+
+/**
+ * 在剥离后的文本中查找体验级事实声称，返回 {hit, line} 或 null。
+ * 否定句、条件句、按引用豁免的命中一律不算命中。
+ */
+function findClaimHit(text, tokens, exemptHit) {
   for (const line of text.split(/\r?\n/)) {
     for (const token of tokens) {
       const exempt = () => (exemptHit ? exemptHit(line, token) : false);
       if (token instanceof RegExp) {
         const re = new RegExp(token.source, token.flags.includes('g') ? token.flags : `${token.flags}g`);
         for (const m of line.matchAll(re)) {
-          const before = line.slice(Math.max(0, m.index - 4), m.index);
-          if (!/[不无未没勿]/.test(before) && !exempt()) {
-            return true;
+          if (!exempt() && !isNegatedOrConditional(line, m.index, token)) {
+            return { hit: String(m[0]), line };
           }
         }
       } else {
         let idx = line.indexOf(token);
         while (idx !== -1) {
-          const before = line.slice(Math.max(0, idx - 4), idx);
-          if (!/[不无未没勿]/.test(before) && !exempt()) {
-            return true;
+          if (!exempt() && !isNegatedOrConditional(line, idx, token)) {
+            return { hit: token, line };
           }
           idx = line.indexOf(token, idx + 1);
         }
       }
     }
   }
-  return false;
+  return null;
+}
+
+/** 兼容旧调用：只关心是否命中的布尔版本。 */
+function hasClaimHit(text, tokens, exemptHit) {
+  return findClaimHit(text, tokens, exemptHit) !== null;
 }
 
 /**
@@ -323,34 +354,120 @@ function isEmptyValue(value) {
   return value === undefined || value === '' || value === 'none' || UNFILLED_RE.test(value);
 }
 
-/** 来源格切分：按 ; 或 ； 分项，trim 并去反引号，丢弃空项。 */
-function sourceItems(cell) {
-  return cell.split(/[;；]/).map((s) => s.trim().replace(/`/g, '')).filter((s) => s !== '');
-}
-
 /**
- * 来源项的路径记号：第一个空白前的部分，再去掉末尾的行号与锚点后缀。
- * 允许 `path:12`、`path:3-9`、`path#anchor`、`path:12#anchor` 四种后缀组合。
+ * 来源格切分：按 ; 或 ； 分项，trim，丢弃空项。
+ * 整项被反引号包裹时保留「显式路径」标记——该形式下整项即为路径，
+ * 路径内的空格不再与说明文字混淆。
  */
-function pathTokenOf(item) {
-  let token = item.split(/\s+/)[0];
-  token = token.replace(/#.*$/, '');
-  token = token.replace(/:\d+(-\d+)?$/, '');
-  return token;
+function sourceItems(cell) {
+  return cell.split(/[;；]/)
+    .map((s) => s.trim())
+    .filter((s) => s !== '')
+    .map((s) => {
+      const m = /^`([^`]+)`(\s.*)?$/s.exec(s);
+      if (m) {
+        return { text: m[1].trim(), tail: (m[2] || '').trim(), explicit: true };
+      }
+      const bare = s.replace(/`/g, '');
+      return { text: bare, tail: '', explicit: false };
+    });
 }
 
-/** 来源项的行号后缀（如 `:12`、`:3-9`、`:12#anchor`）；无则返回 ''。 */
-function lineSuffixOf(item) {
-  const token = item.split(/\s+/)[0];
-  const m = /:\d+(-\d+)?(?=#|$)/.exec(token);
+/** 去掉末尾锚点后缀（`#anchor`）。 */
+function stripAnchor(s) {
+  return s.replace(/#.*$/, '');
+}
+
+/** 去掉末尾行号后缀（`:12`、`:3-9`）。 */
+function stripLine(s) {
+  return s.replace(/:\d+(-\d+)?$/, '');
+}
+
+/** 来源项的行号后缀（如 `:12`、`:3-9`）；无则返回 ''。 */
+function lineSuffixOf(text) {
+  const m = /:\d+(-\d+)?(?=#|$)/.exec(text);
   return m ? m[0] : '';
 }
 
 /** 来源项的锚点后缀（如 `#anchor`）；无则返回 ''。 */
-function anchorSuffixOf(item) {
-  const token = item.split(/\s+/)[0];
-  const hash = token.indexOf('#');
-  return hash === -1 ? '' : token.slice(hash);
+function anchorSuffixOf(text) {
+  const hash = text.indexOf('#');
+  return hash === -1 ? '' : text.slice(hash);
+}
+
+/** 去掉路径后的行号与锚点后缀，得到候选路径本体（可能仍含空格与说明文字）。 */
+function candidatePathOf(text) {
+  return stripLine(stripAnchor(text)).trim();
+}
+
+/**
+ * 解析来源项的路径记号。返回 { token, anchor, line }。
+ *
+ * 显式形式（整项反引号包裹）：整项即路径，空格属于路径。
+ * 非显式形式：先去掉行号与锚点，再取**相对 cwd 真实存在的最长前缀**，
+ * 使 `src/a.js 行 12` 与 `src/my updater.js` 都能正确切分；
+ * 若没有任何前缀存在，退回第一个空白前的部分，由存在性检查如实报缺失。
+ */
+function resolveSourcePath(item, cwd) {
+  const anchor = anchorSuffixOf(item.text);
+  const line = lineSuffixOf(item.text);
+  const candidate = candidatePathOf(item.text);
+  if (candidate === '') {
+    return { token: '', anchor, line };
+  }
+  if (item.explicit) {
+    return { token: candidate, anchor, line };
+  }
+  const words = candidate.split(' ').filter((w) => w !== '');
+  for (let n = words.length; n >= 1; n -= 1) {
+    const prefix = words.slice(0, n).join(' ');
+    if (fs.existsSync(path.resolve(cwd, prefix))) {
+      return { token: prefix, anchor, line };
+    }
+  }
+  return { token: words[0] === undefined ? candidate : words[0], anchor, line };
+}
+
+/**
+ * 共享证据的处理口径。
+ *
+ * 同一份日志、录像或测试记录**可以**同时支撑控制逻辑与用户可见体验两个维度——
+ * 这是 #33 场景下的正常形态，不再按「两处文本或路径相同」判冒充。
+ *
+ * 机器只保留一条与共享证据直接相关、且不引入新表格的硬检查：
+ * 两处证据**完全逐字相同且不含任何维度说明**时，报告没有回答
+ * 「同一份材料分别支撑哪个结论」，记 evidence-not-distinguished 交人工补写。
+ * 只要任一侧写明了它支撑的维度或具体位置，即视为已区分。
+ * 是否真的分别支撑两个结论，属 §6 人工审查项。
+ */
+function isUndistinguishedSharedEvidence(cev, uev) {
+  if (isEmptyValue(cev) || isEmptyValue(uev)) {
+    return false;
+  }
+  const a = cev.replace(/\s+/g, ' ').trim();
+  const b = uev.replace(/\s+/g, ' ').trim();
+  if (a !== b) {
+    return false;
+  }
+  // 文本完全相同：只有当两侧都写明了维度或具体位置才算已区分。
+  const locates = /(:\d|#|@|\d{1,2}:\d{2})/.test(a) || /\.(log|json|txt|md|jsonl|mp4|mkv|mov)/i.test(a);
+  const namesAxis = /控制|状态机|后端|流程|体验|用户可见|交互|界面/.test(a);
+  const states = /支撑|证明|依据|evidence|shows?|supports?/i.test(a);
+  return !(locates && namesAxis) && !(locates && states);
+}
+
+/**
+ * 差异表是否为该路径登记了差异说明。
+ * 差异表不含路径列，因此按差异文本中出现该路径名，或该路径存在任一差异行即视为已登记，
+ * 再由人工审查核实登记内容是否真的对应。
+ */
+function hasDifferenceRecordFor(diffRows, stepPath) {
+  const labels = { normal: /正常|normal|主路径|常规/, exception: /异常|exception|失败|失败分支|超时/ };
+  const re = labels[stepPath];
+  if (!re) {
+    return diffRows.length > 0;
+  }
+  return diffRows.some((c) => c.length >= 1 && re.test(c[0]));
 }
 
 /** 绝对路径或不安全（.. 段）判定；用于来源项与路径类条目。 */
@@ -377,13 +494,13 @@ function checkSourceCell(cell, rowName, allowNone, cwd, failures) {
     return;
   }
   for (const item of items) {
-    if (item === 'none') {
+    if (item.text === 'none') {
       if (!allowNone) {
         failures.push(`missing-source=${rowName}`);
       }
       continue;
     }
-    const token = pathTokenOf(item);
+    const { token } = resolveSourcePath(item, cwd);
     if (token === '') {
       failures.push(`missing-source=${rowName}`);
       continue;
@@ -401,29 +518,35 @@ function checkSourceCell(cell, rowName, allowNone, cwd, failures) {
 /**
  * R5 路径类解析：none/占位/空 → null（无约束可命中）；否则按 , 或 ， 分项，
  * 每项须相对，否则 bad-path-class-entry；相对条目还须相对 cwd 存在，
- * 否则 path-class-entry-missing=<条目原文>。条目可带 #锚点 后缀用于同文件按锚点分层。
+ * 否则 path-class-entry-missing=<解析出的路径>。条目可带 #锚点 后缀用于同文件按锚点分层；
+ * 条目本身可含空格（空格属于路径），末端的行号与锚点后缀照常剥离。
  * 返回归一化匹配器列表。
  */
 function parsePathClass(value, failures, cwd) {
   if (isEmptyValue(value)) {
     return null;
   }
-  const items = value.split(/[,，]/).map((s) => s.trim().replace(/`/g, '')).filter((s) => s !== '');
+  const items = value.split(/[,，]/)
+    .map((s) => s.trim())
+    .filter((s) => s !== '')
+    .map((s) => {
+      const m = /^`([^`]+)`$/.exec(s);
+      return m ? { text: m[1].trim(), explicit: true } : { text: s.replace(/`/g, ''), explicit: false };
+    });
   const matchers = [];
   for (const item of items) {
-    if (isAbsOrUnsafe(item)) {
-      failures.push(`bad-path-class-entry=${item}`);
+    if (isAbsOrUnsafe(item.text)) {
+      failures.push(`bad-path-class-entry=${item.text}`);
       continue;
     }
-    // 路径类条目允许带 #锚点 后缀；存在性检查按去锚点后的路径部分进行。
-    const anchor = anchorSuffixOf(item);
-    const bare = pathTokenOf(item);
+    const anchor = anchorSuffixOf(item.text);
+    const bare = resolveSourcePath(item, cwd).token;
     if (bare === '') {
-      failures.push(`bad-path-class-entry=${item}`);
+      failures.push(`bad-path-class-entry=${item.text}`);
       continue;
     }
     if (!fs.existsSync(path.resolve(cwd, bare))) {
-      failures.push(`path-class-entry-missing=${item}`);
+      failures.push(`path-class-entry-missing=${bare}`);
       continue;
     }
     const norm = normRel(bare);
@@ -461,10 +584,10 @@ function pathMatches(token, matchers, anchor) {
 }
 
 /** 步骤行各来源的 {token, anchor} 列表（不含 none 项与空记号）。 */
-function sourceTokens(cell) {
+function sourceTokens(cell, cwd) {
   return sourceItems(cell)
-    .filter((it) => it !== 'none')
-    .map((it) => ({ token: pathTokenOf(it), anchor: anchorSuffixOf(it) }))
+    .filter((it) => it.text !== 'none')
+    .map((it) => resolveSourcePath(it, cwd))
     .filter((row) => row.token !== '');
 }
 
@@ -474,6 +597,7 @@ function sourceTokens(cell) {
  */
 function parseSection(lines) {
   const problems = [];
+  const fieldProblems = [];
   const headings = [];
   const mask = fenceMask(lines);
   lines.forEach((line, idx) => {
@@ -496,6 +620,8 @@ function parseSection(lines) {
     }
   }
   const body = lines.slice(start + 1, end);
+  // 围栏代码块内的示例行（字段行、表头等）不是本报告的真实内容，跳过。
+  const bodyMask = fenceMask(body);
 
   const fields = {};
   const stepRows = [];
@@ -512,7 +638,11 @@ function parseSection(lines) {
   let diffsTableSeen = false;
   let legacyStepsFormat = false;
 
-  for (const line of body) {
+  for (let bi = 0; bi < body.length; bi += 1) {
+    if (bodyMask[bi]) {
+      continue;
+    }
+    const line = body[bi];
     if (SUB_STEPS.test(line)) {
       stepsHeaderSeen = true;
       inSteps = true;
@@ -536,6 +666,15 @@ function parseSection(lines) {
     }
     const field = FIELD_LINE.exec(line);
     if (field) {
+      // 同一字段重复出现时记录问题，不静默让后者覆盖前者。
+      if (Object.prototype.hasOwnProperty.call(fields, field[1])) {
+        const first = fields[field[1]];
+        const second = field[2].trim();
+        const kind = first === second ? 'duplicate-field' : 'conflicting-field';
+        if (!fieldProblems.includes(`${kind}=${field[1]}`)) {
+          fieldProblems.push(`${kind}=${field[1]}`);
+        }
+      }
       fields[field[1]] = field[2].trim();
       continue;
     }
@@ -601,6 +740,7 @@ function parseSection(lines) {
   if (diffsHeaderSeen && !diffsTableSeen) {
     problems.push('missing-diffs-table');
   }
+  problems.push(...fieldProblems);
   return { fields, stepRows, compareRows, diffRows, problems };
 }
 
@@ -729,7 +869,7 @@ function cmdCheck(flags) {
       failures.push(`non-product-row-has-path=${rowName}`);
     }
     checkSourceCell(cells[4], rowName, tag === 'environment_limitation', cwd, failures);
-    const tokens = sourceTokens(cells[4]);
+    const tokens = sourceTokens(cells[4], cwd);
     if (tag === 'test_harness_prerequisite') {
       if (!tokens.some((t) => pathMatches(t.token, harnessMatchers, t.anchor))) {
         failures.push(`harness-row-source-outside-harness-paths=${rowName}`);
@@ -810,9 +950,12 @@ function cmdCheck(flags) {
     failures.push('reference-none-but-reference-rows');
   }
 
-  // 差异表行（沿用）
+  // 差异表行：新增第 5 列「是否违反已确认体验要求」，取值 yes | no。
+  // 只有 in-scope、未解决且违反验收要求的差异才阻断 aligned；
+  // 影响说明、是否属本轮范围、是否违反要求由人工在表中如实记录。
+  const unresolvedViolations = [];
   for (const cells of diffRows) {
-    if (cells.length < 4 || cells.some((c) => c === '')) {
+    if (cells.length !== 5 || cells.some((c) => c === '')) {
       failures.push(`bad-diff-row=${cells.join('|')}`);
       continue;
     }
@@ -821,6 +964,13 @@ function cmdCheck(flags) {
     }
     if (!DIFF_STATES.has(cells[3])) {
       failures.push(`bad-diff-state=${cells[3]}`);
+    }
+    if (!VIOLATION_VALUES.has(cells[4])) {
+      failures.push(`bad-diff-violation=${cells[4]}`);
+    }
+    const open = cells[2] === 'in-scope' && cells[3] !== 'resolved';
+    if (open && cells[4] === 'yes') {
+      unresolvedViolations.push(cells[0]);
     }
   }
 
@@ -842,9 +992,10 @@ function cmdCheck(flags) {
   if ((ux === 'aligned' || ux === 'partial' || ux === 'different') && isEmptyValue(uev)) {
     failures.push(`${ux}-without-ux-evidence`);
   }
-  if (!isEmptyValue(cev) && !isEmptyValue(uev)
-      && cev.replace(/\s+/g, ' ').trim() === uev.replace(/\s+/g, ' ').trim()) {
-    failures.push('control-and-ux-evidence-identical');
+  // 共享证据允许：同一份日志/录像/测试记录可以同时支撑控制逻辑与用户体验两个维度。
+  // 不再按路径或文本相同判冒充；只有两处完全相同且未写明维度时才提示补写。
+  if (isUndistinguishedSharedEvidence(cev, uev)) {
+    failures.push('evidence-not-distinguished');
   }
   if (ux === 'aligned') {
     if (isEmptyValue(ref)) {
@@ -853,24 +1004,33 @@ function cmdCheck(flags) {
     if (!isEmptyValue(uev) && containsAny(uev, STATIC_EVIDENCE_TOKENS)) {
       failures.push('aligned-with-static-only-evidence');
     }
-    const unresolved = diffRows.filter((c) => c.length >= 4 && c[2] === 'in-scope' && c[3] !== 'resolved');
-    if (unresolved.length > 0) {
-      failures.push(`aligned-with-unresolved-in-scope-diffs=${unresolved.length}`);
+    // 只有「违反已确认体验要求且本轮未解决」的差异才阻断 aligned；
+    // 差异的影响、是否属本轮范围、是否违反验收要求由人工在差异表与审查依据中记录。
+    if (unresolvedViolations.length > 0) {
+      failures.push(`aligned-with-unresolved-requirement-violations=${unresolvedViolations.length}`);
     }
     if (review !== 'reviewed') {
       failures.push('aligned-without-layer-review');
     }
+    // 双方正常路径都要有实测记录；但不要求点数相等，也不要求异常分支两边同时存在。
     const normal = compareCounts.normal || {};
     if (!Number.isInteger(normal.reference) || !Number.isInteger(normal.project)) {
       failures.push('aligned-without-two-sided-comparison path=normal');
     }
+    // 点数不同必须有对应差异说明；单侧未观察的分支不得写成已验证。
     for (const p of Object.keys(compareCounts)) {
       const r = compareCounts[p].reference;
       const pr = compareCounts[p].project;
+      const bothInt = Number.isInteger(r) && Number.isInteger(pr);
+      if (bothInt && r !== pr && !hasDifferenceRecordFor(diffRows, p)) {
+        failures.push(`interaction-count-differs-without-difference-record path=${p}`);
+      }
       if (Number.isInteger(r) !== Number.isInteger(pr)) {
-        failures.push(`aligned-without-two-sided-comparison path=${p}`);
-      } else if (Number.isInteger(r) && r !== pr) {
-        failures.push(`aligned-but-interaction-count-differs path=${p}`);
+        const oneSide = Number.isInteger(r) ? 'reference' : 'project';
+        const recorded = compareRows.some((c) => c.length === 5 && c[0] === p && c[1] === oneSide);
+        if (!recorded) {
+          failures.push(`one-sided-branch-not-recorded path=${p} side=${oneSide}`);
+        }
       }
     }
   }
@@ -890,14 +1050,23 @@ function cmdCheck(flags) {
     failures.push('layer-review-without-basis');
   }
 
-  // R9 声称扫描（剥离后的文本；否定豁免不变；已对齐的控制逻辑豁免）
+  // R9 声称扫描：否定句、条件句与引用已豁免。
+  // 硬检查以结构化结论与证据的一致性为准；自然语言声称无法可靠判断时只给审查提示，
+  // 不作为武断的 format-fail——是否夸大由 §6 人工审查项负责。
+  const hints = [];
   const alignedClaimExempt = (line, token) => token === '已对齐'
     && line.includes('控制逻辑') && !line.includes('体验');
-  if (ux && ux !== 'aligned' && hasClaimHit(claimText, OVERCLAIM_PHRASES)) {
-    failures.push('ux-overclaim-outside-aligned-status');
+  if (ux && ux !== 'aligned') {
+    const over = findClaimHit(claimText, OVERCLAIM_PHRASES);
+    if (over) {
+      hints.push(`review-hint: 体验状态为 ${ux}，正文出现「${over.hit}」，请人工确认是否夸大`);
+    }
   }
-  if ((ux === 'unverified' || ux === 'not-applicable') && hasClaimHit(claimText, FACT_CLAIM_PHRASES, alignedClaimExempt)) {
-    failures.push('ux-fact-claim-while-unverified');
+  if (ux === 'unverified' || ux === 'not-applicable') {
+    const fact = findClaimHit(claimText, FACT_CLAIM_PHRASES, alignedClaimExempt);
+    if (fact) {
+      hints.push(`review-hint: 体验状态为 ${ux}，正文出现「${fact.hit}」，请人工确认是否为如实降级表述`);
+    }
   }
 
   if (failures.length > 0) {
@@ -908,7 +1077,8 @@ function cmdCheck(flags) {
           `path: ${fileRel}`,
           `step-rows: ${stepRows.length}`,
           `compare-rows: ${compareRows.length}`,
-          `diff-rows: ${diffRows.length}`
+          `diff-rows: ${diffRows.length}`,
+          ...hints
         ]
       }
     });
@@ -920,7 +1090,8 @@ function cmdCheck(flags) {
         `control_logic_status: ${f.control_logic_status}`,
         `user_experience_status: ${f.user_experience_status}`,
         `product_user_steps: ${productSteps}`,
-        `reference_product: ${f.reference_product}`
+        `reference_product: ${f.reference_product}`,
+        ...hints
       ]
     }
   });
