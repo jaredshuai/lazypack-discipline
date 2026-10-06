@@ -15,9 +15,11 @@
 **配套模板**（位于 `templates/`）：
 - `.github/workflows/nightly-mutation-ts.yml` - TypeScript/JavaScript 项目 GitHub Actions 工作流
 - `.github/workflows/nightly-mutation-py.yml` - Python 项目 GitHub Actions 工作流
-- `scripts/nightly-mutation-runner.sh` - 本地 cron 运行器脚本
-- `systemd/nightly-mutation.service` / `.timer` - Linux systemd 定时器配置
-- `.vscode/tasks.json` - VS Code 任务配置
+- `scripts/nightly-mutation-runner.sh` - 本地 cron / systemd 运行器脚本（CLI 旗标配置）
+- `config/crontab.example` - crontab 示例（含 PATH 补齐、py 错峰与 flock 防重叠说明）
+- `config/mutation-testing.service` / `config/mutation-testing.timer` - Linux systemd **user 级**定时器配置（无需 root）
+
+VS Code 任务模板不在 `templates/` 下：它是本仓根目录的 [`.vscode/tasks.json`](../../.vscode/tasks.json)（触发面调研见 `docs/research/vscode-scheduled-tasks.md`）。
 
 ---
 
@@ -54,12 +56,15 @@
 
 ### 1.3 前置条件
 
-在开始部署前，确保：
+在开始部署前，确保（工具链以下列版本验证）：
 
-1. **已完成首次变异测试基线冻结**（见 [mutation-testing.md §1](mutation-testing.md#1-门槛冻结策略threshold-freezing-strategy)）
-2. **已识别并豁免等价变异体**（见 [mutation-testing.md §2](mutation-testing.md#2-等价变异豁免equivalent-mutant-exemption)）
-3. **项目已有可工作的测试套件**（`npm test` 或 `pytest` 能通过）
-4. **GitHub 仓库已启用 Issues**
+1. **运行时**：Node.js ≥ 24（验证环境 v24.19.0；解析器、基线与 issue 创建工具均为 Node 程序）；Python ≥ 3.8（验证环境 3.14.0；mutmut 解析器要求）
+2. **变异测试工具**：StrykerJS（`reporters` 必须含 `"json"`）；mutmut 2.x（安装固定 `pip install "mutmut<3"`——3.x 不再写本链路读取的 `.mutmut-cache`）
+3. **GitHub CLI**：gh ≥ 2.87（验证环境 2.87.3），已 `gh auth login` 或提供 `GH_TOKEN`
+4. **已完成首次变异测试基线冻结**（见 [mutation-testing.md §1](mutation-testing.md#1-门槛冻结策略threshold-freezing-strategy)）
+5. **已识别并豁免等价变异体**（见 [mutation-testing.md §2](mutation-testing.md#2-等价变异豁免流程equivalent-mutant-exemption-process)）
+6. **项目已有可工作的测试套件**（`npm test` 或 `pytest` 能通过）
+7. **GitHub 仓库已启用 Issues**
 
 ---
 
@@ -71,28 +76,23 @@
 
 ```bash
 cp templates/.github/workflows/nightly-mutation-ts.yml \
-   your-project/.github/workflows/nightly-mutation.yml
+   your-project/.github/workflows/nightly-mutation-ts.yml
 ```
 
-2. **调整配置**（根据项目需求修改以下字段）：
+2. **调整配置**（模板开箱即用，通常只需按项目需求调整 cron 表达式）：
 
 ```yaml
 # 定时触发（UTC 时间，每日凌晨 2 点）
 schedule:
   - cron: '0 2 * * *'
-
-# 变异测试命令（根据项目调整）
-- name: Run mutation testing
-  run: npx stryker run
-
-# 基线文件路径（首次运行需先 init）
-- name: Check baseline
-  run: |
-    node scripts/mutation-baseline.mjs check \
-      --input reports/mutation/mutation.json \
-      --lang ts \
-      --output .mutation-baseline.json
 ```
+
+同时确认目标项目的 `stryker.conf.json`：
+
+- `reporters` 必须含 `"json"`（原生 JSON 报告默认落 `reports/mutation/mutation.json`，是解析器与基线工具的输入）；
+- 建议不要配置 `thresholds.break`：配置后分数低于阈值时 Stryker 以非零码退出，后续 issue 创建不会执行；夜跑闭环的门槛由基线 check 承担（回归退出码 2 拦截）。
+
+工作流的基线步骤已内置：首轮工作区没有 `.mutation-baseline.json` 时自动 `init`，之后每轮 `check`（回归时退出码 2，中止后续 issue 创建）。
 
 3. **配置 GitHub Token**：
 
@@ -105,17 +105,24 @@ env:
 
 4. **首次运行准备**：
 
-首次启用前，必须先在本地生成基线文件并提交：
+模板首轮会自动 `init` 基线（工作区没有 `.mutation-baseline.json` 时），无需手工步骤；跑完后把生成的基线文件提交进版本库——否则每轮都会重新 init，棘轮检查形同虚设：
+
+```bash
+git add .mutation-baseline.json
+git commit -m "chore: initialize mutation testing baseline"
+git push
+```
+
+也可以在启用 workflow 前在本地先手动冻结基线：
 
 ```bash
 # 运行变异测试
 npx stryker run
 
-# 初始化基线
+# 初始化基线（目标位置已有基线文件时 init 拒绝执行，不会静默覆盖）
 node scripts/mutation-baseline.mjs init \
   --input reports/mutation/mutation.json \
-  --lang ts \
-  --output .mutation-baseline.json
+  --lang ts
 
 # 提交基线文件
 git add .mutation-baseline.json
@@ -129,43 +136,72 @@ git push
 
 ```bash
 cp templates/.github/workflows/nightly-mutation-py.yml \
-   your-project/.github/workflows/nightly-mutation.yml
+   your-project/.github/workflows/nightly-mutation-py.yml
 ```
 
 2. **调整配置**：
 
 ```yaml
-# Python 版本（根据项目需求）
+# Python 版本（解析器 parse_mutmut_report.py 要求 3.8+）
 - uses: actions/setup-python@v5
   with:
     python-version: '3.12'
 
-# 变异测试命令
-- name: Run mutation testing
-  run: mutmut run
-
-# 导出结果（mutmut 2.x 使用 result-ids + JSON 组装）
-- name: Export results
+# 安装依赖并固定 mutmut 2.x（3.x 不再写模板链路读取的 .mutmut-cache）
+- name: Install dependencies
   run: |
-    mkdir -p reports/mutation
-    python scripts/export_mutmut_results.py \
-      --output reports/mutation/mutmut-results.json
+    pip install -r requirements.txt
+    pip install "mutmut<3"
+
+# 运行变异测试。mutmut 在存在存活/可疑变异体时以非零码退出，这正是
+# 夜跑闭环要处理的输入，模板用 continue-on-error 容忍该退出码；致命错误
+# 由下一步导出裁决（缓存缺失或导出失败时 workflow 直接失败，不会静默放过）
+- name: Run mutation tests (mutmut)
+  continue-on-error: true
+  run: mutmut run
 ```
 
-**注意**：mutmut 2.x 不支持 `results-export` 命令。模板使用 `mutmut result-ids` 系列命令组装 JSON（见 `parse_mutmut_report.py` 文档）。
+3. **导出基线输入并解析统一报告**（在 workflow 内联组装，仓库不提供独立的导出脚本）：
 
-3. **基线初始化**（同 TypeScript，使用 `--lang py`）：
+mutmut 2.x 没有一键导出 JSON 的子命令（`results` 是人读文本、`junitxml` 是 XML），而基线工具不读 `.mutmut-cache`。模板用官方 `mutmut result-ids <status>` 子命令按六类状态取变异体 ID，组装出基线工具约定的 `mutmut-results-export.json`；diff 片段则用 `mutmut show all` 捕获后交给解析器：
 
 ```bash
-mutmut run
+# 六类状态 → mutmut-results-export.json（基线步骤输入；完整脚本见模板步骤 6）
+python - <<'PY'
+import json
+import subprocess
+import sys
+
+statuses = ("killed", "timeout", "survived", "suspicious", "skipped", "untested")
+export = {}
+for status in statuses:
+    proc = subprocess.run(["mutmut", "result-ids", status], capture_output=True, text=True)
+    if proc.returncode != 0:
+        sys.exit(f"mutmut result-ids {status} failed: {proc.stderr.strip()}")
+    export[status] = proc.stdout.split()
+with open("mutmut-results-export.json", "w", encoding="utf-8") as f:
+    json.dump(export, f, indent=2)
+    f.write("\n")
+PY
+
+# 捕获 diff 并把 .mutmut-cache 解析为统一报告（issue 创建输入）
+mutmut show all > .mutmut-show-all.txt
 python scripts/parse_mutmut_report.py \
   --input .mutmut-cache \
   --show .mutmut-show-all.txt \
-  --output reports/mutation/unified-report.json
+  --output unified-mutation-report.json
+```
+
+两个文件用途不同，不要混用：`mutmut-results-export.json` 只作基线步骤输入（按类别计数，Timeout 计入检出）；`unified-mutation-report.json` 是 issue 创建的输入。
+
+4. **基线初始化**（同 TypeScript，使用 `--lang py`）：
+
+```bash
+# 前置：步骤 3 已产出 mutmut-results-export.json
 node scripts/mutation-baseline.mjs init \
-  --input reports/mutation/mutmut-results.json \
-  --lang py \
-  --output .mutation-baseline.json
+  --input mutmut-results-export.json \
+  --lang py
+
 git add .mutation-baseline.json
 git commit -m "chore: initialize mutation testing baseline"
 ```
@@ -186,38 +222,51 @@ git commit -m "chore: initialize mutation testing baseline"
 
 ### 3.1 使用 Shell 脚本（跨平台）
 
-1. **复制并配置运行器**：
+1. **复制运行器与工具脚本**：
 
 ```bash
 cp templates/scripts/nightly-mutation-runner.sh your-project/scripts/
 chmod +x your-project/scripts/nightly-mutation-runner.sh
+
+# 工具脚本一并复制到目标项目 scripts/（runner 逐步调用它们）：
+# TypeScript：parse-stryker-report.mjs、mutation-baseline.mjs、create-mutation-issues.mjs
+# Python：parse_mutmut_report.py、mutation-baseline.mjs、create-mutation-issues.mjs
+cp scripts/parse-stryker-report.mjs scripts/mutation-baseline.mjs \
+   scripts/create-mutation-issues.mjs your-project/scripts/
 ```
 
-2. **编辑配置变量**（脚本顶部）：
+2. **用 CLI 旗标配置**（脚本没有配置文件，无需编辑脚本本身）：
 
 ```bash
-# 项目根目录
-PROJECT_ROOT="/path/to/your/project"
+# 查看全部选项
+your-project/scripts/nightly-mutation-runner.sh --help
 
-# 语言：ts 或 py
-LANG="ts"
-
-# 变异测试命令
-if [ "$LANG" = "ts" ]; then
-  MUTATION_CMD="npx stryker run"
-else
-  MUTATION_CMD="mutmut run"
-fi
+# TypeScript 示例（--project-dir 缺省为脚本所在目录的上一级）
+your-project/scripts/nightly-mutation-runner.sh \
+  --lang ts \
+  --project-dir /path/to/your/project \
+  --log-dir /tmp/nightly-mutation \
+  --log-keep 14
 ```
+
+| 选项 | 说明 |
+|---|---|
+| `--lang ts\|py` | 变异测试工具链：ts=Stryker，py=mutmut（默认 ts） |
+| `--project-dir DIR` | 目标项目根（默认：脚本所在目录的上一级） |
+| `--log-dir DIR` | 日志目录（默认环境变量 `MUTATION_LOG_DIR`，再默认 `/tmp/nightly-mutation`） |
+| `--log-keep DAYS` | 日志保留天数，到期自动清理（默认 14） |
+| `--dry-run` | issue 创建零 gh 调用，只写 `.mutation-queue/` 队列文件与 body 预览 |
+| `-h, --help` | 显示帮助并退出 |
 
 3. **测试运行**：
 
 ```bash
 cd your-project
-./scripts/nightly-mutation-runner.sh
+./scripts/nightly-mutation-runner.sh --dry-run   # 先零 gh 调用验证链路
+./scripts/nightly-mutation-runner.sh             # 再实跑
 ```
 
-成功时退出码为 0；基线检查失败时退出非零。
+成功时退出码为 0；基线检查失败时退出码 2（门槛失败），其余失败沿用失败工具的退出码。
 
 4. **配置 crontab**（Linux/macOS）：
 
@@ -225,9 +274,11 @@ cd your-project
 # 编辑 crontab
 crontab -e
 
-# 添加定时任务（每日凌晨 2 点）
-0 2 * * * /path/to/your/project/scripts/nightly-mutation-runner.sh >> /var/log/mutation-nightly.log 2>&1
+# 添加定时任务（每日凌晨 2 点；控制台输出丢弃以免 cron 邮件刷屏，完整日志由脚本写入 --log-dir）
+0 2 * * * /path/to/your/project/scripts/nightly-mutation-runner.sh --lang ts --project-dir /path/to/your/project >/dev/null 2>&1
 ```
+
+注意 cron 的三个常见坑：PATH 很短（node/npx/mutmut/gh 装在 nvm、homebrew、`~/.local` 等位置时必须在 crontab 顶部补 `PATH=`）；cron 不加载 `.bashrc`/`.profile`，环境靠显式声明；时间按本机时区解释（GitHub Actions 的 cron 按 UTC）。完整示例（含 py 03:30 错峰与 flock 防重叠）见 `templates/config/crontab.example`。
 
 5. **配置 Windows Task Scheduler**：
 
@@ -235,52 +286,64 @@ crontab -e
 - 创建基本任务 → 名称："Nightly Mutation Testing"
 - 触发器：每天凌晨 2:00
 - 操作：启动程序 → `bash.exe`（WSL）或 `wsl.exe`
-- 参数：`-c "/mnt/c/path/to/scripts/nightly-mutation-runner.sh"`
+- 参数：`-c "/mnt/c/path/to/scripts/nightly-mutation-runner.sh --lang ts"`
 
-### 3.2 使用 systemd timer（Linux 服务器）
+### 3.2 使用 systemd timer（Linux 服务器，user 级）
 
-1. **复制配置文件**：
+模板为 **user 级**单元（无需 root）：由 `mutation-testing.timer` 每天定时触发同名 `mutation-testing.service`，实际执行包装脚本。
+
+1. **复制配置文件**（到 user 单元目录）：
 
 ```bash
-sudo cp templates/systemd/nightly-mutation.service /etc/systemd/system/
-sudo cp templates/systemd/nightly-mutation.timer /etc/systemd/system/
+mkdir -p ~/.config/systemd/user
+cp templates/config/mutation-testing.service ~/.config/systemd/user/
+cp templates/config/mutation-testing.timer ~/.config/systemd/user/
 ```
 
-2. **编辑 service 文件**（修改路径和用户）：
+2. **编辑 service 文件**（把 ExecStart 里的 `YOUR_USER_HERE` / `YOUR_REPO_HERE` 占位换成实际值）：
 
 ```ini
 [Service]
 Type=oneshot
-User=your-username
-WorkingDirectory=/path/to/your/project
-ExecStart=/path/to/your/project/scripts/nightly-mutation-runner.sh
+ExecStart=/usr/bin/env bash /home/your-username/projects/your-project/scripts/nightly-mutation-runner.sh --lang ts --project-dir /home/your-username/projects/your-project --log-dir %h/.local/state/nightly-mutation
 ```
 
-3. **编辑 timer 文件**（调整运行时间）：
+- Python 项目把 `--lang` 改为 `py`；同机同仓两种语言都要跑时，复制一份 service/timer 改名错峰（如 `mutation-testing-py`，03:30）；
+- issue 创建需要 gh 凭据：默认用 `gh auth login` 的持久凭据；无人值守环境可取消注释 `Environment=GH_TOKEN=...`；
+- 变异测试常以小时计，模板默认 `TimeoutStartSec=4h`，按项目规模调整。
+
+3. **调整 timer 运行时间**（可选，默认每天 02:00 本地时间）：
 
 ```ini
 [Timer]
-OnCalendar=daily
-OnCalendar=02:00
+OnCalendar=*-*-* 02:00:00
 Persistent=true
+RandomizedDelaySec=15m
 ```
 
-4. **启用并启动**：
+`Persistent=true` 会补跑因关机/休眠错过的触发；`RandomizedDelaySec` 在触发时刻加 0~15 分钟随机延迟，不需要可删除。
+
+4. **启用并启动**（user 级操作都带 `--user` 旗标，不要加 sudo）：
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable nightly-mutation.timer
-sudo systemctl start nightly-mutation.timer
-
-# 查看状态
-sudo systemctl status nightly-mutation.timer
-sudo systemctl list-timers --all
+systemctl --user daemon-reload
+systemctl --user enable --now mutation-testing.timer
+systemctl --user list-timers                        # 确认调度生效
+systemctl --user start mutation-testing.service     # 立即手动跑一次
 ```
 
 5. **查看日志**：
 
 ```bash
-sudo journalctl -u nightly-mutation.service -f
+journalctl --user -u mutation-testing.service -f
+```
+
+包装脚本自身也写带时间戳的文件日志（`--log-dir`），journal 里看的是控制台输出。
+
+6. **笔记本等常关机的机器**：user 级 timer 只在用户会话内触发，建议开启 linger 让未登录时也能定时触发：
+
+```bash
+loginctl enable-linger $USER
 ```
 
 ---
@@ -291,27 +354,26 @@ VS Code 任务提供手动触发的便捷入口，适用于本地开发调试。
 
 ### 4.1 安装任务配置
 
+任务模板即本仓根目录的 `.vscode/tasks.json`（VS Code 触发面调研与结论见 `docs/research/vscode-scheduled-tasks.md`）：
+
 ```bash
-cp templates/.vscode/tasks.json your-project/.vscode/
+cp /path/to/lazypack-discipline/.vscode/tasks.json your-project/.vscode/
 ```
 
 ### 4.2 可用任务
 
+与 `.vscode/tasks.json` 一致，共 7 个任务：
+
 **TypeScript 路径**：
-- `Run Mutation Tests (TS)` - 运行 Stryker
-- `Parse Stryker Report` - 解析 Stryker JSON 报告
-- `Check Baseline (TS)` - 基线检查
-- `Create Mutation Issues (TS)` - 创建 GitHub issues（dry-run）
+- `run-mutation-tests` - 运行 Stryker（json 报告写 `reports/mutation/mutation.json`）
+- `parse-results` - 把 Stryker JSON 报告转为统一报告 `unified-mutation-report.json`
+- `check-baseline` - 对照 `.mutation-baseline.json` 做只涨不跌检查（退出码 2 = 回归）
+- `create-issues` - 从统一报告按文件分组创建 GitHub issues（需要 gh 认证；预览请临时加 `--dry-run`）
 
 **Python 路径**：
-- `Run Mutation Tests (Py)` - 运行 mutmut
-- `Parse mutmut Report` - 解析 mutmut 报告
-- `Check Baseline (Py)` - 基线检查
-- `Create Mutation Issues (Py)` - 创建 GitHub issues（dry-run）
-
-**完整流程**：
-- `Full Mutation Loop (TS)` - TypeScript 完整流程
-- `Full Mutation Loop (Py)` - Python 完整流程
+- `run-mutation-tests-py` - 运行 mutmut（2.x；Windows 上请在 WSL 运行）
+- `parse-results-py` - 捕获 `mutmut show all` 输出并把 `.mutmut-cache` 转为统一报告
+- `check-baseline-py` - 基线检查（输入是项目根的 `mutmut-results-export.json`）
 
 ### 4.3 使用方法
 
@@ -321,16 +383,9 @@ cp templates/.vscode/tasks.json your-project/.vscode/
 
 ### 4.4 已知限制
 
-**Python 基线检查**：`Check Baseline (Py)` 任务需要手动提供 `mutmut-results-export.json`。由于 mutmut 2.x 不支持 `results-export`，需要先运行 Python 完整流程或手动导出：
+**VS Code 无定时触发**：VS Code 原生不支持 scheduled tasks（`runOptions.runOn` 只有 `default` 与 `folderOpen` 两个取值），任务均为手动触发；无人值守的定时执行走 §2（GitHub Actions）或 §3（cron/systemd）。扩展市场虽有调度扩展，但寄生在 VS Code 进程内（要求 VS Code 常开、机器不睡眠），不适合夜跑场景。
 
-```bash
-# 手动导出（仅示例，实际需按 parse_mutmut_report.py 文档操作）
-mutmut result-ids killed > killed.txt
-mutmut result-ids survived > survived.txt
-# ... 然后组装 JSON
-```
-
-完整 Python 流程任务已处理此限制，建议使用完整流程任务。
+**Python 基线检查**：`check-baseline-py` 任务的输入是项目根的 `mutmut-results-export.json`（基线工具不读 `.mutmut-cache`，也不读统一报告）。文件不存在时，先用 §2.2 步骤 3 的 `mutmut result-ids` 组装脚本生成，或直接跑一轮 Python workflow。
 
 ---
 
@@ -364,9 +419,9 @@ node scripts/mutation-baseline.mjs init \
   --lang ts \
   --output .mutation-baseline.json
 
-# Python
+# Python（输入为 §2.2 步骤 3 组装的 mutmut-results-export.json）
 node scripts/mutation-baseline.mjs init \
-  --input reports/mutation/mutmut-results.json \
+  --input mutmut-results-export.json \
   --lang py \
   --output .mutation-baseline.json
 ```
@@ -436,47 +491,63 @@ git push
 
 ### 6.2 创建豁免文件
 
-在项目根目录创建 `.equivalent-mutants.json`：
+在项目根目录创建 `.equivalent-mutants.json`（顶层只有 `version` 与 `exemptions` 两个字段；每个 exemption 条目恰好八个必填字段）：
 
 ```json
 {
   "version": "1.0",
-  "mutants": [
+  "exemptions": [
     {
+      "id": "equiv-001",
       "file": "src/calculator.ts",
       "line": 42,
       "mutationType": "ConditionalExpression",
-      "reason": "identity",
-      "comment": "x === x always true, mutant x !== x unreachable in normal flow",
-      "reviewedBy": "alice",
-      "reviewedAt": "2024-03-15",
-      "issueRef": "#123"
+      "reason": "该条件比较 x === x 恒为 true（identity），变异 x !== x 在正常流程不可达；若左操作数改为可变输入，本条目须重审。",
+      "exemptedBy": "alice",
+      "exemptedAt": "2026-10-07T10:20:00Z",
+      "reviewRequired": false
     }
   ]
 }
 ```
 
-详细格式见 [mutation-testing.md §2](mutation-testing.md#2-等价变异豁免equivalent-mutant-exemption)。
+八个字段的含义：
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 豁免记录号（`equiv-` 前缀 + 至少三位数字；文件内唯一，删除后不复用） |
+| `file` | 变异体所在源文件（项目根相对 POSIX 路径） |
+| `line` | 变异体所在行（1-based） |
+| `mutationType` | 归一化变异类型（与统一报告同枚举） |
+| `reason` | 可检验的等价论证（非空） |
+| `exemptedBy` | 当前判定的责任人 |
+| `exemptedAt` | 判定写盘时刻（ISO-8601 UTC，`YYYY-MM-DDTHH:MM:SSZ`） |
+| `reviewRequired` | 待复核标记（true 时不影响过滤行为） |
+
+`exemptions` 允许空数组（新项目或豁免已清理时的合法状态）；条目按 `file` → `line` → `mutationType` → `id` 排序；豁免文件由人经代码评审写入，工具不得自动生成或改写。
+
+详细格式契约见 [等价变异体文件格式](../formats/equivalent-mutants.md)；识别 → 审查 → 记录的人工流程见 [mutation-testing.md §2](mutation-testing.md#2-等价变异豁免流程equivalent-mutant-exemption-process)。
 
 ### 6.3 应用豁免过滤
 
-`create-mutation-issues.mjs` 自动读取 `.equivalent-mutants.json` 并过滤匹配的变异体：
+`create-mutation-issues.mjs` 经 `--exemptions` 旗标读取豁免文件（缺省不过滤；传入的文件缺失、JSON 非法或 schema 违规时以退出码 1 失败），按 `file + line + mutationType` 三元组精确匹配并剔除命中的变异体：
 
 ```bash
 node scripts/create-mutation-issues.mjs \
-  --input reports/mutation/unified-report.json \
+  --input unified-mutation-report.json \
   --exemptions .equivalent-mutants.json \
-  --output .mutation-queue \
   --dry-run
 ```
 
-豁免的变异体不会出现在生成的 `.mutation-queue/*.json` 文件中，也不会创建 GitHub issue。
+- 队列文件恒写到 `.mutation-queue/{file}.json`（dry-run 另有 `.mutation-queue/{file}.body.md` 预览），与 `--output` 无关；
+- `--output <path>` 写的是本次运行的**清单 JSON**（issue 列表 + 元数据 + summary，含 `exempted` 计数与 `staleExemptionIds` 陈旧豁免提示），例如 `--output manifest.json`，不是队列目录；
+- 被豁免的变异体不会出现在 `.mutation-queue/*.json` 中，也不会创建 GitHub issue。
 
 ### 6.4 豁免文件维护
 
 - **版本控制**：`.equivalent-mutants.json` 应提交到版本库
-- **定期审查**：代码重构后，豁免可能失效（文件/行号变化），需重新审查
-- **文档化**：`comment` 字段应清晰说明豁免原因，便于后续维护
+- **定期审查**：代码重构后，豁免可能失效（文件/行号变化），需重新审查；`reviewRequired: true` 的条目进入复核清单
+- **文档化**：`reason` 字段须写可检验的等价论证，便于后续维护
 
 ---
 
@@ -493,20 +564,15 @@ node scripts/create-mutation-issues.mjs \
 
 ### 7.2 队列文件格式
 
-`.mutation-queue/src-calculator.ts.json` 示例：
+`.mutation-queue/src-calculator.ts.json` 示例（实跑模式；dry-run 省略 `issueNumber`）：
 
 ```json
 {
   "version": "1.0",
-  "mode": "real",
   "file": "src/calculator.ts",
+  "tool": "stryker",
+  "timestamp": "2026-10-07T18:30:00Z",
   "issueNumber": 456,
-  "summary": {
-    "total": 3,
-    "byStatus": {
-      "Survived": 3
-    }
-  },
   "mutants": [
     {
       "id": "stryker-14",
@@ -521,6 +587,8 @@ node scripts/create-mutation-issues.mjs \
   ]
 }
 ```
+
+`mutants` 是统一报告中该文件存活变异体的八字段副本（`id` / `file` / `line` / `column` / `mutationType` / `original` / `mutated` / `status`），保持报告顺序；实跑时被既有 open issue 去重跳过的分组，其队列文件携带既有 issue 编号。
 
 ### 7.3 Agent 工作流示例
 
@@ -540,7 +608,7 @@ for queue_file in queue_files:
         data = json.load(f)
     
     file_path = data["file"]
-    issue_number = data["issueNumber"]
+    issue_number = data["issueNumber"]  # dry-run 模式无此字段
     mutants = data["mutants"]
 ```
 
@@ -650,37 +718,28 @@ mutmut run --verbose
 
 **症状**：基线检查报告回退，但实际分数未降低
 
-**原因**：浮点数精度或工具版本差异导致分数微小变化（例如 66.23% → 66.22%）
+**先核对再下结论**：基线比较自带 1e-9 浮点容差，66.23 → 66.22 这类变化是真实回归，不是浮点噪声。常见根因：mutate 范围漂移（`total` 相对上次大幅变化）、工具版本升级、测试被删除或跳过。
 
 **解决方案**：
 
-1. **检查实际分数变化**：
+1. **核对基线中冻结的分数与本轮实际分数**：
 
 ```bash
-# 查看报告中的分数
+# 基线文件中冻结的分数
 jq '.baseline.score' .mutation-baseline.json
-jq '.summary.mutationScore' reports/mutation/mutation.json
 ```
 
-2. **允许容差**（修改基线工具）：
+   check 判定回归时，stderr 会写明本轮分数、基线分数与差值。
 
-在 `mutation-baseline.mjs` 的 `check` 命令中，允许 ±0.1% 容差：
+2. **确认是否为真实回归**：检查本轮 `total` 与 mutate 范围、测试数量是否变化。范围扩大等口径变化导致分数下降时不走 `update`，按第 3 步人工确认后重新 `init` 并留痕。
 
-```javascript
-const tolerance = 0.1;
-if (newScore >= baselineScore - tolerance) {
-  console.log("✓ Baseline maintained or improved");
-  process.exit(0);
-}
-```
-
-3. **重新初始化基线**（最后手段）：
+3. **重新初始化基线**（最后手段，需人工确认；工具没有 `--force`，目标位置已有基线时 `init` 会拒绝执行，先删后建并以一次显式提交说明原因）：
 
 ```bash
+rm .mutation-baseline.json
 node scripts/mutation-baseline.mjs init \
   --input reports/mutation/mutation.json \
-  --lang ts \
-  --output .mutation-baseline.json --force
+  --lang ts
 git add .mutation-baseline.json
 git commit -m "chore: reset mutation baseline"
 ```
@@ -717,12 +776,11 @@ gh api rate_limit
 
 ```bash
 node scripts/create-mutation-issues.mjs \
-  --input reports/mutation/unified-report.json \
-  --output .mutation-queue \
+  --input unified-mutation-report.json \
   --dry-run
 ```
 
-查看生成的 `.mutation-queue/*.json` 和 issue body 预览。
+查看生成的 `.mutation-queue/*.json` 队列文件与 `.mutation-queue/*.body.md` issue body 预览（零 gh 调用）。
 
 ### 8.4 mutmut 在 Windows 上无法运行
 
@@ -871,59 +929,91 @@ on:
 
 ### 8.8 Python 基线工具报错 "unexpected format"
 
-**症状**：`mutation-baseline.mjs check --lang py` 报错
+**症状**：`mutation-baseline.mjs init/check --lang py` 报错
 
-**原因**：mutmut 2.x 输入格式与工具预期不符
+**原因**：基线工具的 py 输入必须是 mutmut results-export JSON（六类状态的字符串数组）。它不读 `.mutmut-cache`，也不读统一报告——两个文件的分工见 §2.2 步骤 3。
 
 **检查步骤**：
 
 1. **验证输入文件格式**：
 
-```bash
-# 期望格式（mutmut result-ids 导出）
+```json
 {
-  "killed": [1, 2, 3],
-  "survived": [4, 5],
+  "killed": ["1", "2", "3"],
+  "survived": ["4", "5"],
   "timeout": [],
   "suspicious": [],
-  "untested": [],
-  "skipped": []
+  "skipped": [],
+  "untested": []
 }
 ```
 
-2. **使用正确的导出命令**：
+   六个类别键缺一不可（空类别为空数组）；数组元素是 `mutmut result-ids` 输出的字符串 ID。
+
+2. **用 §2.2 步骤 3 的组装命令重新生成**该文件（`mutmut result-ids <status>` 六类各取一次，拼成 JSON）。
+
+3. **不要用统一报告喂基线工具**：`unified-mutation-report.json` 只含存活变异体，是 issue 创建的输入；基线分数来自 results-export 的类别计数（score = (killed + timeout) / total，Timeout 计入检出）。
+
+### 8.9 cron/systemd 环境找不到 node、mutmut 或 gh
+
+**症状**：手动运行一切正常；cron 或 systemd timer 触发时报 "command not found"，或 gh 认证失败
+
+**原因**：cron 的 PATH 通常只有 `/usr/bin:/bin`，且不加载 `.bashrc`/`.profile`；systemd user 服务的环境同样精简
+
+**解决方案**：
+
+1. **核对实际安装位置**：
 
 ```bash
-# 正确导出（mutmut 2.x）
-mutmut result-ids killed > killed.txt
-mutmut result-ids survived > survived.txt
-# ... 然后组装 JSON（见 parse_mutmut_report.py 文档）
+which node npx mutmut gh
 ```
 
-3. **使用 parse_mutmut_report.py 生成统一格式**：
+2. **crontab 顶部显式补 PATH**（完整示例见 `templates/config/crontab.example`）：
 
 ```bash
-python scripts/parse_mutmut_report.py \
-  --input .mutmut-cache \
-  --show .mutmut-show-all.txt \
-  --output reports/mutation/unified-report.json
-
-# 然后用统一格式初始化基线（需修改 baseline 工具以支持统一格式）
-# 或直接从 mutmut result-ids 导出的 JSON 初始化
+PATH=/usr/local/bin:/usr/bin:/bin:/home/YOUR_USER_HERE/.local/bin
 ```
+
+3. **systemd 核对环境**：`systemctl --user show-environment`；需要显式 gh 凭据时在 service 中取消注释 `Environment=GH_TOKEN=...`
+
+4. **挂定时前先手动跑通**：包装脚本支持 `--dry-run`（issue 创建零 gh 调用），先验证链路再补凭据实跑
+
+5. **注意时间口径**：本地 cron/systemd 按本机时区解释，GitHub Actions 的 cron 按 UTC，两边不同
+
+### 8.10 mutmut 3.x 不再写 .mutmut-cache
+
+**症状**：解析器报找不到 `.mutmut-cache`，或升级 mutmut 后解析失败
+
+**原因**：mutmut 3.x 改用 `mutants/` 缓存目录；本链路的解析器、runner 脚本与 workflow 模板都按 2.x 口径读取 `.mutmut-cache`
+
+**解决方案**：
+
+1. **核对版本**：
+
+```bash
+mutmut --version
+```
+
+2. **固定安装 2.x**：
+
+```bash
+pip install "mutmut<3"
+```
+
+3. **确认结果命令口径**：mutmut 2.x 的 `results` 不接旗标，diff 用 `mutmut show all`（或 `mutmut show <file>`）捕获，见 §2.2 步骤 3
 
 ---
 
 ## 9. 交叉引用（Cross References）
 
 - [变异测试运营手册](mutation-testing.md) (#42) - 门槛冻结策略、等价变异豁免、胶水代码边界
-- [工具用法文档](../README.md) - 所有工具的详细 CLI 参数
-- [Parser 设计文档](parse-stryker-report.mjs) (#37) - Stryker 报告解析器
-- [Parser 设计文档](parse_mutmut_report.py) (#37) - mutmut 报告解析器
-- [等价变异体文件格式](formats/equivalent-mutants.md) - 豁免文件详细规范
-- [统一变异报告格式](formats/unified-mutation-report.md) - 解析器输出格式
-- [基线文件格式](formats/mutation-baseline.md) - 基线文件详细规范
-- [GitHub issue 模板](formats/mutation-issue-template.md) - issue 创建模板
+- [工具用法文档](../../README.md) - 所有工具的详细 CLI 参数
+- [Stryker 报告解析器](../../scripts/parse-stryker-report.mjs) (#37) - 源码与 CLI 说明
+- [mutmut 报告解析器](../../scripts/parse_mutmut_report.py) (#37) - 源码与 CLI 说明
+- [等价变异体文件格式](../formats/equivalent-mutants.md) - 豁免文件详细规范
+- [统一变异报告格式](../formats/unified-mutation-report.md) - 解析器输出格式
+- [基线文件格式](../formats/mutation-baseline.md) - 基线文件详细规范
+- [GitHub issue 模板](../formats/mutation-issue-template.md) - issue 与队列文件模板
 
 ---
 
@@ -935,10 +1025,10 @@ python scripts/parse_mutmut_report.py \
 # 1. 运行变异测试
 npx stryker run
 
-# 2. 解析报告
+# 2. 解析报告（统一报告落项目根）
 node scripts/parse-stryker-report.mjs \
   --input reports/mutation/mutation.json \
-  --output reports/mutation/unified-report.json
+  --output unified-mutation-report.json
 
 # 3. 基线检查
 node scripts/mutation-baseline.mjs check \
@@ -952,18 +1042,16 @@ node scripts/mutation-baseline.mjs update \
   --lang ts \
   --output .mutation-baseline.json
 
-# 5. 创建 GitHub issues（dry-run）
+# 5. 创建 GitHub issues（dry-run 预览）
 node scripts/create-mutation-issues.mjs \
-  --input reports/mutation/unified-report.json \
+  --input unified-mutation-report.json \
   --exemptions .equivalent-mutants.json \
-  --output .mutation-queue \
   --dry-run
 
 # 6. 实际创建 issues（去掉 --dry-run）
 node scripts/create-mutation-issues.mjs \
-  --input reports/mutation/unified-report.json \
-  --exemptions .equivalent-mutants.json \
-  --output .mutation-queue
+  --input unified-mutation-report.json \
+  --exemptions .equivalent-mutants.json
 
 # 7. 提交更新
 git add .mutation-baseline.json .mutation-queue/
@@ -977,28 +1065,29 @@ git push
 # 1. 运行变异测试
 mutmut run
 
-# 2. 导出结果
+# 2. 捕获 mutmut show 输出（解析器需要的 diff 片段）
 mutmut show all > .mutmut-show-all.txt
 
-# 3. 解析报告
+# 3. 解析报告（统一报告落项目根）
 python scripts/parse_mutmut_report.py \
   --input .mutmut-cache \
   --show .mutmut-show-all.txt \
-  --output reports/mutation/unified-report.json
+  --output unified-mutation-report.json
 
-# 4. 基线检查（需先导出 mutmut-results.json）
-# 见工具文档获取导出命令
+# 4. 组装基线输入 mutmut-results-export.json
+# 用 mutmut result-ids 按六类状态取 ID（完整脚本见 §2.2 步骤 3 / workflow 模板步骤 6）
 
+# 5. 基线检查
 node scripts/mutation-baseline.mjs check \
-  --input reports/mutation/mutmut-results.json \
+  --input mutmut-results-export.json \
   --lang py \
   --output .mutation-baseline.json
 
-# 5-7. 同 TypeScript
+# 6-7. 同 TypeScript（issue 创建与提交）
 ```
 
 ---
 
-**文档版本**：1.0  
-**最后更新**：2024-03-15  
+**文档版本**：1.1  
+**最后更新**：2026-10-07  
 **维护者**：lazypack-discipline 团队
