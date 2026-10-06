@@ -432,7 +432,7 @@ mutmut 没有公开稳定的机器可读变异类型标签，解析器按 `mutmu
 
 ## 8. 消费者约定
 
-- **豁免过滤**：豁免条目与报告变异体的匹配键是 `file + line + mutationType + original`（语义键）。id 不参与匹配（§3.1）。命中的变异体从报告中剔除后才进入 issue 创建。
+- **豁免过滤**：豁免条目与报告变异体的匹配键是 `file + line + mutationType`（语义三元组，精确定义见 [equivalent-mutants.md](./equivalent-mutants.md) §4）。id 不参与匹配（§3.1）。命中的变异体从报告中剔除后才进入 issue 创建。
 - **门槛检查**：统一报告只含存活变异体且无统计字段，1.0 **不能**直接算出变异分数（需要 killed/total）。baseline 工具 `mutation-baseline.mjs` 的分数数据源（读工具原生报告，或将来经 §9 扩展统一报告）由该工具的施工票确定；本文档不预留统计字段。
 - **issue 创建**：按 `file` 精确分组（大小写敏感），每组生成一个人读 issue 与一个机读 JSON（`.mutation-queue/` 下）。机读 JSON 可复用 mutant 对象的字段子集；issue 与 queue 文件的具体格式由 `create-mutation-issues.mjs` 的施工票定义，不在本契约内。
 - **补测 agent**：读 issue 附带的 JSON（含 `file`、`line`、`mutationType`、`original`、`mutated`）即可生成针对性测试，无需读统一报告全文。
