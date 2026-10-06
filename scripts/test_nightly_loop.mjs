@@ -265,10 +265,10 @@ function runMutmut(venv, args, sandbox) {
 }
 
 /**
- * 经夹具 run_mutmut.py 包装器运行 mutmut 子命令（沙箱内副本）。包装器按位
- * 裁决 mutmut 退出码：存活/超时/可疑位（偶数）归一化为 0，致命错误位
- * （奇数）透传非零——与 runMutmut 同一套环境约定，仅供 `run` 这类会因
- * 存活变异体退非零的子命令使用。
+ * 经夹具 run_mutmut.py 包装器运行 mutmut 子命令（沙箱内副本）。包装器只把
+ * 0（干净跑完）与 2（存在存活变异体）归一化为 0，其余退出码透传非零——
+ * 与 runMutmut 同一套环境约定，仅供 `run` 这类会因存活变异体退非零的
+ * 子命令使用。
  */
 function runMutmutWrapper(venv, args, sandbox) {
   return spawnSync(venv.venvPython, [path.join(sandbox, 'run_mutmut.py'), ...args], {
