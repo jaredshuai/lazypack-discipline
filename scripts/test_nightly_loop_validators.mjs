@@ -5,7 +5,8 @@
  * 只覆盖端到端正常管线跑不到的路径：
  *   - 统一报告顶层 / mutant 对象 / 基线文件（顶层与 baseline 对象）/ 队列
  *     文档的闭合字段集（契约 schema additionalProperties:false）；
- *   - 基线 score 最多 2 位小数（基线契约 §4 生产者约束）；
+ *   - 基线 score 最多 2 位小数（基线契约 §4 生产者约束），含 1e-12 级
+ *     微小分数与 42.550000000001 式尾差的精度回归；
  *   - 文档可选字段的省略合法性（统一报告 score、队列 issueNumber）。
  * 端到端全流程本身仍由 scripts/test_nightly_loop.mjs 承担，本文件不重复；
  * 队列文档字段的实际调用点在 readDryRunManifest，这里以同一份 QUEUE_TOP_KEYS
@@ -197,6 +198,29 @@ function caseHasAtMost2DecimalsTable() {
   }
 }
 
+function caseTinyFractionPrecisionRegression() {
+  // 回归：旧实现（×100 取近整 + 1e-9 容差）会放过 ≤1e-11 的微小分数与
+  // 仅在第 12 位小数起偏离的字面量，必须按 >2 位小数拒绝。
+  for (const value of [0.000000000001, 5e-12, 0.00000000000001, 42.550000000001]) {
+    assertCase(!hasAtMost2Decimals(value), '微小分数应判为 >2 位小数：' + value);
+  }
+  // 两位以内小数与整数档位不受影响。
+  for (const value of [0.01, 0.1, 42.55, 42.5, 42, 0]) {
+    assertCase(hasAtMost2Decimals(value), '≤2 位小数应放行：' + value);
+  }
+  // 契约表面：基线 score 出现这类字面量时 assertBaselineFile 必须以精度错误拒绝。
+  assertThrows(
+    () => assertBaselineFile(validBaselineDoc({}, { score: 0.000000000001 }), 'b.json'),
+    '2 位小数',
+    '基线 score 微小分数'
+  );
+  assertThrows(
+    () => assertBaselineFile(validBaselineDoc({}, { score: 42.550000000001 }), 'b.json'),
+    '2 位小数',
+    '基线 score 第 12 位小数起偏离'
+  );
+}
+
 function caseKeyContractSanity() {
   assertCase(MUTANT_KEYS.length === 8, 'mutant 应恰八字段');
   assertCase(REPORT_TOP_KEYS.length === 4 && REPORT_TOP_KEYS.includes('score'), '统一报告顶层四键（score 可选）');
@@ -220,6 +244,7 @@ function main() {
     ['caseBaselineExpectedScoreOptional', caseBaselineExpectedScoreOptional],
     ['caseQueueFieldSet', caseQueueFieldSet],
     ['caseHasAtMost2DecimalsTable', caseHasAtMost2DecimalsTable],
+    ['caseTinyFractionPrecisionRegression', caseTinyFractionPrecisionRegression],
     ['caseKeyContractSanity', caseKeyContractSanity]
   ];
   let failed = 0;

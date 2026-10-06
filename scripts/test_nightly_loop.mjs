@@ -408,16 +408,25 @@ function assertNoUnknownFields(value, allowedKeys, filePath, label) {
 
 /**
  * 数值是否最多 2 位小数（基线 score 的生产者约束，基线契约 §4）。
- * JSON 解析后是 double，用 ×100 后与最近整数的距离判断；容差取 1e-9 与
- * 分数比较口径一致（42.55×100 的浮点尾差约 1e-12，不误伤；42.553 的
- * 差值 0.3 必被拒）。
+ * 按 JSON 序列化文本做词法判断：JSON.stringify 产生最短往返表示，与文件里
+ * 实际出现的字面量逐字一致，因此任何 >2 位小数的表示都会被拒绝；科学计数
+ * 法（如 1e-12）按指数换算回十进制位数后再判。不采用 ×100 取近整 + 浮点
+ * 容差的口径——1e-9 容差会放过 0.000000000001 与 42.550000000001 这类字面量。
  */
 function hasAtMost2Decimals(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return false;
+  }
   if (Number.isInteger(value)) {
     return true;
   }
-  const scaled = value * 100;
-  return Math.abs(scaled - Math.round(scaled)) <= 1e-9;
+  const match = /^-?(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(JSON.stringify(value));
+  if (!match) {
+    return false;
+  }
+  const fractionDigits = match[2] === undefined ? 0 : match[2].length;
+  const exponent = match[3] === undefined ? 0 : Number.parseInt(match[3], 10);
+  return fractionDigits - exponent <= 2;
 }
 
 /**
