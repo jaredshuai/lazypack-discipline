@@ -19,7 +19,9 @@
  *                     已有 open issue 的组跳过并计数，其余经
  *                     gh issue create --title --body-file --label 创建。
  *                     每组创建/跳过完成后队列文件立即原子写盘（临时文件 +
- *                     rename 覆盖），gh 中途失败时已完成组的条目保留。
+ *                     rename 覆盖），gh 中途失败时已完成组的条目保留；
+ *                     创建 gh 调用前先删除该组既有队列文件，失败组不留
+ *                     上一轮的陈旧条目（fix-stale-queue-cleanup）。
  *   --dry-run         预览模式：写队列文件与 body 预览
  *                     （.mutation-queue/{file}.body.md），不调用 gh。
  *   --create-issues   兼容 no-op：实跑已是默认行为，传入不改变模式
@@ -628,6 +630,21 @@ function writeQueueFile(report, plan, issueNumber) {
 }
 
 /**
+ * 删除某组既有的队列文件（实跑创建路径专用，gh 调用前调用）：上一轮运行
+ * 可能遗留陈旧条目，先失效它，gh 失败时磁盘上不留过期数据误导 agent；
+ * 成功路径随后由 writeQueueFile 用本轮数据重建。文件不存在时是 no-op；
+ * 删除失败的原始 fs 错误照常上抛。
+ * @param {string} queuePath - 队列文件路径
+ * @returns {void}
+ */
+function removeStaleQueueFile(queuePath) {
+  if (!fs.existsSync(queuePath)) {
+    return;
+  }
+  fs.rmSync(queuePath, { force: true });
+}
+
+/**
  * 解析 gh 可执行 argv：默认 ['gh']，可用 MUTATION_ISSUES_GH 换成
  * "|"-分隔的 argv 前缀（测试钩子）。
  * @returns {string[]} argv 前缀
@@ -824,7 +841,9 @@ function printHelp() {
     '  number for skipped groups), mutants: [8-field copies in report order] }.',
     '  Queue files are written atomically (temp file + rename) immediately after each',
     '  create/skip completes, so a partial gh failure keeps entries for completed',
-    '  operations; each run overwrites the previous queue files. Dry-run omits',
+    '  operations; each run overwrites the previous queue files. Before each',
+    "  issue-create gh call the group's pre-existing queue file is deleted first,",
+    '  so a failed create leaves no stale entry from a previous run. Dry-run omits',
     '  issueNumber.',
     '  Body preview (dry-run): .mutation-queue/{file}.body.md, identical to the issue body.',
     '  Manifest (--output): { version, mode, tool, timestamp, generatedAt, input,',
@@ -943,6 +962,8 @@ function main(argv) {
         }
         const bodyFile = path.join(tmpDir, `body-${index}.md`);
         fs.writeFileSync(bodyFile, plan.body, 'utf8');
+        // 创建 gh 调用前先失效该组旧队列文件：失败时不留上一轮陈旧条目
+        removeStaleQueueFile(plan.queuePath);
         const created = createIssue(plan.title, plan.body, bodyFile, args.assignee);
         plan.status = 'created';
         plan.issueNumber = created.number;

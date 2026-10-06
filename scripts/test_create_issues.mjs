@@ -976,6 +976,51 @@ function casePartialGhFailureKeepsCompletedQueues(base) {
 }
 
 /**
+ * 陈旧队列清理（fix-stale-queue-cleanup）：预置上一轮遗留的两组陈旧队列
+ * 文件后实跑，gh 调用前先删除该组既有队列文件——成功组被本轮数据覆盖，
+ * 失败组保持删除状态，磁盘上不留上一轮陈旧条目误导 agent。
+ */
+function caseStaleQueueRemovedOnGhFailure(base) {
+  const dir = makeCaseDir(base, 'stale-queue-failure');
+  const input = writeJson(dir, 'report.json', validReport());
+  const queueDir = path.join(dir, '.mutation-queue');
+  fs.mkdirSync(queueDir, { recursive: true });
+  const stalePricing = queuePath(dir, 'src/domain/pricing.ts');
+  const staleCart = queuePath(dir, 'src/services/cart.ts');
+  fs.mkdirSync(path.dirname(stalePricing), { recursive: true });
+  fs.mkdirSync(path.dirname(staleCart), { recursive: true });
+  const staleBody = JSON.stringify({
+    version: '1.0',
+    file: 'stale-run',
+    tool: 'mutmut',
+    timestamp: '2000-01-01T00:00:00Z',
+    issueNumber: 7,
+    mutants: [],
+    staleKey: true
+  });
+  fs.writeFileSync(stalePricing, `${staleBody}\n`);
+  fs.writeFileSync(staleCart, `${staleBody}\n`);
+  // 组按 file 升序：pricing 第 1 次创建成功（101），cart 第 2 次创建失败
+  const fake = setupFakeGh(dir, { labels: ['mutation', 'nightly'], failCreateFrom: 2 });
+  const cli = runCli(['--input', input, '--create-issues'], dir, fake);
+  assertCase(cli.status === 2, `部分失败退出码应为 2，实际 ${cli.status}`);
+  assertCase(/gh/i.test(cli.stderr), `stderr 应含 gh 错误细节，实际：${cli.stderr}`);
+  // 失败组：陈旧队列文件已删除，不残留上一轮条目
+  assertCase(!fs.existsSync(staleCart), '失败组的陈旧队列文件应保持删除状态（不留陈旧条目）');
+  // 成功组：陈旧队列文件被本轮数据覆盖
+  const pricingQueue = JSON.parse(fs.readFileSync(stalePricing, 'utf8'));
+  assertCase(pricingQueue.file === 'src/domain/pricing.ts', '成功组队列应被本轮数据覆盖');
+  assertCase(pricingQueue.tool === 'stryker', '成功组队列 tool 应为本轮报告值');
+  assertCase(pricingQueue.timestamp === REPORT_TS, '成功组队列 timestamp 应为本轮报告值');
+  assertCase(pricingQueue.issueNumber === 101, `成功组队列应带本轮编号 101，实际 ${pricingQueue.issueNumber}`);
+  assertCase(pricingQueue.mutants.length === 2, '成功组队列应含本轮全部 mutant');
+  assertCase(!('staleKey' in pricingQueue), '成功组队列不应残留陈旧键');
+  // 原子写：队列目录只含成品文件，无 .tmp- 残留
+  const leftovers = fs.readdirSync(queueDir).filter((name) => name.includes('.tmp-'));
+  assertCase(leftovers.length === 0, `队列目录不应残留临时文件，实际：${JSON.stringify(leftovers)}`);
+}
+
+/**
  * 默认（无模式旗标）即实跑：假 gh 下直接创建 issue，队列带编号、manifest
  * mode=create、不写 body 预览（fix-issue-creator-defaults）。
  */
@@ -1093,6 +1138,7 @@ function main() {
     caseDedupSkip,
     caseDefaultCreatesIssues,
     casePartialGhFailureKeepsCompletedQueues,
+    caseStaleQueueRemovedOnGhFailure,
     caseAssigneeFlag,
     caseAssigneeWithDryRunRejected,
     caseLegacyCreateIssuesFlagNoop,
