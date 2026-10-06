@@ -39,7 +39,9 @@
 #   步骤 1  运行变异测试   ts: npx stryker run（要求 reporters 含 "json"，
 #                          建议不配 thresholds.break，门槛由 baseline 承担）
 #                          py: mutmut run（固定 2.x；存活变异体导致的非零
-#                          退出属预期输入，不视为失败，真实崩溃由步骤 2 拦截）
+#                          退出属预期输入，其余非零退出经 traceback 信号与
+#                          .mutmut-cache 新鲜度校验在本步裁决为真实失败，
+#                          陈旧缓存不进入后续解析）
 #   步骤 2  解析存活变异体 ts: parse-stryker-report.mjs 读取
 #                          reports/mutation/mutation.json
 #                          py: 先 mutmut show all 捕获 diff，再由
@@ -255,12 +257,41 @@ run_py_pipeline() {
     die "缺少依赖命令：python3（解析器 parse_mutmut_report.py 要求 Python 3.8+）"
   fi
 
-  # 步骤 1：全量变异测试。mutmut 在存在存活/可疑变异体时以非零码退出，
-  # 而这正是夜跑闭环要处理的输入，不视为失败；测试套件真实崩溃由步骤 2
-  # 的解析失败拦截（与 GitHub Actions 模板 continue-on-error 同一口径）。
-  log "INFO" "==> 运行变异测试（mutmut run；存活变异体的非零退出属预期）"
-  if ! mutmut run; then
-    log "WARN" "mutmut run 非零退出（存活变异体的预期行为；若测试套件崩溃，下一步解析会失败）"
+  # 步骤 1：全量变异测试。mutmut 2.x 在存在存活/可疑变异体时以非零码退出，
+  # 这正是夜跑闭环要处理的输入；但配置错误、基线测试没跑干净、mutmut 自身
+  # 崩溃同样是非零退出，不能一刀切容忍。本步就地裁决（比 GitHub Actions
+  # 模板的 continue-on-error 更严格：那边的兜底是后续导出/解析步骤硬失败）：
+  #   a) 起跑前落标记文件；输出整体捕获到 .mutmut-run-output.txt 备查；
+  #   b) 非零退出且输出含 Python traceback → mutmut 中途崩溃、缓存可能
+  #      残缺，按真实失败退出（沿用 mutmut 退出码）；
+  #   c) .mutmut-cache 缺失或修改时间不晚于标记 → mutmut 本轮没有写缓存，
+  #      在场的是陈旧数据，拒绝带着陈旧缓存进入解析，按真实执行/配置失败
+  #      退出（沿用 mutmut 退出码）；
+  #   d) 缓存在场且新鲜时，非零退出才按存活/可疑变异体的预期输入放行。
+  # 新鲜度按 mtime 严格晚于标记判定（find -newer），秒级粒度下存在同秒
+  # 边角，真实施行耗时远超 1 秒，不影响真实运行。
+  local mutmut_rc="0"
+  local run_marker="${log_dir}/.mutmut-run-start-$$"
+  : > "$run_marker"
+  log "INFO" "==> 运行变异测试（mutmut run；存活变异体的非零退出属预期，其余失败中止）"
+  set +e
+  mutmut run 2>&1 | tee .mutmut-run-output.txt
+  mutmut_rc=$?
+  set -e
+  if [ "$mutmut_rc" -ne 0 ] && grep -q "Traceback (most recent call last)" .mutmut-run-output.txt; then
+    rm -f "$run_marker"
+    die "mutmut run 中途崩溃（退出码 ${mutmut_rc}，输出含 Python traceback，缓存可能残缺）；完整输出：.mutmut-run-output.txt，日志：${LOG_FILE}" "$mutmut_rc"
+  fi
+  if [ ! -f .mutmut-cache ] || [ -z "$(find .mutmut-cache -maxdepth 0 -newer "$run_marker")" ]; then
+    rm -f "$run_marker"
+    if [ "$mutmut_rc" -eq 0 ]; then
+      die "mutmut run 退出码 0 但本轮没有写出新的 .mutmut-cache（多为配置问题：paths_to_mutate 未命中源码、runner 起不来等）；输出：.mutmut-run-output.txt，日志：${LOG_FILE}"
+    fi
+    die "mutmut run 失败（退出码 ${mutmut_rc}）且 .mutmut-cache 缺失或陈旧——mutmut 本轮没有写缓存，这不是存活变异体的预期退出；先修复配置/测试再重跑；输出：.mutmut-run-output.txt，日志：${LOG_FILE}" "$mutmut_rc"
+  fi
+  rm -f "$run_marker"
+  if [ "$mutmut_rc" -ne 0 ]; then
+    log "WARN" "mutmut run 非零退出（退出码 ${mutmut_rc}）：.mutmut-cache 已确认为本轮新鲜产物，按存活/可疑变异体的预期输入继续"
   fi
 
   # 步骤 2：先捕获 mutmut show 全量 diff（缓存不含替换片段，存活条目必须
