@@ -5,7 +5,8 @@
  *
  * 用 scripts/fixtures/sample-{ts,py} 夹具在系统临时目录的独立沙箱里各走一遍
  * 完整闭环，逐步验证退出码、输出文件存在性与 JSON 契约（统一报告 v1.1、
- * 基线 v1.0、队列/manifest），再覆盖两个跨环节场景：
+ * 基线 v1.0、队列/manifest 的闭合字段集与基线 score 两位小数上限），
+ * 再覆盖两个跨环节场景：
  *   - 基线回归：把报告改差后 check 必须以退出码 2 拒绝（VAL-CROSS-004）；
  *   - 豁免过滤：.equivalent-mutants.json 命中的变异体不得进入队列文件
  *     （VAL-CROSS-003）。
@@ -42,7 +43,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,6 +90,21 @@ const MUTATION_TYPES = new Set([
   'ComparisonOperator', 'DecoratorRemoval', 'KeywordArgument', 'KeywordLiteral',
   'Unknown'
 ]);
+
+/** 统一报告顶层允许的字段（契约 §1；score 为 1.1 起可选，旧消费者可忽略）。 */
+const REPORT_TOP_KEYS = ['tool', 'timestamp', 'mutants', 'score'];
+
+/** mutant 对象的八字段（契约 §2，全部必填、不得有其他字段）。 */
+const MUTANT_KEYS = ['id', 'file', 'line', 'column', 'mutationType', 'original', 'mutated', 'status'];
+
+/** 基线文件顶层允许的字段（基线契约 §2）。 */
+const BASELINE_TOP_KEYS = ['version', 'updated', 'baseline'];
+
+/** 基线 baseline 对象允许的四字段（基线契约 §3，全部必填）。 */
+const BASELINE_STAT_KEYS = ['score', 'killed', 'survived', 'total'];
+
+/** 队列文件顶层允许的字段（模板契约 §4.3；issueNumber 仅实跑存在）。 */
+const QUEUE_TOP_KEYS = ['version', 'file', 'tool', 'timestamp', 'issueNumber', 'mutants'];
 
 /** --keep 时保留沙箱目录（供 main 按选项赋值）。 */
 let KEEP_SANDBOXES = false;
@@ -373,13 +389,47 @@ function readJson(filePath) {
 }
 
 /**
+ * 闭合字段集检查（各契约 schema additionalProperties: false）：对象的每个键
+ * 都必须在允许清单内，否则报错。必填字段的存在性与类型由调用方单独断言，
+ * 本函数只拒绝未知字段；null/原始值交给调用方既有的类型断言处理。
+ */
+function assertNoUnknownFields(value, allowedKeys, filePath, label) {
+  if (value === null || typeof value !== 'object') {
+    return;
+  }
+  for (const key of Object.keys(value)) {
+    assertCase(
+      allowedKeys.includes(key),
+      `${filePath}: ${label}含未知字段 ${JSON.stringify(key)}` +
+      `（additionalProperties:false，允许：${allowedKeys.join('、')}）`
+    );
+  }
+}
+
+/**
+ * 数值是否最多 2 位小数（基线 score 的生产者约束，基线契约 §4）。
+ * JSON 解析后是 double，用 ×100 后与最近整数的距离判断；容差取 1e-9 与
+ * 分数比较口径一致（42.55×100 的浮点尾差约 1e-12，不误伤；42.553 的
+ * 差值 0.3 必被拒）。
+ */
+function hasAtMost2Decimals(value) {
+  if (Number.isInteger(value)) {
+    return true;
+  }
+  const scaled = value * 100;
+  return Math.abs(scaled - Math.round(scaled)) <= 1e-9;
+}
+
+/**
  * 校验单个 mutant 对象的八字段契约（docs/formats/unified-mutation-report.md §2）：
- * 字段存在且非空、id 词形/前缀/唯一性、file 为项目根相对 POSIX 路径、
- * line/column 为 >=1 整数、mutationType 在 §4 闭合枚举内、original/mutated
- * 为字符串且不相等、status 恒为 Survived。seenIds 用于同文件内 id 去重。
+ * 闭合字段集（additionalProperties:false）、八个必填字段存在且非空、
+ * id 词形/前缀/唯一性、file 为项目根相对 POSIX 路径、line/column 为 >=1
+ * 整数、mutationType 在 §4 闭合枚举内、original/mutated 为字符串且不相等、
+ * status 恒为 Survived。seenIds 用于同文件内 id 去重。
  */
 function assertMutantObject(mutant, filePath, expectedTool, seenIds) {
-  for (const field of ['id', 'file', 'line', 'column', 'mutationType', 'original', 'mutated', 'status']) {
+  assertNoUnknownFields(mutant, MUTANT_KEYS, filePath, 'mutant');
+  for (const field of MUTANT_KEYS) {
     assertCase(
       mutant[field] !== undefined && mutant[field] !== null && mutant[field] !== '',
       `${filePath}: mutant 缺字段 ${field}：${JSON.stringify(mutant)}`
@@ -428,10 +478,13 @@ function assertMutantObject(mutant, filePath, expectedTool, seenIds) {
 
 /**
  * 校验统一变异体报告契约（docs/formats/unified-mutation-report.md v1.1）：
- * 顶层 tool/timestamp（ISO-8601 UTC）/mutants/score 与每个 mutant 的完整
- * 字段约束。返回 { score, mutants, tool, timestamp } 供后续步骤断言。
+ * 顶层闭合字段集（additionalProperties:false）、tool/timestamp（ISO-8601 UTC）/
+ * mutants 必填、score 为可选字段（1.1 起可省略，出现时须为 [0,100] 内的
+ * 数字），以及每个 mutant 的完整字段约束。返回 { score, mutants, tool,
+ * timestamp } 供后续步骤断言。
  */
 function assertUnifiedReport(data, expectedTool, filePath) {
+  assertNoUnknownFields(data, REPORT_TOP_KEYS, filePath, '统一报告顶层');
   assertCase(data.tool === expectedTool, `${filePath}: tool 应为 ${expectedTool}，实际 ${JSON.stringify(data.tool)}`);
   assertCase(
     typeof data.timestamp === 'string' && ISO_UTC_PATTERN.test(data.timestamp),
@@ -439,8 +492,9 @@ function assertUnifiedReport(data, expectedTool, filePath) {
   );
   assertCase(Array.isArray(data.mutants) && data.mutants.length > 0, `${filePath}: mutants 应为非空数组`);
   assertCase(
-    typeof data.score === 'number' && Number.isFinite(data.score) && data.score >= 0 && data.score <= 100,
-    `${filePath}: score 应为 [0,100] 内的数字，实际 ${JSON.stringify(data.score)}`
+    data.score === undefined ||
+    (typeof data.score === 'number' && Number.isFinite(data.score) && data.score >= 0 && data.score <= 100),
+    `${filePath}: score 为可选字段，出现时应为 [0,100] 内的数字，实际 ${JSON.stringify(data.score)}`
   );
   const seenIds = new Set();
   for (const mutant of data.mutants) {
@@ -450,10 +504,14 @@ function assertUnifiedReport(data, expectedTool, filePath) {
 }
 
 /**
- * 校验基线文件契约（docs/formats/mutation-baseline.md v1.0）：version/updated
- * （ISO-8601 UTC）/四统计值的类型与范围/killed+survived≤total 跨字段一致性。
+ * 校验基线文件契约（docs/formats/mutation-baseline.md v1.0）：顶层与 baseline
+ * 对象的闭合字段集（additionalProperties:false）、version/updated（ISO-8601
+ * UTC）/四统计值的类型与范围、score 最多 2 位小数（§4 生产者约束）、
+ * killed+survived≤total 跨字段一致性。expectedScore 缺省（统一报告省略
+ * score）时跳过分数比对，其余断言照常执行。
  */
 function assertBaselineFile(data, filePath, expectedScore) {
+  assertNoUnknownFields(data, BASELINE_TOP_KEYS, filePath, '基线文件顶层');
   assertCase(data.version === '1.0', `${filePath}: version 应为 "1.0"，实际 ${JSON.stringify(data.version)}`);
   assertCase(
     typeof data.updated === 'string' && ISO_UTC_PATTERN.test(data.updated),
@@ -461,10 +519,15 @@ function assertBaselineFile(data, filePath, expectedScore) {
   );
   assertCase(data.baseline && typeof data.baseline === 'object', `${filePath}: 应含 baseline 对象`);
   const baseline = data.baseline;
+  assertNoUnknownFields(baseline, BASELINE_STAT_KEYS, filePath, 'baseline 对象');
   assertCase(
     typeof baseline.score === 'number' && Number.isFinite(baseline.score) &&
     baseline.score >= 0 && baseline.score <= 100,
     `${filePath}: baseline.score 应为 [0,100] 内的数字，实际 ${JSON.stringify(baseline.score)}`
+  );
+  assertCase(
+    hasAtMost2Decimals(baseline.score),
+    `${filePath}: baseline.score 最多 2 位小数（基线契约 §4），实际 ${baseline.score}`
   );
   assertCase(
     Number.isInteger(baseline.killed) && baseline.killed >= 0,
@@ -483,10 +546,12 @@ function assertBaselineFile(data, filePath, expectedScore) {
     `${filePath}: killed+survived 应 ≤ total（其余状态可计入 total），实际 ` +
     `${baseline.killed}+${baseline.survived}>${baseline.total}`
   );
-  assertCase(
-    Math.abs(baseline.score - expectedScore) <= 1e-9,
-    `${filePath}: baseline.score ${baseline.score} 应与统一报告分数 ${expectedScore} 一致`
-  );
+  if (typeof expectedScore === 'number') {
+    assertCase(
+      Math.abs(baseline.score - expectedScore) <= 1e-9,
+      `${filePath}: baseline.score ${baseline.score} 应与统一报告分数 ${expectedScore} 一致`
+    );
+  }
   return baseline;
 }
 
@@ -494,7 +559,8 @@ function assertBaselineFile(data, filePath, expectedScore) {
  * 读取 manifest（create-mutation-issues --output），按其施工票契约完整校验
  * dry-run 输出：元数据（tool/timestamp/generatedAt/input/exemptionsFile）、
  * summary 五计数、issue 条目（title/labels/queuePath/previewPath/status/
- * dry-run 不带编号）与队列文件（version/tool/timestamp/逐字段 mutant）。
+ * dry-run 不带编号）与队列文件（闭合字段集、version/tool/timestamp/
+ * 逐字段 mutant）。
  * 返回 { manifest, queueByFile }。
  */
 function readDryRunManifest(manifestPath, sandbox, expectedMutantCount, expectedTool, expectedTimestamp) {
@@ -570,6 +636,7 @@ function readDryRunManifest(manifestPath, sandbox, expectedMutantCount, expected
     }
     const queuePath = path.resolve(sandbox, issue.queuePath);
     const queue = readJson(queuePath);
+    assertNoUnknownFields(queue, QUEUE_TOP_KEYS, queuePath, '队列文件顶层');
     assertCase(queue.version === '1.0', `队列文件 ${queuePath}: version 应为 "1.0"`);
     assertCase(queue.file === issue.file, `队列文件 ${queuePath}: file 应为 ${issue.file}`);
     assertCase(queue.tool === expectedTool,
@@ -992,11 +1059,30 @@ function main() {
   process.exit(ok ? 0 : 1);
 }
 
-try {
-  main();
-} catch (err) {
-  process.stderr.write(`test_nightly_loop: FAIL ${err.message}\n`);
-  process.exit(1);
+/**
+ * 供 scripts/test_nightly_loop_validators.mjs 离线单测复用的内部导出；
+ * 直接执行本文件时才运行 main（import 本模块只取校验器，不跑端到端）。
+ */
+export {
+  assertNoUnknownFields,
+  hasAtMost2Decimals,
+  assertUnifiedReport,
+  assertMutantObject,
+  assertBaselineFile,
+  REPORT_TOP_KEYS,
+  MUTANT_KEYS,
+  BASELINE_TOP_KEYS,
+  BASELINE_STAT_KEYS,
+  QUEUE_TOP_KEYS
+};
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    main();
+  } catch (err) {
+    process.stderr.write(`test_nightly_loop: FAIL ${err.message}\n`);
+    process.exit(1);
+  }
 }
 
 
