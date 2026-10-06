@@ -2,7 +2,7 @@
 # 夜跑变异测试闭环 workflow 模板（Python / mutmut）
 # =============================================================================
 # 作用：每晚定时全量运行 mutmut 变异测试，解析 .mutmut-cache 中的存活变异体
-#       为统一报告，可选地做基线只涨不跌检查，按文件分组创建补测 issue
+#       为统一报告，做基线只涨不跌检查，按文件分组创建补测 issue
 #       （人读 GitHub issue + agent 队列 JSON），并上传全部报告作为 artifacts。
 #
 # 使用方式（复制到目标项目，本仓自身不运行该闭环）：
@@ -11,16 +11,24 @@
 #      parse_mutmut_report.py、mutation-baseline.mjs、create-mutation-issues.mjs；
 #   3. 配置 mutmut（setup.cfg 的 [mutmut] 段或命令行参数）：
 #      paths_to_mutate、runner 等，见 mutmut 文档；
-#   4. 首次运行不需要手工步骤；基线检查为可选步骤（见下面步骤 7 的边界说明）。
+#   4. 首次运行不需要手工步骤：首轮自动 init 基线，之后每轮做只涨不跌
+#      check（见步骤 8/9）；建议把生成的 .mutation-baseline.json 提交进版本库，
+#      否则每轮都会重新 init、棘轮检查形同虚设。
 #
 # 已知边界（如实暴露，不做伪装）：
 #   - 本模板按 mutmut 2.x 口径（结果缓存在 .mutmut-cache）；mutmut 3.x 不再
 #     写该缓存文件，因此安装时固定 "mutmut<3"；
-#   - mutation-baseline.mjs 不读 .mutmut-cache，需要项目自备 mutmut
-#     results-export JSON（文件名 mutmut-results-export.json，shape 见
-#     parse_mutmut_report.py --help 的第 2 种输入形态；killed/timeout 等
-#     只计数类别可以是字符串数组）。没有该文件时基线步骤自动跳过，
-#     其余环节照常。缺口说明见本仓 docs/research/vscode-scheduled-tasks.md §7.1。
+#   - mutmut 2.x 没有一键导出 JSON 的子命令（results 是人读文本、junitxml
+#     是 XML），而 mutation-baseline.mjs 不读 .mutmut-cache。因此步骤 6 用
+#     官方 `mutmut result-ids <status>` 子命令按六类状态取变异体 ID，在
+#     workflow 内组装出本仓约定的 mutmut-results-export.json（各类别为
+#     字符串数组）。该文件只供基线步骤按类别计数（Timeout 计入检出），
+#     不作为解析器输入——解析器仍走 .mutmut-cache + show，其同名导出形态
+#     对 survived/suspicious 有富对象要求（见 parse_mutmut_report.py --help
+#     的第 2 种输入形态），与本文件不同。基线不再条件跳过：每轮必跑
+#     （步骤 8 首轮 init / 步骤 9 常规 check）。baseline 工具不读缓存、
+#     曾要求项目自备导出文件的历史缺口见本仓
+#     docs/research/vscode-scheduled-tasks.md §7.1。
 #
 # 前置条件：
 #   - 目标项目 Python 依赖可安装（默认 pip install -r requirements.txt，
@@ -75,13 +83,38 @@ jobs:
       # 5. 运行 mutmut 变异测试
       #    mutmut 在存在存活/可疑变异体时以非零码退出，而这正是夜跑闭环要
       #    处理的输入，不应让 workflow 在此失败（continue-on-error 让该步骤
-      #    显示为「已容忍」但不中断）；若测试套件本身崩溃，下一步解析会因
-      #    配不出有效结果而失败，不会静默放过。
+      #    显示为「已容忍」但不中断）；若测试套件本身崩溃、缓存配不出来，
+      #    下一步导出会因读不到缓存而失败，不会静默放过。
       - name: Run mutation tests (mutmut)
         continue-on-error: true
         run: mutmut run
 
-      # 6. 捕获 mutmut show 输出并把 .mutmut-cache 解析为统一变异体报告
+      # 6. 把 mutmut 结果导出为 JSON（基线检查的输入文件，见头注「已知边界」）
+      #    mutmut 2.x 没有一键导出 JSON 的子命令，这里用官方
+      #    `mutmut result-ids <status>` 按六类状态取变异体 ID（空类输出空
+      #    行，自然得到空数组），组装成本仓约定的 results-export 形态。
+      #    该步不做任何容忍：缓存缺失或 result-ids 失败时本 workflow 直接
+      #    失败，而不是静默跳过基线检查。
+      - name: Export mutmut results JSON (baseline input)
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          statuses = ("killed", "timeout", "survived", "suspicious", "skipped", "untested")
+          export = {}
+          for status in statuses:
+              proc = subprocess.run(["mutmut", "result-ids", status], capture_output=True, text=True)
+              if proc.returncode != 0:
+                  sys.exit(f"mutmut result-ids {status} failed: {proc.stderr.strip()}")
+              export[status] = proc.stdout.split()
+          with open("mutmut-results-export.json", "w", encoding="utf-8") as f:
+              json.dump(export, f, indent=2)
+              f.write("\n")
+          PY
+
+      # 7. 捕获 mutmut show 输出并把 .mutmut-cache 解析为统一变异体报告
       #    （契约 v1.1）。缓存不含替换片段，存活条目必须配到 "mutmut show"
       #    的 diff，所以先落盘 show all 输出再经 --show 传入解析器；
       #    临时捕获文件与统一报告都落项目根（解析器 --output 不创建父目录）。
@@ -90,21 +123,24 @@ jobs:
           mutmut show all > .mutmut-show-all.txt
           python scripts/parse_mutmut_report.py --input .mutmut-cache --show .mutmut-show-all.txt --output unified-mutation-report.json
 
-      # 7. 基线只涨不跌检查（可选步骤）
-      #    需要 mutmut results-export JSON 作为输入（见文件头「已知边界」）：
-      #    文件不存在时本步骤跳过；存在时首次运行 init 冻结基线，之后每轮
-      #    check。分数回归时退出码 2，本步骤失败并中止后续 issue 创建；
-      #    报告仍会被最后一步上传（if: always()）。
-      - name: Check baseline (needs mutmut results-export JSON)
-        if: hashFiles('mutmut-results-export.json') != ''
-        run: |
-          if [ -f .mutation-baseline.json ]; then
-            node scripts/mutation-baseline.mjs check --input mutmut-results-export.json --lang py
-          else
-            node scripts/mutation-baseline.mjs init --input mutmut-results-export.json --lang py
-          fi
+      # 8. 首次运行（工作区还没有基线文件）：把本轮分数冻结为基线。
+      #    输入是步骤 6 导出的 mutmut-results-export.json（各类别字符串数组，
+      #    baseline 工具按数组长度计数，score = (killed + timeout) / total）。
+      #    跑完后请把生成的 .mutation-baseline.json 提交进版本库。
+      - name: Initialize baseline (first run only)
+        if: hashFiles('.mutation-baseline.json') == ''
+        run: node scripts/mutation-baseline.mjs init --input mutmut-results-export.json --lang py
 
-      # 8. 按文件分组创建补测 issue + agent 队列 JSON
+      # 9. 常规运行（基线文件已提交）：只涨不跌检查。
+      #    分数回归时退出码 2，本步骤失败并中止后续 issue 创建（回归先由人
+      #    处理，不自动放行）；报告仍会被最后一步上传（if: always()）。
+      #    基线文件缺失时不会走到这里（步骤 8 已 init），两个条件互补，
+      #    每轮必有其一执行，不再静默跳过。
+      - name: Check baseline (ratchet; exit 2 on regression)
+        if: hashFiles('.mutation-baseline.json') != ''
+        run: node scripts/mutation-baseline.mjs check --input mutmut-results-export.json --lang py
+
+      # 10. 按文件分组创建补测 issue + agent 队列 JSON
       #    - gh CLI 从 GH_TOKEN 环境变量读取凭据，值为仓库自带的 GITHUB_TOKEN；
       #    - 与 open 状态的同名 issue 去重，重复夜跑只会跳过不会重复创建；
       #    - 存在 .equivalent-mutants.json 时自动应用豁免过滤；
@@ -120,7 +156,7 @@ jobs:
             node scripts/create-mutation-issues.mjs --input unified-mutation-report.json
           fi
 
-      # 9. 上传本轮全部报告作为 artifacts（即便中途失败也上传，便于排查；
+      # 11. 上传本轮全部报告作为 artifacts（即便中途失败也上传，便于排查；
       #    none of the paths exist 时只告警不失败）
       - name: Upload mutation reports
         if: always()
@@ -130,6 +166,7 @@ jobs:
           path: |
             .mutmut-cache
             .mutmut-show-all.txt
+            mutmut-results-export.json
             unified-mutation-report.json
             .mutation-queue/
           if-no-files-found: warn
