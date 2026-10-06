@@ -31,7 +31,7 @@ skipped: [...] }，survived/suspicious 条目必须是带 original+mutated 或 d
 打开）：缓存有权威的 mutant id、状态（ok_killed/bad_survived/bad_timeout/
 ok_suspicious/skipped/untested）、源文件路径与 0 基行号（输出统一 +1 转
 1 基），但没有替换片段，survived/suspicious 条目须用 --show 提供
-`mutmut show` 输出配对（`mutmut results --diffs` 的 "# mutant <id>" 标记
+`mutmut show` 输出配对（`mutmut show all` 的 "# mutant <id>" 标记
 按 id 精确配对，纯 `mutmut show` 输出按 file+line 回退配对，带标记的块
 只按 id 认领以免 killed 块误配同行存活者），缺配对报错退出；分数按全
 缓存计数计算（ok_killed 计检出、bad_timeout 计入检出）。
@@ -134,10 +134,10 @@ DIFF_OLD_RE = re.compile(r'^--- (?:a/)?(?P<path>.+?)\s*$')
 DIFF_NEW_RE = re.compile(r'^\+\+\+ (?:b/)?(?P<path>.+?)\s*$')
 HUNK_RE = re.compile(r'^@@ -(?P<line>\d+)(?:,\d+)? \+\d+(?:,\d+)? @@')
 
-# mutmut results --diffs 在每个 diff 前打印的 mutant id 标记。
+# mutmut show all 在每个 diff 前打印的 mutant id 标记。
 SHOW_MARKER_RE = re.compile(r'^#\s*mutant\s+(\d+)\s*$', re.IGNORECASE)
 
-# mutmut results --diffs 的文件分隔头（"---- <path> (n) ----"）。以 4+ 个
+# mutmut show all 的文件分隔头（"---- <path> (n) ----"）。以 4+ 个
 # 连字符开头，与 unified diff 的 "--- <path>" 头和 "- <del>" 行都不同形；
 # 在 diff 块未闭合时出现应终结当前块，而不是被当成删除行吞掉。
 SHOW_FILE_HEADER_RE = re.compile(r'^-{4,}\s.*\s-{4,}$')
@@ -451,7 +451,7 @@ def parse_diff_blocks(text, source_path, collect_markers=False):
 
     行号取第一个 - 行在源文件中的行号（hunk 头起点 + 前置上下文行推进）。
     collect_markers 为真时返回 (标记 id 或 None, 块) 列表：标记来自
-    `mutmut results --diffs` 在 diff 前打印的 "# mutant <id>" 行，绑定到
+    `mutmut show all` 在 diff 前打印的 "# mutant <id>" 行，绑定到
     其后紧跟的第一个 diff 块。
     """
     blocks = []
@@ -496,7 +496,7 @@ def parse_diff_blocks(text, source_path, collect_markers=False):
             continue
         if block['new_path'] is not None and block['in_hunk']:
             if SHOW_FILE_HEADER_RE.match(line):
-                # results --diffs 的下一个文件分隔头：终结当前块。
+                # show all 的下一个文件分隔头：终结当前块。
                 finish(block)
                 block = None
                 continue
@@ -697,7 +697,7 @@ def read_mutmut_cache(path):
 def pair_cache_entries(entries, show_path, source_path):
     """把缓存存活条目配对到 --show 文本的 diff 块并构造 mutant。
 
-    "# mutant <id>" 标记按缓存 mutant id 精确认领（mutmut results --diffs
+    "# mutant <id>" 标记按缓存 mutant id 精确认领（mutmut show all
     口径，同 file+line 的多个变异体也能区分）；无标记的纯 `mutmut show`
     输出按 file+line 回退配对。带标记的块只按 id 认领，避免把 killed
     变异体的 diff 误配给同行存活者；缺配对的条目整体报错退出，落单块
@@ -710,7 +710,7 @@ def pair_cache_entries(entries, show_path, source_path):
                             for entry in entries)
         raise CliError('survived/suspicious mutants in the cache carry no replaced fragments; '
                        'pass the "mutmut show" output via --show '
-                       '(e.g. `mutmut results --diffs > show.txt`); missing: %s (%s)'
+                       '(e.g. `mutmut show all > show.txt`); missing: %s (%s)'
                        % (listing, source_path))
     marked_blocks = parse_diff_blocks(read_text_file(show_path, 'show output'),
                                       source_path, collect_markers=True)
@@ -938,11 +938,14 @@ def print_help():
         '     skipped, untested), file paths, and 0-based line numbers (converted to',
         '     1-based in the output), but it does NOT store the replaced fragments.',
         '     Survived/suspicious mutants therefore need their "mutmut show" diffs via',
-        '     --show: the output of `mutmut results --diffs` is matched exactly by its',
+        '     --show: the output of `mutmut show all` is matched exactly by its',
         '     "# mutant <id>" markers (safe when several mutants share one line);',
         '     concatenated `mutmut show <id>` output without markers is matched by file',
         '     and line. Survivors without a matching diff fail with exit code 1 and list',
         '     the "mutmut show <id>" commands to run.',
+        '     Version note: in mutmut 2.x the results command takes no flags; capture',
+        '     the diffs with `mutmut show all` (or `mutmut show <file>`). mutmut 3.x',
+        '     no longer writes the .mutmut-cache file this parser reads.',
         '',
         'Output:',
         '  Unified report JSON (UTF-8, LF, 2-space indent):',

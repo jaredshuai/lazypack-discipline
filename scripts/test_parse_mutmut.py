@@ -202,7 +202,7 @@ CACHE_MUTANTS = [
     ('src/services/cart.py', 22, 12, 'ok_suspicious'),
 ]
 
-# mutmut results --diffs 口径的 show 输出："# mutant <id>" 标记 + diff 块，
+# mutmut show all 口径的 show 输出："# mutant <id>" 标记 + diff 块，
 # 前置指引行与节标题行作为噪声一并容忍。
 SHOW_TEXT = '\n'.join([
     'To apply a mutant on disk:',
