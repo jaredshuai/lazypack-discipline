@@ -1,0 +1,75 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "run-mutation-tests",
+      "detail": "TypeScript: run Stryker mutation tests (json reporter writes reports/mutation/mutation.json)",
+      "type": "shell",
+      "command": "npx stryker run",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "parse-results",
+      "detail": "TypeScript: convert the Stryker JSON report into the unified mutation report",
+      "type": "shell",
+      "command": "node scripts/parse-stryker-report.mjs --input reports/mutation/mutation.json --output unified-mutation-report.json",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "check-baseline",
+      "detail": "TypeScript: compare the current mutation score against .mutation-baseline.json (exit code 2 = regression)",
+      "type": "shell",
+      "command": "node scripts/mutation-baseline.mjs check --input reports/mutation/mutation.json --lang ts",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "create-issues",
+      "detail": "Shared: create per-file GitHub issues from the unified report (adds --dry-run for preview; requires gh authentication)",
+      "type": "shell",
+      "command": "node scripts/create-mutation-issues.mjs --input unified-mutation-report.json",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "run-mutation-tests-py",
+      "detail": "Python: run mutmut (2.x; results cached in .mutmut-cache; on Windows run inside WSL)",
+      "type": "shell",
+      "command": "mutmut run",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "parse-results-py",
+      "detail": "Python: capture mutmut show diffs and convert .mutmut-cache into the unified mutation report",
+      "type": "shell",
+      "command": "mutmut show all > .mutmut-show-all.txt && python scripts/parse_mutmut_report.py --input .mutmut-cache --show .mutmut-show-all.txt --output unified-mutation-report.json",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "check-baseline-py",
+      "detail": "Python: compare the current mutation score against .mutation-baseline.json (input is a mutmut results-export JSON, see docs/research/vscode-scheduled-tasks.md)",
+      "type": "shell",
+      "command": "node scripts/mutation-baseline.mjs check --input mutmut-results-export.json --lang py",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
