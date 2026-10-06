@@ -3,8 +3,8 @@
 日期：2026-10-06  
 议题：固定层 `docs/DECISIONS.md` 新增"提示词瘦、工具肥"原则（来源：issue #36）  
 主持方：Droid（§9.2：不投票、不提方案，只生成提示词、分配对手、汇总）  
-参与席位：待定（3 或 5 个 AI）  
-状态：准备中
+参与席位：5 位 AI（Participant 1-5）  
+状态：**第一轮准备完成，等待执行**
 
 ---
 
@@ -31,53 +31,46 @@
 
 ---
 
+## 执行方案
+
+详见 [EXECUTION-PLAN.md](EXECUTION-PLAN.md)
+
+---
+
 ## 第一轮：独立意见（各席互不可见）
 
-_待填充：各席位独立分析文件链接_
+**状态**：提示词已生成，等待用户执行 5 次讨论
 
-- 共同提示词：
-- 席位 1：
-- 席位 2：
-- 席位 3：
+**提示词**：
+- [Participant 1](round-1/prompts/participant-1.md)
+- [Participant 2](round-1/prompts/participant-2.md)
+- [Participant 3](round-1/prompts/participant-3.md)
+- [Participant 4](round-1/prompts/participant-4.md)
+- [Participant 5](round-1/prompts/participant-5.md)
+
+**输出**（等待收集）：
+- Participant 1: `round-1/participants/participant-1/result.md` + `evidence.md`
+- Participant 2: `round-1/participants/participant-2/result.md` + `evidence.md`
+- Participant 3: `round-1/participants/participant-3/result.md` + `evidence.md`
+- Participant 4: `round-1/participants/participant-4/result.md` + `evidence.md`
+- Participant 5: `round-1/participants/participant-5/result.md` + `evidence.md`
 
 ---
 
 ## 第二轮：互评与收敛
 
-_待填充：各席位互评文件链接_
-
-- 共同任务：
-- 席位 1：
-- 席位 2：
-- 席位 3：
+_待第一轮完成后生成_
 
 ---
 
 ## 第三轮：修订后投票
 
-_待填充：冻结选票与投票结果链接_
-
-- 冻结选票：
-- 投票提示词：
-- 席位 1：
-- 席位 2：
-- 席位 3：
-- 计票与裁定：
+_待第二轮完成后生成_
 
 ---
 
 ## 参考与依据
 
-1. **Issue #36**：原始提案与讨论
+1. **Issue #36**：https://github.com/jaredshuai/lazypack-discipline/issues/36
 2. **Lost in the Middle 论文**：arXiv:2307.03172
 3. **Uncle Bob × Matt Pocock 访谈**：关于 AI 编码助手与规则执行的实践观察
-
----
-
-## 待决事项
-
-- [ ] 确定参与席位（3 或 5 个 AI）
-- [ ] 生成第一轮提示词
-- [ ] 分配对手关系
-- [ ] 执行三轮讨论
-- [ ] 维护者最终裁定
