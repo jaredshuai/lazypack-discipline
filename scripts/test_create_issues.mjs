@@ -4,9 +4,10 @@
  * create-mutation-issues.mjs 断言驱动回归（仿 test_parse_stryker.mjs 模式）。
  * 在系统临时目录生成统一变异体报告与豁免文件夹具，以子进程方式调用
  * create-mutation-issues.mjs，校验队列文件、body 预览、manifest、stdout
- * 摘要与退出码。实跑路径通过 MUTATION_ISSUES_GH 指向临时目录里的假 gh
- * 脚本离线验证（不发任何 GitHub 请求），覆盖标签确保、去重跳过、issue
- * 创建与 gh 失败路径。不修改本仓库，不创建真实 issue。
+ * 摘要与退出码。实跑路径（默认无模式旗标即实跑，fix-issue-creator-defaults；
+ * --create-issues 保留为兼容 no-op）通过 MUTATION_ISSUES_GH 指向临时目录
+ * 里的假 gh 脚本离线验证（不发任何 GitHub 请求），覆盖标签确保、去重跳过、
+ * issue 创建与 gh 失败路径。不修改本仓库，不创建真实 issue。
  * 用法: node scripts/test_create_issues.mjs
  * 全过退出码 0；任一断言失败退出码 1。未接 hook/CI。
  */
@@ -239,6 +240,8 @@ function caseHelp(base) {
   assertCase(cli.stdout.includes('--dry-run'), '--help 应说明 --dry-run');
   assertCase(cli.stdout.includes('--output'), '--help 应说明 --output');
   assertCase(cli.stdout.includes('--create-issues'), '--help 应说明 --create-issues');
+  assertCase(/default/i.test(cli.stdout), '--help 应说明默认模式（实跑），实际：' + cli.stdout.slice(0, 200));
+  assertCase(cli.stdout.includes('no-op'), '--help 应说明 --create-issues 兼容为 no-op，实际：' + cli.stdout.slice(0, 400));
   assertCase(/example/i.test(cli.stdout), '--help 应含示例，实际：' + cli.stdout.slice(0, 200));
   assertCase(cli.stdout.includes('Exit codes'), '--help 应说明退出码');
 }
@@ -834,13 +837,13 @@ function caseNoGhInDryRun(base) {
 }
 
 /**
- * gh CLI 失败：--create-issues 下优雅失败，退出码 2，stderr 带细节
- * （VAL-ISSUES-017）。
+ * gh CLI 失败：默认实跑（无模式旗标）下优雅失败，退出码 2，stderr 带细节
+ * （VAL-ISSUES-017；默认模式即实跑）。
  */
 function caseGhFailureGraceful(base) {
   const dir = makeCaseDir(base, 'gh-failure');
   const input = writeJson(dir, 'report.json', validReport());
-  const cli = runCli(['--input', input, '--create-issues'], dir, {
+  const cli = runCli(['--input', input], dir, {
     MUTATION_ISSUES_GH: 'definitely-not-a-real-gh-binary-xyz'
   });
   assertCase(cli.status === 2, `gh 失败退出码应为 2，实际 ${cli.status}`);
@@ -848,8 +851,9 @@ function caseGhFailureGraceful(base) {
 }
 
 /**
- * 假 gh 实跑：标签确保、按组创建、队列文件带 issueNumber、manifest 带
- * issue URL（VAL-ISSUES-004 / 007 / 009 / 014 / 010）。
+ * 假 gh 经兼容旗标 --create-issues 实跑（该旗标现为 no-op，创建已是默认，
+ * 本用例兼作旧接口兼容回归）：标签确保、按组创建、队列文件带 issueNumber、
+ * manifest 带 issue URL（VAL-ISSUES-004 / 007 / 009 / 014 / 010）。
  */
 function caseCreateIssuesFakeGh(base) {
   const dir = makeCaseDir(base, 'create-fake-gh');
@@ -972,13 +976,34 @@ function casePartialGhFailureKeepsCompletedQueues(base) {
 }
 
 /**
- * --assignee 透传给 gh issue create。
+ * 默认（无模式旗标）即实跑：假 gh 下直接创建 issue，队列带编号、manifest
+ * mode=create、不写 body 预览（fix-issue-creator-defaults）。
+ */
+function caseDefaultCreatesIssues(base) {
+  const dir = makeCaseDir(base, 'default-create');
+  const input = writeJson(dir, 'report.json', validReport());
+  const fake = setupFakeGh(dir, { labels: ['mutation', 'nightly'] });
+  const output = path.join(dir, 'manifest.json');
+  const cli = runCli(['--input', input, '--output', output], dir, fake);
+  assertCase(cli.status === 0, `默认实跑退出码应为 0，实际 ${cli.status}: ${cli.stderr}`);
+  assertCase(cli.stdout.includes('mode=create'), `默认应为 create 模式，实际：${cli.stdout}`);
+  const creates = readGhLog(fake.__logPath).filter((argv) => argv[0] === 'issue' && argv[1] === 'create');
+  assertCase(creates.length === 2, `默认应创建 2 个 issue，实际 ${creates.length}`);
+  const pricingQueue = JSON.parse(fs.readFileSync(queuePath(dir, 'src/domain/pricing.ts'), 'utf8'));
+  assertCase(pricingQueue.issueNumber === 101, `默认实跑队列应带 issueNumber 101，实际 ${pricingQueue.issueNumber}`);
+  assertCase(!fs.existsSync(previewPath(dir, 'src/domain/pricing.ts')), '默认实跑不应写 body 预览文件');
+  const manifest = JSON.parse(fs.readFileSync(output, 'utf8'));
+  assertCase(manifest.mode === 'create', 'manifest mode 应为 create');
+}
+
+/**
+ * --assignee 透传给 gh issue create（默认实跑，无需旧 --create-issues）。
  */
 function caseAssigneeFlag(base) {
   const dir = makeCaseDir(base, 'assignee');
   const input = writeJson(dir, 'report.json', validReport());
   const fake = setupFakeGh(dir, { labels: ['mutation', 'nightly'] });
-  const cli = runCli(['--input', input, '--create-issues', '--assignee', 'bob'], dir, fake);
+  const cli = runCli(['--input', input, '--assignee', 'bob'], dir, fake);
   assertCase(cli.status === 0, `退出码应为 0，实际 ${cli.status}: ${cli.stderr}`);
   const creates = readGhLog(fake.__logPath).filter((argv) => argv[0] === 'issue' && argv[1] === 'create');
   assertCase(creates.length === 2, '应创建 2 个 issue');
@@ -989,25 +1014,29 @@ function caseAssigneeFlag(base) {
 }
 
 /**
- * --assignee 只能与 --create-issues 同用，否则退出码 1。
+ * --assignee 与 --dry-run 同用被拒（只有创建模式才有指派），退出码 1。
  */
-function caseAssigneeWithoutCreateRejected(base) {
+function caseAssigneeWithDryRunRejected(base) {
   const dir = makeCaseDir(base, 'assignee-no-create');
   const input = writeJson(dir, 'report.json', validReport());
   const cli = runCli(['--input', input, '--dry-run', '--assignee', 'bob'], dir);
-  assertCase(cli.status === 1, `--assignee 缺 --create-issues 退出码应为 1，实际 ${cli.status}`);
+  assertCase(cli.status === 1, `--assignee 带 --dry-run 退出码应为 1，实际 ${cli.status}`);
   assertCase(/--assignee/i.test(cli.stderr), `stderr 应点名 --assignee，实际：${cli.stderr}`);
 }
 
 /**
- * --dry-run 与 --create-issues 互斥，退出码 1。
+ * --create-issues 兼容保留为 no-op：与 --dry-run 同用时按预览处理
+ * （不再互斥报错），全程零 gh 调用（gh 指向不存在可执行文件仍成功）。
  */
-function caseDryRunCreateConflict(base) {
-  const dir = makeCaseDir(base, 'mode-conflict');
+function caseLegacyCreateIssuesFlagNoop(base) {
+  const dir = makeCaseDir(base, 'legacy-create-flag');
   const input = writeJson(dir, 'report.json', validReport());
-  const cli = runCli(['--input', input, '--dry-run', '--create-issues'], dir);
-  assertCase(cli.status === 1, `模式冲突退出码应为 1，实际 ${cli.status}`);
-  assertCase(/--dry-run|--create-issues/i.test(cli.stderr), `stderr 应点名冲突旗标，实际：${cli.stderr}`);
+  const cli = runCli(['--input', input, '--dry-run', '--create-issues'], dir, {
+    MUTATION_ISSUES_GH: 'definitely-not-a-real-gh-binary-xyz'
+  });
+  assertCase(cli.status === 0, `兼容 no-op 退出码应为 0，实际 ${cli.status}: ${cli.stderr}`);
+  assertCase(cli.stdout.includes('mode=dry-run'), `--dry-run 应优先于兼容 no-op，实际：${cli.stdout}`);
+  assertCase(fs.existsSync(previewPath(dir, 'src/domain/pricing.ts')), '应按预览模式写 body 预览文件');
 }
 
 /**
@@ -1062,10 +1091,11 @@ function main() {
     caseGhFailureGraceful,
     caseCreateIssuesFakeGh,
     caseDedupSkip,
+    caseDefaultCreatesIssues,
     casePartialGhFailureKeepsCompletedQueues,
     caseAssigneeFlag,
-    caseAssigneeWithoutCreateRejected,
-    caseDryRunCreateConflict,
+    caseAssigneeWithDryRunRejected,
+    caseLegacyCreateIssuesFlagNoop,
     caseQueueOverwrite
   ];
   try {

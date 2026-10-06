@@ -13,15 +13,17 @@
  *     新编号、去重跳过组带既有 open issue 编号，dry-run 省略 issueNumber）。
  *
  * 模式：
- *   默认 / --dry-run  预览模式：写队列文件与 body 预览
- *                     （.mutation-queue/{file}.body.md），不调用 gh；
- *   --create-issues   实跑模式：先经 gh label list/create 确保标签存在，
+ *   默认（无模式旗标）实跑模式：先经 gh label list/create 确保标签存在，
  *                     再用 gh issue list 做客户端前缀去重
  *                     （[Mutation] {file} -  + mutation 标签 + open 状态），
  *                     已有 open issue 的组跳过并计数，其余经
  *                     gh issue create --title --body-file --label 创建。
  *                     每组创建/跳过完成后队列文件立即原子写盘（临时文件 +
  *                     rename 覆盖），gh 中途失败时已完成组的条目保留。
+ *   --dry-run         预览模式：写队列文件与 body 预览
+ *                     （.mutation-queue/{file}.body.md），不调用 gh。
+ *   --create-issues   兼容 no-op：实跑已是默认行为，传入不改变模式
+ *                     （与 --dry-run 同用时按预览处理）。
  *
  * 可选：--exemptions <path> 指定豁免文件（缺省不过滤；文件缺失/畸形/schema
  * 非法退出码 1）；--output <path> 写 manifest（issue 列表 + 元数据 + 四计数
@@ -173,6 +175,7 @@ function parseArgs(argv) {
       continue;
     }
     if (token === '--create-issues') {
+      // 兼容旧接口：实跑已是默认行为，该旗标保留为 no-op
       args.createIssues = true;
       continue;
     }
@@ -189,11 +192,8 @@ function parseArgs(argv) {
     }
     args[prop] = argv[++i];
   }
-  if (args.dryRun && args.createIssues) {
-    throw new CliError('--dry-run and --create-issues are mutually exclusive');
-  }
-  if (args.assignee !== undefined && !args.createIssues) {
-    throw new CliError('--assignee requires --create-issues (nothing is assigned in dry-run mode)');
+  if (args.assignee !== undefined && args.dryRun) {
+    throw new CliError('--assignee requires create mode (nothing is assigned with --dry-run)');
   }
   return args;
 }
@@ -800,19 +800,22 @@ function printHelp() {
     'and a machine-readable queue file .mutation-queue/{file}.json for agents.',
     '',
     'Modes:',
-    '  default / --dry-run  Preview: write queue files and body previews',
-    '                       (.mutation-queue/{file}.body.md); never calls gh.',
-    '  --create-issues      Real run: ensure labels (gh label list/create),',
-    '                       dedup against open issues (prefix "[Mutation] {file} - "',
-    '                       + mutation label), then create via gh issue create.',
-    '  The two flags are mutually exclusive.',
+    '  default (no mode flag)  Create: ensure labels (gh label list/create),',
+    '                          dedup against open issues (prefix "[Mutation] {file} - "',
+    '                          + mutation label), then create via gh issue create.',
+    '  --dry-run               Preview: write queue files and body previews',
+    '                          (.mutation-queue/{file}.body.md); never calls gh.',
+    '  --create-issues         Accepted as a no-op for backward compatibility;',
+    '                          creating issues is already the default. Combined with',
+    '                          --dry-run it stays in preview mode.',
     '',
     'Options:',
     '  --input <path>       Unified mutation report JSON (required)',
     '  --exemptions <path>  .equivalent-mutants.json; missing file, invalid JSON or',
     '                       schema exit with code 1 (default: no filtering)',
     '  --output <path>      Write a manifest JSON (issue list + metadata + summary)',
-    '  --assignee <login>   Assign created issues to this user (requires --create-issues)',
+    '  --assignee <login>   Assign created issues to this user (create mode only;',
+    '                       refused together with --dry-run)',
     '  -h, --help           Show this help and exit',
     '',
     'Output:',
@@ -847,10 +850,11 @@ function printHelp() {
     '                      e.g. "node|C:/tools/fake-gh.mjs"',
     '',
     'Examples:',
+    '  node scripts/create-mutation-issues.mjs --input unified-mutation-report.json',
     '  node scripts/create-mutation-issues.mjs --input unified-mutation-report.json --dry-run',
-    '  node scripts/create-mutation-issues.mjs --input unified-mutation-report.json \\',
-    '      --exemptions .equivalent-mutants.json --output manifest.json --create-issues',
-    '  node scripts/create-mutation-issues.mjs --input report.json --create-issues --assignee alice',
+    '  node scripts/create-mutation-issues.mjs --input report.json \\',
+    '      --exemptions .equivalent-mutants.json --output manifest.json',
+    '  node scripts/create-mutation-issues.mjs --input report.json --assignee alice',
     '',
     'Exit codes:',
     '  0  success (including empty lists and skipped duplicates)',
@@ -886,7 +890,9 @@ function main(argv) {
     printUsage(process.stderr);
     return 1;
   }
-  const createMode = args.createIssues;
+  // 默认即实跑（fix-issue-creator-defaults）；--dry-run 显式进入预览，
+  // --create-issues 为兼容 no-op，不再参与模式判定。
+  const createMode = !args.dryRun;
 
   const report = validateReport(readJsonFile(args.input, 'unified mutation report'), args.input);
   const survivors = report.mutants.filter((mutant) => mutant.status === 'Survived');
