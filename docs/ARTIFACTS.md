@@ -59,6 +59,7 @@
 | [../scripts/calculate_crap.mjs](../scripts/calculate_crap.mjs) | 本仓执行辅助 | current | CRAP (Change Risk Anti-Patterns) 计算器 CLI 工具。读取覆盖率和圈复杂度报告（TypeScript: c8 + escomplex; Python: pytest-cov + radon），计算 CRAP 值（complexity² × (1 − coverage)³ + complexity），输出文本摘要和 JSON 报告。默认阈值 6（Uncle Bob 对 AI 代码的建议）。支持 --coverage, --complexity, --threshold, --lang (ts/py/js/javascript/typescript/python), --output。交付于 issue #42 任务 |
 | [../scripts/test_calculate_crap.mjs](../scripts/test_calculate_crap.mjs) | 本仓执行辅助 | current | CRAP 计算器的断言驱动测试套件。23 个测试用例覆盖公式计算、阈值过滤、边界情况（0%/100% 覆盖率）、输入验证、TypeScript/Python 双语言支持。在 os.tmpdir() 生成临时 fixtures，以子进程方式运行计算器，验证输出和退出码。手动运行。未接 hook/CI |
 | [quality-gates/mutation-testing.md](quality-gates/mutation-testing.md) | 给 agent 的按需说明 | current | 变异测试运营手册，包含三个操作程序：(1) 阈值冻结策略（baseline 冻结、新代码 ≥80%、遗留代码豁免、重构时提升）；(2) 等价变异体豁免流程（识别 → 审查 → 记录，含 equivalent-mutants.json 架构）；(3) 胶水代码边界定义（逻辑层需变异测试、适配层豁免，含架构信号与 Stryker/mutmut 配置示例）。引用 Uncle Bob 的 CRAP 阈值建议（人类 4，AI 6-8）。交付于 issue #42 任务 |
+| [formats/unified-mutation-report.md](formats/unified-mutation-report.md) | 给 agent 的按需说明 | current | 夜跑变异测试闭环的统一变异体报告格式契约 v1.0（unified-mutation-report.json）：顶层 tool/timestamp/mutants 与 mutant 的 id/file/line/column/mutationType/original/mutated/status 字段约束，mutationType 与 status 闭合枚举及 Stryker/mutmut 归一化映射，draft-07 JSON Schema 与 TS/Py 完整示例，消费者约定与演进规则。是 parse-stryker-report.mjs 与 parse_mutmut_report.py 的输出契约（解析器尚未实现）。交付于夜跑闭环 M1 |
 | [interviews/2026-09-04-founding-interview.md](interviews/2026-09-04-founding-interview.md) | 立项来源 | reference | 历史去敏访谈，不覆盖现行愿景与纪律 |
 | [reviews/](reviews/) | 讨论材料集合入口 | reference | 子文档各自状态需要核实，不将整个目录认作实施基线 |
 | [reviews/2026-09-10-document-homes-adoption/](reviews/2026-09-10-document-homes-adoption/) | 讨论留档 | current | 2026-09-10 文档归属正式采纳三轮会议留档、表决与维护者裁定，0.3.0 生效依据 |
@@ -216,3 +217,12 @@
 - 处理结果：P1、P2、P3、P4、P5、P8 为未发现差异。本段不新增 Markdown 链接，写入后复跑仍为 6/6 PASS、退出码 0。检查器运行前后 `git status` 一致。
 - 未覆盖：语义定位器未建设。hook/CI 未接线。未跟踪目录未纳入。
 - 未决：#29 待排期 §9 讨论。#9 phase-2b 待授权。#10 后续范围待裁定。
+2026-10-06（夜跑闭环 M1：统一变异体报告格式）：新增 `docs/formats/unified-mutation-report.md`（契约 v1.0）：顶层 tool/timestamp/mutants 结构、mutant 八字段约束与归一化规则（id、POSIX 路径、1-based 坐标、最小文本片段、确定性排序）、mutationType 闭合枚举 25 值（StrykerJS 19 mutator + Python 来源 5 类 + Unknown 兜底）、status 统一枚举 10 值与 Stryker/mutmut 归一化映射、draft-07 JSON Schema、TS/Py 完整示例、消费者约定与演进规则。解析器与消费脚本尚未实现，文档先于实现冻结契约；报告不含统计字段，分数类消费（killed/total）的衔接留给 baseline 工具施工票。README 与 AGENTS 指针未改（对外导航更新按夜跑闭环 M4 计划）。固定层未改。未跟踪目录 `docs/reviews/2026-09-07-lazypack-harvest/` 未纳入、未删除。
+
+本轮防腐检查记录：
+
+- 检查范围：机器检查 P1、P2、P3、P4、P5、P8，共跑三次（开工、插入 §3 登记行后、写入本段后）。人工阅读：新文档「状态与边界」一节不把解析器写成已交付；§3 登记行只指向本轮新建文档；§1 归属表与既有登记段未被改写。
+- 依据版本：开工提交 `1a238c454362f242207bafdf0abf9c805e08ca65`。收尾核对在包含本段的工作区；提交号与本段同一提交，写入时还没有。声明正文为 `docs/agents/doc-pairs.md`。命令为仓库根 `node scripts/check_doc_pairs.mjs`。开工检查 6/6 PASS、退出码 0（P4 links=44 failures=0，P5 agents=6 readme=8，P8 commands=generate,verify）。
+- 处理结果：P1、P2、P3、P4、P5、P8 为未发现差异。§3 登记行新增一条 Markdown 链接（目标为本轮新建的 `formats/unified-mutation-report.md`），本段不新增链接；插入登记行后复跑 6/6 PASS、退出码 0（P4 links=45 failures=0）。同源清单由 `scripts/handoff_manifest.js generate` 生成，长证据与清单在系统临时目录 `nightly-loop-m1-unified-format/`，登记册不手抄哈希。格式文档的机读校验（4 个 JSON 块解析、3 个示例过内嵌 schema、10 组负例被拒、相对链接可解析、§4 枚举表覆盖 schema 枚举）由临时脚本完成，未入库。
+- 未覆盖：格式契约与其未来消费者脚本（解析器、baseline 工具、issue 创建）之间的语义一致性没有声明对子，脚本落地前无法机器核对；任意代码 diff 到文档段落的语义定位器未建设。hook/CI 未接线。
+- 未决：统一报告只含存活变异体且无统计字段，与 baseline 分数计算所需 killed/total 的衔接待 baseline 工具施工票确认。夜跑验证契约 VAL-STRYKER-003 的字段名（mutator/replacement）与本文档字段名（mutationType/mutated）不一致，待主持者在解析器验证前对齐。
