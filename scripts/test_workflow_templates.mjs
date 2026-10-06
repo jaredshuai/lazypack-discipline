@@ -31,6 +31,9 @@
  *     模式），依赖可安装性由夹具 node_modules 与后续 Stryker 实跑证明；
  *   - create-mutation-issues.mjs 注入 --dry-run：本仓边界禁止开发期创建
  *     真实 GitHub issue；workflow 头注也写明配置期可用 --dry-run 验证；
+ *   - py 路径 Install dependencies 原文执行，但经 pyEnv 注入夹具 .venv 的
+ *     PATH，pip/python 都解析到 venv 内，安装不触全局环境；夹具
+ *     requirements.txt 与 pyproject [dev] extras 同源（逐步断言一致性）。
  *   - actions/* 步骤（checkout/setup-node/setup-python/upload-artifact）
  *     无法本地执行，以等价断言覆盖：checkout=沙箱即检出结果（workflow
  *     文件随仓安装）、setup-node/python=本机工具链实跑、upload-artifact=
@@ -878,6 +881,23 @@ function caseSimulatePyWorkflow(base, results, state) {
     copyToolScripts(sandbox, PY_TOOL_SCRIPTS, wfName);
     installWorkflow(sandbox, TEMPLATE_PY, `${wfName}.yml`);
     return `测试仓库 ${sandbox}${venv.provisioned ? '（venv 为本轮自动装配）' : ''}`;
+  });
+
+  // 步骤 4 Install dependencies：requirements.txt 原文执行（pyEnv 注入 venv
+  // PATH 后 pip/python 都解析到夹具 .venv，不触全局环境；依赖已就位时 pip
+  // 直接「already satisfied」秒过）。顺带断言 requirements.txt 与 pyproject
+  // [dev] extras（PY_DEV_DEPENDENCIES）同源，防止两处依赖清单漂移。
+  step(results, ctx, '[py-wf] pip install (requirements.txt)', () => {
+    const sandboxRequirements = path.join(sandbox, 'requirements.txt');
+    assertCase(fs.existsSync(sandboxRequirements), '夹具应有 requirements.txt（workflow 步骤 4 的安装清单）');
+    const requirements = fs.readFileSync(sandboxRequirements, 'utf8');
+    for (const dep of PY_DEV_DEPENDENCIES) {
+      assertCase(requirements.includes(dep), `requirements.txt 应含 ${dep}（与 pyproject [dev] extras 同源）`);
+    }
+    const block = findRunBlock(doc, wfName, 'Install dependencies');
+    assertBashOk(runBashBlock(block, sandbox, pyEnv(venv, sandbox), SPAWN_TIMEOUT_MS.install),
+      'pip install (requirements.txt)');
+    return 'requirements.txt 安装步骤模拟执行成功（venv 内，未触全局环境）';
   });
 
   // 步骤 5 mutmut run（continue-on-error：存活变异体导致的非零码要容忍，

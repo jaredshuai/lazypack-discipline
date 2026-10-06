@@ -13,7 +13,8 @@
  * 各语言路径（VAL-CROSS-001 / VAL-CROSS-002）：
  *   TypeScript: Stryker → parse-stryker-report → baseline init → check
  *               → create-issues --dry-run
- *   Python:     mutmut run → result-ids 导出 → show all 捕获
+ *   Python:     mutmut run（经夹具 run_mutmut.py 包装器归一化退出码，
+ *               存活变异体位不再是错误）→ result-ids 导出 → show all 捕获
  *               → parse_mutmut_report → baseline init → check
  *               → create-issues --dry-run
  *
@@ -230,6 +231,27 @@ function ensurePythonVenv() {
  */
 function runMutmut(venv, args, sandbox) {
   return spawnSync(venv.mutmutExe, args, {
+    encoding: 'utf8',
+    windowsHide: true,
+    cwd: sandbox,
+    maxBuffer: SPAWN_MAX_BUFFER,
+    timeout: SPAWN_TIMEOUT_MS.mutmut,
+    env: {
+      ...process.env,
+      PATH: `${venv.binDir}${path.delimiter}${process.env.PATH}`,
+      PYTHONPATH: path.join(sandbox, 'src')
+    }
+  });
+}
+
+/**
+ * 经夹具 run_mutmut.py 包装器运行 mutmut 子命令（沙箱内副本）。包装器按位
+ * 裁决 mutmut 退出码：存活/超时/可疑位（偶数）归一化为 0，致命错误位
+ * （奇数）透传非零——与 runMutmut 同一套环境约定，仅供 `run` 这类会因
+ * 存活变异体退非零的子命令使用。
+ */
+function runMutmutWrapper(venv, args, sandbox) {
+  return spawnSync(venv.venvPython, [path.join(sandbox, 'run_mutmut.py'), ...args], {
     encoding: 'utf8',
     windowsHide: true,
     cwd: sandbox,
@@ -550,12 +572,14 @@ function casePythonPath(base, results) {
   });
 
   step(results, ctx, '[py] mutmut-run', () => {
-    const run = runMutmut(venv, ['run'], sandbox);
-    assertCase(run.status !== null, `mutmut run 未能执行：${run.error}`);
-    assertCase((run.status & 1) === 0,
-      `mutmut run 命中致命错误位（奇数退出码 ${run.status}）：${(run.stderr || run.stdout || '').slice(-600)}`);
+    const wrapper = path.join(sandbox, 'run_mutmut.py');
+    assertCase(fs.existsSync(wrapper), '夹具应提供 run_mutmut.py 退出码归一化包装器');
+    const run = runMutmutWrapper(venv, ['run'], sandbox);
+    assertCase(run.status !== null, `run_mutmut.py 未能执行：${run.error}`);
+    assertCase(run.status === 0,
+      `mutmut run 经包装器应归一化退出 0（存活变异体位属预期，非零即真实失败）：${(run.stderr || run.stdout || '').slice(-600)}`);
     assertCase(fs.existsSync(path.join(sandbox, '.mutmut-cache')), 'mutmut run 后应生成 .mutmut-cache');
-    return `mutmut 退出 ${run.status}（存活变异体位，属预期），缓存已生成`;
+    return 'mutmut run 完成（包装器归一化退出 0，存活变异体交后续步骤处理），缓存已生成';
   });
 
   step(results, ctx, '[py] export-results', () => {

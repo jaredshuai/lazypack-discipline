@@ -1,0 +1,7 @@
+# 与 pyproject.toml [project.optional-dependencies].dev 完全一致；
+# templates/.github/workflows/nightly-mutation-py.yml 步骤 4 用
+# pip install -r requirements.txt 安装项目依赖，改动时两处同步。
+# mutmut 固定 2.x：3.x 不再写夜跑闭环工具链读取的 .mutmut-cache，
+# 也不认 setup.cfg 的 [mutmut] 段（另需 pip install -e . 安装本包本身）。
+pytest>=7.0,<9
+mutmut>=2.4,<3
