@@ -10,6 +10,9 @@
  *   - 豁免过滤：.equivalent-mutants.json 命中的变异体不得进入队列文件
  *     （VAL-CROSS-003）。
  *
+ * 清理安全：删除沙箱树前先摘除内部 junction（成功与失败清理路径同口径），
+ * 避免 Windows 递归删除顺着链接伤及夹具 node_modules。
+ *
  * 各语言路径（VAL-CROSS-001 / VAL-CROSS-002）：
  *   TypeScript: Stryker → parse-stryker-report → baseline init → check
  *               → create-issues --dry-run
@@ -69,6 +72,23 @@ const SPAWN_TIMEOUT_MS = {
 const PY_DEV_DEPENDENCIES = ['pytest>=7.0,<9', 'mutmut>=2.4,<3'];
 
 const MUTMUT_STATUSES = ['killed', 'timeout', 'survived', 'suspicious', 'skipped', 'untested'];
+
+/** ISO-8601 UTC 时刻形状（YYYY-MM-DDTHH:MM:SSZ），统一报告/基线/manifest 校验共用。 */
+const ISO_UTC_PATTERN = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/;
+
+/**
+ * 统一报告 mutationType 闭合枚举（docs/formats/unified-mutation-report.md §4：
+ * 19 个 StrykerJS mutator 名 + 5 个 Python 通用类别 + Unknown 兜底）。
+ */
+const MUTATION_TYPES = new Set([
+  'ArithmeticOperator', 'ArrayDeclaration', 'ArrowFunction', 'Block',
+  'BooleanLiteral', 'ConditionalExpression', 'EqualityOperator', 'LogicalOperator',
+  'MethodExpression', 'MethodName', 'NegateCondition', 'NumberLiteral',
+  'ObjectLiteral', 'OptionalChaining', 'Regex', 'StringLiteral',
+  'SwitchStatement', 'UnaryOperator', 'UpdateOperator', 'BreakContinue',
+  'ComparisonOperator', 'DecoratorRemoval', 'KeywordArgument', 'KeywordLiteral',
+  'Unknown'
+]);
 
 /** --keep 时保留沙箱目录（供 main 按选项赋值）。 */
 let KEEP_SANDBOXES = false;
@@ -294,16 +314,38 @@ function linkNodeModules(sandbox) {
 }
 
 /**
+ * 深度优先摘除 dir 下所有 junction/symlink（不进入链接内部），返回摘除数量。
+ * Windows 上递归删除含 junction 的目录树可能顺着链接伤及链接目标（如夹具
+ * node_modules），删树前必须先摘链接；目录不存在或不可读时按无链接处理。
+ */
+function unlinkJunctionsUnder(dir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isSymbolicLink()) {
+      fs.rmSync(fullPath, { recursive: true, force: true });
+      removed += 1;
+    } else if (entry.isDirectory()) {
+      removed += unlinkJunctionsUnder(fullPath);
+    }
+  }
+  return removed;
+}
+
+/**
  * 清理沙箱：先摘 junction 再删树；校验夹具 node_modules 完好（--keep 时保留）。
  */
 function cleanupSandbox(sandbox, linkedNodeModules) {
   if (KEEP_SANDBOXES) {
     return `沙箱保留（--keep）：${sandbox}`;
   }
-  const junction = path.join(sandbox, 'node_modules');
-  if (fs.existsSync(junction)) {
-    fs.rmSync(junction, { recursive: true, force: true });
-  }
+  unlinkJunctionsUnder(sandbox);
   fs.rmSync(sandbox, { recursive: true, force: true });
   if (linkedNodeModules) {
     assertCase(
@@ -331,43 +373,116 @@ function readJson(filePath) {
 }
 
 /**
- * 校验统一变异体报告契约（docs/formats/unified-mutation-report.md v1.1）。
- * 返回 { score, mutants } 供后续步骤断言。
+ * 校验单个 mutant 对象的八字段契约（docs/formats/unified-mutation-report.md §2）：
+ * 字段存在且非空、id 词形/前缀/唯一性、file 为项目根相对 POSIX 路径、
+ * line/column 为 >=1 整数、mutationType 在 §4 闭合枚举内、original/mutated
+ * 为字符串且不相等、status 恒为 Survived。seenIds 用于同文件内 id 去重。
  */
-function assertUnifiedReport(data, expectedTool, filePath) {
-  assertCase(data.tool === expectedTool, `${filePath}: tool 应为 ${expectedTool}，实际 ${JSON.stringify(data.tool)}`);
-  assertCase(typeof data.timestamp === 'string' && data.timestamp.length > 0, `${filePath}: timestamp 应为非空字符串`);
-  assertCase(Array.isArray(data.mutants) && data.mutants.length > 0, `${filePath}: mutants 应为非空数组`);
-  assertCase(
-    typeof data.score === 'number' && data.score >= 0 && data.score <= 100,
-    `${filePath}: score 应为 [0,100] 内的数字，实际 ${JSON.stringify(data.score)}`
-  );
-  for (const mutant of data.mutants) {
-    for (const field of ['id', 'file', 'line', 'column', 'mutationType', 'original', 'mutated', 'status']) {
-      assertCase(
-        mutant[field] !== undefined && mutant[field] !== null && mutant[field] !== '',
-        `${filePath}: mutant 缺字段 ${field}：${JSON.stringify(mutant)}`
-      );
-    }
+function assertMutantObject(mutant, filePath, expectedTool, seenIds) {
+  for (const field of ['id', 'file', 'line', 'column', 'mutationType', 'original', 'mutated', 'status']) {
     assertCase(
-      Number.isInteger(mutant.line) && mutant.line >= 1,
-      `${filePath}: line 应为 >=1 的整数，实际 ${JSON.stringify(mutant.line)}`
+      mutant[field] !== undefined && mutant[field] !== null && mutant[field] !== '',
+      `${filePath}: mutant 缺字段 ${field}：${JSON.stringify(mutant)}`
     );
-    assertCase(mutant.status === 'Survived', `${filePath}: 统一报告只应含存活变异体，实际 status=${mutant.status}`);
   }
-  return { score: data.score, mutants: data.mutants };
+  assertCase(
+    typeof mutant.id === 'string' && /^(stryker|mutmut)-\S+$/.test(mutant.id),
+    `${filePath}: mutant.id 应形如 <tool>-<非空白>，实际 ${JSON.stringify(mutant.id)}`
+  );
+  assertCase(
+    mutant.id.startsWith(`${expectedTool}-`),
+    `${filePath}: mutant.id 前缀应与 tool 一致（${expectedTool}-），实际 ${JSON.stringify(mutant.id)}`
+  );
+  assertCase(
+    !seenIds.has(mutant.id),
+    `${filePath}: mutant.id 应在同文件内唯一，重复：${JSON.stringify(mutant.id)}`
+  );
+  seenIds.add(mutant.id);
+  assertCase(
+    typeof mutant.file === 'string' && !mutant.file.includes('\\') &&
+    !mutant.file.startsWith('./') && !mutant.file.startsWith('/'),
+    `${filePath}: mutant.file 应为项目根相对 POSIX 路径，实际 ${JSON.stringify(mutant.file)}`
+  );
+  assertCase(
+    Number.isInteger(mutant.line) && mutant.line >= 1,
+    `${filePath}: line 应为 >=1 的整数，实际 ${JSON.stringify(mutant.line)}`
+  );
+  assertCase(
+    Number.isInteger(mutant.column) && mutant.column >= 1,
+    `${filePath}: column 应为 >=1 的整数，实际 ${JSON.stringify(mutant.column)}`
+  );
+  assertCase(
+    MUTATION_TYPES.has(mutant.mutationType),
+    `${filePath}: mutationType 应为契约 §4 闭合枚举值，实际 ${JSON.stringify(mutant.mutationType)}`
+  );
+  assertCase(
+    typeof mutant.original === 'string',
+    `${filePath}: original 应为字符串，实际 ${JSON.stringify(mutant.original)}`
+  );
+  assertCase(
+    typeof mutant.mutated === 'string' && mutant.mutated !== mutant.original,
+    `${filePath}: mutated 应为字符串且不等于 original，实际 ${JSON.stringify(mutant.mutated)}`
+  );
+  assertCase(mutant.status === 'Survived', `${filePath}: 夜跑管线只应含存活变异体，实际 status=${mutant.status}`);
 }
 
 /**
- * 校验基线文件契约（docs/formats/mutation-baseline.md v1.0）。
+ * 校验统一变异体报告契约（docs/formats/unified-mutation-report.md v1.1）：
+ * 顶层 tool/timestamp（ISO-8601 UTC）/mutants/score 与每个 mutant 的完整
+ * 字段约束。返回 { score, mutants, tool, timestamp } 供后续步骤断言。
+ */
+function assertUnifiedReport(data, expectedTool, filePath) {
+  assertCase(data.tool === expectedTool, `${filePath}: tool 应为 ${expectedTool}，实际 ${JSON.stringify(data.tool)}`);
+  assertCase(
+    typeof data.timestamp === 'string' && ISO_UTC_PATTERN.test(data.timestamp),
+    `${filePath}: timestamp 应为 YYYY-MM-DDTHH:MM:SSZ 的 UTC 时刻，实际 ${JSON.stringify(data.timestamp)}`
+  );
+  assertCase(Array.isArray(data.mutants) && data.mutants.length > 0, `${filePath}: mutants 应为非空数组`);
+  assertCase(
+    typeof data.score === 'number' && Number.isFinite(data.score) && data.score >= 0 && data.score <= 100,
+    `${filePath}: score 应为 [0,100] 内的数字，实际 ${JSON.stringify(data.score)}`
+  );
+  const seenIds = new Set();
+  for (const mutant of data.mutants) {
+    assertMutantObject(mutant, filePath, expectedTool, seenIds);
+  }
+  return { score: data.score, mutants: data.mutants, tool: data.tool, timestamp: data.timestamp };
+}
+
+/**
+ * 校验基线文件契约（docs/formats/mutation-baseline.md v1.0）：version/updated
+ * （ISO-8601 UTC）/四统计值的类型与范围/killed+survived≤total 跨字段一致性。
  */
 function assertBaselineFile(data, filePath, expectedScore) {
   assertCase(data.version === '1.0', `${filePath}: version 应为 "1.0"，实际 ${JSON.stringify(data.version)}`);
+  assertCase(
+    typeof data.updated === 'string' && ISO_UTC_PATTERN.test(data.updated),
+    `${filePath}: updated 应为 YYYY-MM-DDTHH:MM:SSZ 的 UTC 时刻，实际 ${JSON.stringify(data.updated)}`
+  );
   assertCase(data.baseline && typeof data.baseline === 'object', `${filePath}: 应含 baseline 对象`);
   const baseline = data.baseline;
-  for (const field of ['score', 'killed', 'survived', 'total']) {
-    assertCase(typeof baseline[field] === 'number', `${filePath}: baseline.${field} 应为数字`);
-  }
+  assertCase(
+    typeof baseline.score === 'number' && Number.isFinite(baseline.score) &&
+    baseline.score >= 0 && baseline.score <= 100,
+    `${filePath}: baseline.score 应为 [0,100] 内的数字，实际 ${JSON.stringify(baseline.score)}`
+  );
+  assertCase(
+    Number.isInteger(baseline.killed) && baseline.killed >= 0,
+    `${filePath}: baseline.killed 应为 >=0 的整数，实际 ${JSON.stringify(baseline.killed)}`
+  );
+  assertCase(
+    Number.isInteger(baseline.survived) && baseline.survived >= 0,
+    `${filePath}: baseline.survived 应为 >=0 的整数，实际 ${JSON.stringify(baseline.survived)}`
+  );
+  assertCase(
+    Number.isInteger(baseline.total) && baseline.total >= 1,
+    `${filePath}: baseline.total 应为 >=1 的整数，实际 ${JSON.stringify(baseline.total)}`
+  );
+  assertCase(
+    baseline.killed + baseline.survived <= baseline.total,
+    `${filePath}: killed+survived 应 ≤ total（其余状态可计入 total），实际 ` +
+    `${baseline.killed}+${baseline.survived}>${baseline.total}`
+  );
   assertCase(
     Math.abs(baseline.score - expectedScore) <= 1e-9,
     `${filePath}: baseline.score ${baseline.score} 应与统一报告分数 ${expectedScore} 一致`
@@ -376,30 +491,97 @@ function assertBaselineFile(data, filePath, expectedScore) {
 }
 
 /**
- * 读取 manifest（create-mutation-issues --output），校验 dry-run 摘要契约，
+ * 读取 manifest（create-mutation-issues --output），按其施工票契约完整校验
+ * dry-run 输出：元数据（tool/timestamp/generatedAt/input/exemptionsFile）、
+ * summary 五计数、issue 条目（title/labels/queuePath/previewPath/status/
+ * dry-run 不带编号）与队列文件（version/tool/timestamp/逐字段 mutant）。
  * 返回 { manifest, queueByFile }。
  */
-function readDryRunManifest(manifestPath, sandbox, expectedMutantCount) {
+function readDryRunManifest(manifestPath, sandbox, expectedMutantCount, expectedTool, expectedTimestamp) {
   const manifest = readJson(manifestPath);
-  assertCase(manifest.version === '1.0', `manifest: version 应为 "1.0"`);
+  assertCase(manifest.version === '1.0', `manifest: version 应为 "1.0"，实际 ${JSON.stringify(manifest.version)}`);
   assertCase(manifest.mode === 'dry-run', `manifest: mode 应为 dry-run，实际 ${JSON.stringify(manifest.mode)}`);
+  assertCase(manifest.tool === expectedTool, `manifest: tool 应为 ${expectedTool}，实际 ${JSON.stringify(manifest.tool)}`);
+  assertCase(
+    manifest.timestamp === expectedTimestamp,
+    `manifest: timestamp 应与统一报告一致（${expectedTimestamp}），实际 ${JSON.stringify(manifest.timestamp)}`
+  );
+  assertCase(
+    typeof manifest.generatedAt === 'string' && ISO_UTC_PATTERN.test(manifest.generatedAt),
+    `manifest: generatedAt 应为 YYYY-MM-DDTHH:MM:SSZ 的 UTC 时刻，实际 ${JSON.stringify(manifest.generatedAt)}`
+  );
+  assertCase(
+    manifest.generatedAt >= manifest.timestamp,
+    `manifest: generatedAt (${manifest.generatedAt}) 不得早于报告 timestamp (${manifest.timestamp})`
+  );
+  assertCase(
+    typeof manifest.input === 'string' && manifest.input.length > 0,
+    `manifest: input 应为非空字符串，实际 ${JSON.stringify(manifest.input)}`
+  );
+  assertCase(
+    manifest.exemptionsFile === null || typeof manifest.exemptionsFile === 'string',
+    `manifest: exemptionsFile 应为 null 或字符串，实际 ${JSON.stringify(manifest.exemptionsFile)}`
+  );
   const summary = manifest.summary || {};
+  for (const field of ['totalMutants', 'exempted', 'nonSurvivedDropped', 'issuesCreated', 'issuesSkipped']) {
+    assertCase(
+      Number.isInteger(summary[field]) && summary[field] >= 0,
+      `manifest: summary.${field} 应为 >=0 的整数，实际 ${JSON.stringify(summary[field])}`
+    );
+  }
   assertCase(summary.totalMutants === expectedMutantCount,
     `manifest: summary.totalMutants 应为 ${expectedMutantCount}，实际 ${JSON.stringify(summary.totalMutants)}`);
   assertCase(summary.issuesCreated === 0, `manifest: dry-run 不应创建 issue，实际 ${JSON.stringify(summary.issuesCreated)}`);
+  assertCase(summary.issuesSkipped === 0, `manifest: dry-run 不应触发去重跳过，实际 ${JSON.stringify(summary.issuesSkipped)}`);
+  assertCase(Array.isArray(manifest.staleExemptionIds), 'manifest: staleExemptionIds 应为数组');
   assertCase(Array.isArray(manifest.issues) && manifest.issues.length > 0, 'manifest: issues 应为非空数组');
   const queueByFile = new Map();
   for (const issue of manifest.issues) {
-    assertCase(Array.isArray(issue.mutants) || issue.mutantCount > 0, `manifest: ${issue.file} 应带变异体`);
+    assertCase(typeof issue.file === 'string' && issue.file.length > 0,
+      `manifest: issue.file 应为非空字符串，实际 ${JSON.stringify(issue.file)}`);
+    assertCase(
+      Number.isInteger(issue.mutantCount) && issue.mutantCount >= 1,
+      `manifest: ${issue.file} 的 mutantCount 应为 >=1 的整数，实际 ${JSON.stringify(issue.mutantCount)}`
+    );
+    assertCase(
+      issue.title === `[Mutation] ${issue.file} - ${issue.mutantCount} survivors`,
+      `manifest: title 应为 "[Mutation] {file} - N survivors"，实际 ${JSON.stringify(issue.title)}`
+    );
+    assertCase(
+      Array.isArray(issue.labels) && issue.labels.length === 2 &&
+      issue.labels[0] === 'mutation' && issue.labels[1] === 'nightly',
+      `manifest: labels 应为 ["mutation","nightly"]，实际 ${JSON.stringify(issue.labels)}`
+    );
+    assertCase(
+      issue.queuePath === `.mutation-queue/${issue.file}.json`,
+      `manifest: queuePath 应为 .mutation-queue/${issue.file}.json，实际 ${JSON.stringify(issue.queuePath)}`
+    );
+    assertCase(
+      typeof issue.previewPath === 'string' && issue.previewPath.length > 0,
+      `manifest: dry-run issue 应带 previewPath，实际 ${JSON.stringify(issue.previewPath)}`
+    );
+    assertCase(
+      Array.isArray(issue.mutantIds) && issue.mutantIds.length === issue.mutantCount,
+      `manifest: ${issue.file} 的 mutantIds 数应与 mutantCount 一致（${issue.mutantCount}）`
+    );
+    assertCase(issue.status === 'dry-run', `manifest: dry-run issue.status 应为 dry-run，实际 ${JSON.stringify(issue.status)}`);
+    for (const field of ['issueNumber', 'issueUrl', 'skippedIssueNumber']) {
+      assertCase(issue[field] === undefined, `manifest: dry-run 不应带 ${field}`);
+    }
     const queuePath = path.resolve(sandbox, issue.queuePath);
     const queue = readJson(queuePath);
     assertCase(queue.version === '1.0', `队列文件 ${queuePath}: version 应为 "1.0"`);
     assertCase(queue.file === issue.file, `队列文件 ${queuePath}: file 应为 ${issue.file}`);
+    assertCase(queue.tool === expectedTool,
+      `队列文件 ${queuePath}: tool 应为 ${expectedTool}，实际 ${JSON.stringify(queue.tool)}`);
+    assertCase(queue.timestamp === expectedTimestamp,
+      `队列文件 ${queuePath}: timestamp 应与统一报告一致（${expectedTimestamp}），实际 ${JSON.stringify(queue.timestamp)}`);
     assertCase(Array.isArray(queue.mutants) && queue.mutants.length === issue.mutantCount,
       `队列文件 ${queuePath}: mutants 数应与 manifest 一致（${issue.mutantCount}）`);
     assertCase(queue.issueNumber === undefined, `队列文件 ${queuePath}: dry-run 不应带 issueNumber`);
+    const seenIds = new Set();
     for (const mutant of queue.mutants) {
-      assertCase(mutant.id && mutant.file && mutant.line >= 1, `队列文件 ${queuePath}: mutant 字段不完整：${JSON.stringify(mutant)}`);
+      assertMutantObject(mutant, queuePath, expectedTool, seenIds);
     }
     queueByFile.set(issue.file, queue);
   }
@@ -478,7 +660,7 @@ function caseTypeScriptPath(base, results) {
     ], sandbox);
     assertCase(run.status === 0, `create-issues --dry-run 退出码应为 0，实际 ${run.status}：${run.stderr}`);
     const { manifest, queueByFile } = readDryRunManifest(
-      path.join(sandbox, 'manifest.json'), sandbox, parsed.mutants.length
+      path.join(sandbox, 'manifest.json'), sandbox, parsed.mutants.length, parsed.tool, parsed.timestamp
     );
     assertCase(manifest.summary.exempted === 0, `无豁免文件时 exempted 应为 0，实际 ${manifest.summary.exempted}`);
     const distinctFiles = new Set(parsed.mutants.map((m) => m.file)).size;
@@ -539,7 +721,7 @@ function caseTypeScriptPath(base, results) {
     ], sandbox);
     assertCase(run.status === 0, `带豁免 create-issues 退出码应为 0，实际 ${run.status}：${run.stderr}`);
     const { manifest, queueByFile } = readDryRunManifest(
-      path.join(sandbox, 'manifest-exempt.json'), sandbox, parsed.mutants.length
+      path.join(sandbox, 'manifest-exempt.json'), sandbox, parsed.mutants.length, parsed.tool, parsed.timestamp
     );
     assertCase(manifest.summary.exempted === 1, `exempted 应为 1，实际 ${manifest.summary.exempted}`);
     assertCase(Array.isArray(manifest.staleExemptionIds) && manifest.staleExemptionIds.length === 0,
@@ -654,7 +836,7 @@ function casePythonPath(base, results) {
     ], sandbox);
     assertCase(run.status === 0, `create-issues --dry-run 退出码应为 0，实际 ${run.status}：${run.stderr}`);
     const { manifest, queueByFile } = readDryRunManifest(
-      path.join(sandbox, 'manifest.json'), sandbox, parsed.mutants.length
+      path.join(sandbox, 'manifest.json'), sandbox, parsed.mutants.length, parsed.tool, parsed.timestamp
     );
     assertCase(manifest.summary.exempted === 0, `无豁免文件时 exempted 应为 0，实际 ${manifest.summary.exempted}`);
     ctx.pyFirstMutant = parsed.mutants[0];
@@ -705,7 +887,7 @@ function casePythonPath(base, results) {
     ], sandbox);
     assertCase(run.status === 0, `带豁免 create-issues 退出码应为 0，实际 ${run.status}：${run.stderr}`);
     const { manifest, queueByFile } = readDryRunManifest(
-      path.join(sandbox, 'manifest-exempt.json'), sandbox, parsed.mutants.length
+      path.join(sandbox, 'manifest-exempt.json'), sandbox, parsed.mutants.length, parsed.tool, parsed.timestamp
     );
     assertCase(manifest.summary.exempted === 1, `exempted 应为 1，实际 ${manifest.summary.exempted}`);
     assertCase(queueByFile.size >= 1, '豁免后应至少还剩一个补测组');
@@ -790,7 +972,17 @@ function main() {
     caseCliSurface(results);
   } finally {
     if (!options.keep) {
+      // 失败清理路径同样先摘 junction：中途失败时沙箱里可能还留着指向夹具
+      // node_modules 的链接（成功路径的摘除在 cleanupSandbox 内），Windows 上
+      // 直接递归删树会顺着链接伤及夹具本体，污染后续所有轮次。
+      const unlinked = unlinkJunctionsUnder(base);
       fs.rmSync(base, { recursive: true, force: true });
+      if (unlinked > 0) {
+        process.stdout.write(`test_nightly_loop: 清理前摘除 ${unlinked} 个 junction\n`);
+      }
+      if (!fs.existsSync(NODE_MODULES_CANARY)) {
+        process.stderr.write('test_nightly_loop: WARN 夹具 node_modules 疑似被清理路径破坏（canary 缺失）\n');
+      }
     } else {
       process.stdout.write(`test_nightly_loop: 沙箱根目录保留：${base}\n`);
     }
