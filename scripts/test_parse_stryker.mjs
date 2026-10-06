@@ -88,7 +88,7 @@ const PRICING_SOURCE = [
 const CART_SOURCE = 'export const label = "empty";';
 
 /**
- * 构造单个 Stryker 变异体（0-based 坐标，与真实报告一致）。
+ * 构造单个 Stryker 变异体（1-based 坐标，与真实报告一致）。
  */
 function mutant(id, mutatorName, status, start, end, replacement, extra = {}) {
   return { id, mutatorName, location: { start, end }, status, replacement, ...extra };
@@ -96,16 +96,17 @@ function mutant(id, mutatorName, status, start, end, replacement, extra = {}) {
 
 /**
  * pricing.ts 的六个变异体：3 Survived / 1 Killed / 1 NoCoverage / 1 Timeout。
+ * 坐标按 Stryker schema v1.0 的 1-based 口径（工具内部 0-based 在落盘前已 +1）。
  * 数组顺序故意打乱，验证输出的确定性排序。
  */
 function pricingMutants() {
   return [
-    mutant(63, 'NumberLiteral', 'Survived', { line: 5, column: 9 }, { line: 5, column: 12 }, '301'),
-    mutant(57, 'NegateCondition', 'Survived', { line: 2, column: 33 }, { line: 2, column: 41 }, '!isMember'),
-    mutant(42, 'ConditionalExpression', 'Survived', { line: 2, column: 30 }, { line: 2, column: 32 }, '&&'),
-    mutant(41, 'EqualityOperator', 'Killed', { line: 2, column: 20 }, { line: 2, column: 22 }, '>'),
-    mutant(40, 'NumberLiteral', 'NoCoverage', { line: 1, column: 12 }, { line: 1, column: 13 }, '1'),
-    mutant(64, 'ArithmeticOperator', 'Timeout', { line: 5, column: 6 }, { line: 5, column: 8 }, '-=')
+    mutant(63, 'NumberLiteral', 'Survived', { line: 6, column: 10 }, { line: 6, column: 13 }, '301'),
+    mutant(57, 'NegateCondition', 'Survived', { line: 3, column: 34 }, { line: 3, column: 42 }, '!isMember'),
+    mutant(42, 'ConditionalExpression', 'Survived', { line: 3, column: 31 }, { line: 3, column: 33 }, '&&'),
+    mutant(41, 'EqualityOperator', 'Killed', { line: 3, column: 21 }, { line: 3, column: 23 }, '>'),
+    mutant(40, 'NumberLiteral', 'NoCoverage', { line: 2, column: 13 }, { line: 2, column: 14 }, '1'),
+    mutant(64, 'ArithmeticOperator', 'Timeout', { line: 6, column: 7 }, { line: 6, column: 9 }, '-=')
   ];
 }
 
@@ -118,7 +119,7 @@ function strykerReport({ schemaVersion = '1.3', withMetrics = true, testFiles = 
       'src/domain/pricing.ts': { source: PRICING_SOURCE, mutants: pricingMutants() },
       'src/services/cart.ts': {
         source: CART_SOURCE,
-        mutants: [mutant(71, 'StringLiteral', 'Survived', { line: 0, column: 21 }, { line: 0, column: 28 }, '""')]
+        mutants: [mutant(71, 'StringLiteral', 'Survived', { line: 1, column: 22 }, { line: 1, column: 29 }, '""')]
       }
     },
     ...extras
@@ -380,7 +381,7 @@ function caseEmptyReport(base) {
   assertCase(report.score === 42.55, `空 files 时显式分数应保留，实际 ${report.score}`);
   const dir2 = makeCaseDir(base, 'no-mutants');
   const noSurvivors = writeJson(dir2, 'no-survivors.json', {
-    files: { 'src/a.ts': { source: 'const x = 1;', mutants: [mutant(1, 'NumberLiteral', 'Killed', { line: 0, column: 10 }, { line: 0, column: 11 }, '2')] } }
+    files: { 'src/a.ts': { source: 'const x = 1;', mutants: [mutant(1, 'NumberLiteral', 'Killed', { line: 1, column: 11 }, { line: 1, column: 12 }, '2')] } }
   });
   const cli2 = runCli(['--input', noSurvivors], dir2);
   assertCase(cli2.status === 0, `无非存活退出码应为 0，实际 ${cli2.status}: ${cli2.stderr}`);
@@ -418,7 +419,7 @@ function casePathsPreserved(base) {
   const dir = makeCaseDir(base, 'paths');
   const mixed = writeJson(dir, 'mixed.json', {
     files: {
-      'Src/Domain/Pricing.TS': { source: 'const a = 1;', mutants: [mutant(1, 'NumberLiteral', 'Survived', { line: 0, column: 10 }, { line: 0, column: 11 }, '2')] }
+      'Src/Domain/Pricing.TS': { source: 'const a = 1;', mutants: [mutant(1, 'NumberLiteral', 'Survived', { line: 1, column: 11 }, { line: 1, column: 12 }, '2')] }
     }
   });
   const cli = runCli(['--input', mixed], dir);
@@ -429,7 +430,7 @@ function casePathsPreserved(base) {
   const dir2 = makeCaseDir(base, 'paths-normalize');
   const normalized = writeJson(dir2, 'normalized.json', {
     files: {
-      '.\\src\\x.ts': { source: 'const a = 1;', mutants: [mutant(2, 'NumberLiteral', 'Survived', { line: 0, column: 10 }, { line: 0, column: 11 }, '2')] }
+      '.\\src\\x.ts': { source: 'const a = 1;', mutants: [mutant(2, 'NumberLiteral', 'Survived', { line: 1, column: 11 }, { line: 1, column: 12 }, '2')] }
     }
   });
   const cli2 = runCli(['--input', normalized], dir2);
@@ -445,7 +446,7 @@ function casePathsPreserved(base) {
 function caseUnknownStatus(base) {
   const dir = makeCaseDir(base, 'unknown-status');
   const input = writeJson(dir, 'eaten.json', {
-    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(1, 'NumberLiteral', 'Eaten', { line: 0, column: 10 }, { line: 0, column: 11 }, '2')] } }
+    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(1, 'NumberLiteral', 'Eaten', { line: 1, column: 11 }, { line: 1, column: 12 }, '2')] } }
   });
   const cli = runCli(['--input', input], dir);
   assertCase(cli.status === 1, `未知状态退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
@@ -458,7 +459,7 @@ function caseUnknownStatus(base) {
 function caseBadLocation(base) {
   const dir = makeCaseDir(base, 'bad-location');
   const input = writeJson(dir, 'bad.json', {
-    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(1, 'NumberLiteral', 'Survived', { line: 99, column: 0 }, { line: 99, column: 1 }, '2')] } }
+    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(1, 'NumberLiteral', 'Survived', { line: 99, column: 1 }, { line: 99, column: 2 }, '2')] } }
   });
   const cli = runCli(['--input', input], dir);
   assertCase(cli.status === 1, `坐标越界退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
@@ -471,7 +472,7 @@ function caseBadLocation(base) {
 function caseOriginalEqualsReplacement(base) {
   const dir = makeCaseDir(base, 'same-text');
   const input = writeJson(dir, 'same.json', {
-    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(1, 'NumberLiteral', 'Survived', { line: 0, column: 10 }, { line: 0, column: 11 }, '1')] } }
+    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(1, 'NumberLiteral', 'Survived', { line: 1, column: 11 }, { line: 1, column: 12 }, '1')] } }
   });
   const cli = runCli(['--input', input], dir);
   assertCase(cli.status === 1, `替换文本相同退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
@@ -484,7 +485,7 @@ function caseOriginalEqualsReplacement(base) {
 function caseEmptyReplacement(base) {
   const dir = makeCaseDir(base, 'empty-replacement');
   const input = writeJson(dir, 'empty.json', {
-    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [{ id: 1, mutatorName: 'NumberLiteral', status: 'Survived', location: { start: { line: 0, column: 10 }, end: { line: 0, column: 11 } } }] } }
+    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [{ id: 1, mutatorName: 'NumberLiteral', status: 'Survived', location: { start: { line: 1, column: 11 }, end: { line: 1, column: 12 } } }] } }
   });
   const cli = runCli(['--input', input], dir);
   assertCase(cli.status === 1, `缺 replacement 退出码应为 1，实际 ${cli.status}: ${cli.stdout}`);
@@ -498,7 +499,7 @@ function caseMultiLineOriginal(base) {
   const dir = makeCaseDir(base, 'multi-line');
   const source = ['function f() {', '  return 1;', '}', ''].join('\n');
   const input = writeJson(dir, 'block.json', {
-    files: { 'src/f.ts': { source, mutants: [mutant(9, 'Block', 'Survived', { line: 0, column: 13 }, { line: 2, column: 1 }, '{}')] } }
+    files: { 'src/f.ts': { source, mutants: [mutant(9, 'Block', 'Survived', { line: 1, column: 14 }, { line: 3, column: 2 }, '{}')] } }
   });
   const cli = runCli(['--input', input], dir);
   assertCase(cli.status === 0, `跨行变异体退出码应为 0，实际 ${cli.status}: ${cli.stderr}`);
@@ -518,14 +519,14 @@ function caseIdNormalization(base) {
   assertCase(report.mutants.every((m) => m.id.startsWith('stryker-')), `id 应带 stryker- 前缀，实际 ${report.mutants.map((m) => m.id).join(',')}`);
   const dir2 = makeCaseDir(base, 'ids-string');
   const input = writeJson(dir2, 'str.json', {
-    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant('mutant-7', 'NumberLiteral', 'Survived', { line: 0, column: 10 }, { line: 0, column: 11 }, '2')] } }
+    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant('mutant-7', 'NumberLiteral', 'Survived', { line: 1, column: 11 }, { line: 1, column: 12 }, '2')] } }
   });
   const cli = runCli(['--input', input], dir2);
   assertCase(cli.status === 0, `字符串 id 退出码应为 0，实际 ${cli.status}: ${cli.stderr}`);
   assertCase(JSON.parse(cli.stdout).mutants[0].id === 'stryker-mutant-7', '字符串 id 应保留并加前缀');
   const dir3 = makeCaseDir(base, 'ids-space');
   const bad = writeJson(dir3, 'space.json', {
-    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant('a b', 'NumberLiteral', 'Survived', { line: 0, column: 10 }, { line: 0, column: 11 }, '2')] } }
+    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant('a b', 'NumberLiteral', 'Survived', { line: 1, column: 11 }, { line: 1, column: 12 }, '2')] } }
   });
   const cli3 = runCli(['--input', bad], dir3);
   assertCase(cli3.status === 1, `含空白 id 退出码应为 1，实际 ${cli3.status}: ${cli3.stdout}`);
@@ -538,25 +539,63 @@ function caseIdNormalization(base) {
 function caseMutationTypeNormalization(base) {
   const dir = makeCaseDir(base, 'mutator-known');
   const known = writeJson(dir, 'known.json', {
-    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(1, 'ConditionalExpression', 'Survived', { line: 0, column: 10 }, { line: 0, column: 11 }, '2')] } }
+    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(1, 'ConditionalExpression', 'Survived', { line: 1, column: 11 }, { line: 1, column: 12 }, '2')] } }
   });
   const cli = runCli(['--input', known], dir);
   assertCase(cli.status === 0, `已知 mutator 退出码应为 0，实际 ${cli.status}: ${cli.stderr}`);
   assertCase(JSON.parse(cli.stdout).mutants[0].mutationType === 'ConditionalExpression', '已知 mutatorName 应透传');
   const dir2 = makeCaseDir(base, 'mutator-unknown');
   const unknown = writeJson(dir2, 'unknown.json', {
-    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(2, 'CustomThing', 'Survived', { line: 0, column: 10 }, { line: 0, column: 11 }, '2')] } }
+    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(2, 'CustomThing', 'Survived', { line: 1, column: 11 }, { line: 1, column: 12 }, '2')] } }
   });
   const cli2 = runCli(['--input', unknown], dir2);
   assertCase(cli2.status === 0, `未知 mutator 退出码应为 0，实际 ${cli2.status}: ${cli2.stderr}`);
   assertCase(JSON.parse(cli2.stdout).mutants[0].mutationType === 'Unknown', '未知 mutatorName 应归为 Unknown');
   const dir3 = makeCaseDir(base, 'mutator-missing');
   const missing = writeJson(dir3, 'missing.json', {
-    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(3, undefined, 'Survived', { line: 0, column: 10 }, { line: 0, column: 11 }, '2')] } }
+    files: { 'src/a.ts': { source: 'const a = 1;', mutants: [mutant(3, undefined, 'Survived', { line: 1, column: 11 }, { line: 1, column: 12 }, '2')] } }
   });
   const cli3 = runCli(['--input', missing], dir3);
   assertCase(cli3.status === 0, `缺失 mutator 退出码应为 0，实际 ${cli3.status}: ${cli3.stderr}`);
   assertCase(JSON.parse(cli3.stdout).mutants[0].mutationType === 'Unknown', '缺失 mutatorName 应归为 Unknown');
+}
+
+/**
+ * 回归：Stryker 报告坐标已是 1-based（schema v1.0），输出必须原样透传
+ * （不得再 +1），且 original 必须等于按同一 1-based 坐标从报告 source
+ * 切出的片段（坐标错一行/一列时片段对不上）。
+ */
+function caseCoordinatePassthrough(base) {
+  const dir = makeCaseDir(base, 'coordinate-passthrough');
+  const input = writeJson(dir, 'passthrough.json', strykerReport({}));
+  const cli = runCli(['--input', input], dir);
+  assertCase(cli.status === 0, `坐标透传退出码应为 0，实际 ${cli.status}: ${cli.stderr}`);
+  const report = JSON.parse(cli.stdout);
+  const raw = JSON.parse(fs.readFileSync(input, 'utf8'));
+  const sources = new Map(Object.entries(raw.files)
+    .map(([key, entry]) => [key.replace(/\\/g, '/').replace(/^\.\//, ''), entry.source]));
+  const rawStarts = new Map();
+  for (const entry of Object.values(raw.files)) {
+    for (const mutant of entry.mutants) {
+      if (mutant.status === 'Survived') {
+        rawStarts.set(`stryker-${mutant.id}`, mutant.location.start);
+      }
+    }
+  }
+  assertCase(rawStarts.size === 4, `夹具应有 4 个存活变异体，实际 ${rawStarts.size}`);
+  for (const m of report.mutants) {
+    const start = rawStarts.get(m.id);
+    assertCase(start && m.line === start.line && m.column === start.column,
+      `${m.id} 坐标应原样透传 ${start.line}:${start.column}，实际 ${m.line}:${m.column}`);
+    const source = sources.get(m.file);
+    assertCase(typeof source === 'string', `应找到 ${m.file} 的报告 source`);
+    const lines = source.split('\n');
+    const textAt = m.original.includes('\n')
+      ? lines.slice(m.line - 1, lines.length).join('\n').slice(0, m.original.length)
+      : lines[m.line - 1].slice(m.column - 1, m.column - 1 + m.original.length);
+    assertCase(textAt === m.original,
+      `${m.id} 在 ${m.line}:${m.column} 处的源码应为 ${JSON.stringify(m.original)}，实际 ${JSON.stringify(textAt)}`);
+  }
 }
 
 /**
@@ -574,6 +613,7 @@ function main() {
     caseMalformedJson,
     caseArrayInputRejected,
     caseValidReport,
+    caseCoordinatePassthrough,
     caseSchemaStrictShape,
     caseComputedScore,
     caseExplicitScore,

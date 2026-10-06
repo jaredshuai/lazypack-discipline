@@ -17,8 +17,10 @@ mutationType 按 §4.2 映射表从 diff 文本归类，归类不了写 Unknown 
 file/line/column 升序。
 分数：导出 JSON 显式分数（metrics.mutationScore → mutationScore → score）
 原样记录；否则按检出口径 round2((killed+timeout)/total*100)（Timeout 计入
-检出、Suspicious 不计入，与 mutation-baseline.mjs 同口径）；变异范围为空记
-100；纯 show diff 捕获无运行统计，省略 score 字段（契约 v1.1 可选）。
+检出、Suspicious 不计入，与 mutation-baseline.mjs 同口径）；文本捕获的分数
+统计以节标题计数（如 "Killed (9) Survived (1)"）为权威口径，逐行条目仅在
+节标题无计数时回退参与统计；变异范围为空记 100；纯 show diff 捕获无运行
+统计，省略 score 字段（契约 v1.1 可选）。
 输入形态（自动识别，详见 --help）：(1) mutmut 文本捕获 = `mutmut results`
 输出（状态节 + path:line 条目，进度噪声行忽略）+ `mutmut show` 的 unified
 diff 块，survived/suspicious 条目必须有配对 diff，否则报错退出；
@@ -84,6 +86,14 @@ MUTATION_TYPES = frozenset([
 # 文本 results 节标题（mutmut 会附 emoji 与计数，余下内容忽略）。
 SECTION_RE = re.compile(
     r'^\s*(survived|suspicious|timeout|killed|skipped|no tests|untested|not checked|excluded|ignored)\b',
+    re.IGNORECASE
+)
+
+# 节标题括号里的计数（如 "Killed 🔪 (9)"）；词与括号间容忍 emoji 等任意
+# 非括号字符，同一行合并多个 "词 (计数)" 时逐个提取（分数的权威统计口径）。
+SUMMARY_COUNT_RE = re.compile(
+    r'\b(?P<status>survived|suspicious|timeout|killed|skipped|no tests|untested|not checked|excluded|ignored)'
+    r'[^()\n]*?\(\s*(?P<count>\d+)\s*\)',
     re.IGNORECASE
 )
 
@@ -430,19 +440,35 @@ def parse_diff_blocks(text, source_path):
 
 
 def parse_results_entries(text, source_path):
-    """扫描文本 results 节与条目，返回 (条目列表, 是否见过统计节)。"""
+    """扫描文本 results 节与条目。
+
+    返回 (条目列表, 是否见过统计节, summary 计数映射)：计数映射把统一状态
+    映到节标题括号里的数字（如 "Killed 🔪 (9)" → {'Killed': 9}），同一行
+    合并多组 "词 (计数)" 时逐个提取，同状态冲突时保留先见值并向 stderr
+    打警告。
+    """
     entries = []
     saw_summary = False
+    section_counts = {}
     current_status = None
     for raw_line in text.split('\n'):
         line = raw_line[:-1] if raw_line.endswith('\r') else raw_line
+        stripped = line.lstrip()
+        if stripped.startswith(('+', '-', '@')):
+            continue
         section = SECTION_RE.match(line)
         if section:
             current_status = STATUS_WORDS[section.group(1).lower()]
             saw_summary = True
-            continue
-        stripped = line.lstrip()
-        if stripped.startswith(('+', '-', '@')):
+            for count_match in SUMMARY_COUNT_RE.finditer(line):
+                status = STATUS_WORDS[count_match.group('status').lower()]
+                count = int(count_match.group('count'))
+                if status in section_counts:
+                    if section_counts[status] != count:
+                        warn('conflicting summary counts for %s in %s: keeping %d, ignoring %d'
+                             % (status, source_path, section_counts[status], count))
+                else:
+                    section_counts[status] = count
             continue
         entry = ENTRY_RE.match(line)
         if entry:
@@ -453,7 +479,7 @@ def parse_results_entries(text, source_path):
                 'status': status
             })
             saw_summary = True
-    return entries, saw_summary
+    return entries, saw_summary, section_counts
 
 
 def mutant_from_block(block, status, source_path):
@@ -463,7 +489,7 @@ def mutant_from_block(block, status, source_path):
 
 def parse_text_capture(text, source_path):
     """解析 mutmut 文本捕获：条目定状态、diff 块定片段，按 file+line 配对。"""
-    entries, saw_summary = parse_results_entries(text, source_path)
+    entries, saw_summary, section_counts = parse_results_entries(text, source_path)
     blocks = parse_diff_blocks(text, source_path)
     entry_index = {}
     for entry in entries:
@@ -489,7 +515,12 @@ def parse_text_capture(text, source_path):
     if not entries and not saw_summary and not blocks:
         raise CliError('input does not look like mutmut output: no results sections, '
                        'result entries, or "mutmut show" diffs found (%s)' % source_path)
-    stats = count_entry_stats(entries, extra_survived=unpaired_blocks)
+    if section_counts:
+        # 节标题计数是工具亲口报出的统计（捕获可能只截取了部分条目行），
+        # 比逐行重数条目更可靠，作为分数的权威口径；未配对 diff 块不再加回。
+        stats = stats_from_summary_counts(section_counts)
+    else:
+        stats = count_entry_stats(entries, extra_survived=unpaired_blocks)
     return mutants, stats, saw_summary
 
 
@@ -501,6 +532,18 @@ def count_entry_stats(entries, extra_survived=0):
             stats['killed'] += 1
         elif entry['status'] == 'Timeout':
             stats['timeout'] += 1
+    return stats
+
+
+def stats_from_summary_counts(section_counts):
+    """按 summary 节计数构建统计（total = 各节计数之和；分数的权威口径）。"""
+    stats = {'total': 0, 'killed': 0, 'timeout': 0}
+    for status, count in section_counts.items():
+        stats['total'] += count
+        if status == 'Killed':
+            stats['killed'] = count
+        elif status == 'Timeout':
+            stats['timeout'] = count
     return stats
 
 
@@ -686,8 +729,11 @@ def print_help():
         '  An explicit export score (metrics.mutationScore, or top-level',
         '  mutationScore/score) is preserved verbatim; otherwise',
         '  score = round2((killed + timeout) / total * 100) (Timeout counts as detected,',
-        '  Suspicious does not). An empty mutation range scores 100. Show-only diff',
-        '  captures carry no run statistics, so the optional score field is omitted.',
+        '  Suspicious does not). In text captures the section header counts (e.g.',
+        '  "Killed (9) Survived (1)") are the authoritative run statistics for the',
+        '  score; entry lines are only counted when no header carries a count. An',
+        '  empty mutation range scores 100. Show-only diff captures carry no run',
+        '  statistics, so the optional score field is omitted.',
         '',
         'Exit codes:',
         '  0  success (including an empty survivors list)',

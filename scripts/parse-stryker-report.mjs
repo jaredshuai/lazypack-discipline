@@ -7,9 +7,10 @@
  * （docs/formats/unified-mutation-report.md，契约 v1.1）：
  *   { tool: 'stryker', timestamp, mutants: [...], score }
  * mutant 字段 id/file/line/column/mutationType/original/mutated/status 按契约
- * §2/§3 归一化：id 前缀 stryker-（原生 id 转字符串）；Stryker 坐标 0-based，
- * 换算为 1-based；original 从报告内 source 按位置切片（Stryker 不单独给出
- * 原文，end 为开区间端点）；mutatorName 不在 §4 枚举时归为 Unknown；路径仅
+ * §2/§3 归一化：id 前缀 stryker-（原生 id 转字符串）；Stryker 报告坐标已为
+ * 1-based（schema v1.0 落盘前已把工具内部 0-based 换算 +1），直接透传；
+ * original 从报告内 source 按 1-based 坐标切片（Stryker 不单独给出原文，
+ * end 为开区间端点）；mutatorName 不在 §4 枚举时归为 Unknown；路径仅
  * 归一分隔符与 ./ 前缀，大小写逐字保留；mutants 按 file/line/column 升序。
  * 分数：报告显式分数（metrics.mutationScore → mutationScore → score）原样
  * 记录；否则按检出口径 round2((killed+timeout)/total*100)（Timeout 计入
@@ -137,12 +138,12 @@ function isoTimestampUtc() {
 }
 
 /**
- * 校验值为非负整数（Stryker 的 0-based 坐标）。
+ * 校验值为正整数（Stryker 报告坐标 1-based，最小值为 1）。
  * @param {unknown} value - 待校验值
- * @returns {boolean} 是否非负整数
+ * @returns {boolean} 是否正整数
  */
-function isNonNegativeInt(value) {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+function isPositiveInt(value) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1;
 }
 
 /**
@@ -165,12 +166,13 @@ function normalizeFileKey(rawPath, sourcePath) {
 }
 
 /**
- * 从报告内 source 按 Stryker 位置切片出 original（end 为开区间端点），
- * 跨行片段以 \n 连接（契约 §3.4）。
+ * 从报告内 source 按 Stryker 位置切片出 original。坐标为 1-based（schema
+ * v1.0），切片前换算为 0-based 下标；end 为开区间端点，跨行片段以 \n 连接
+ * （契约 §3.4）。
  * @param {string|undefined} source - 文件源码
  * @param {string} file - 报错用的文件路径
  * @param {string} mutantId - 报错用的变异体标识
- * @param {{start: {line: number, column: number}, end: {line: number, column: number}}|undefined} location - Stryker 原生位置
+ * @param {{start: {line: number, column: number}, end: {line: number, column: number}}|undefined} location - Stryker 原生位置（1-based）
  * @param {string} sourcePath - 报错用的报告路径
  * @returns {string} 原始源码片段（非空）
  */
@@ -180,14 +182,14 @@ function extractOriginal(source, file, mutantId, location, sourcePath) {
   }
   const start = location && location.start;
   const end = location && location.end;
-  if (!start || !isNonNegativeInt(start.line) || !isNonNegativeInt(start.column)) {
-    throw new CliError(`surviving mutant ${mutantId} in "${file}" has invalid location.start (${JSON.stringify(start ?? null)}) (${sourcePath})`);
+  if (!start || !isPositiveInt(start.line) || !isPositiveInt(start.column)) {
+    throw new CliError(`surviving mutant ${mutantId} in "${file}" has invalid location.start (expected 1-based line and column, got ${JSON.stringify(start ?? null)}) (${sourcePath})`);
   }
-  if (!end || !isNonNegativeInt(end.line) || !isNonNegativeInt(end.column)) {
-    throw new CliError(`surviving mutant ${mutantId} in "${file}" has invalid location.end (${JSON.stringify(end ?? null)}) (${sourcePath})`);
+  if (!end || !isPositiveInt(end.line) || !isPositiveInt(end.column)) {
+    throw new CliError(`surviving mutant ${mutantId} in "${file}" has invalid location.end (expected 1-based line and column, got ${JSON.stringify(end ?? null)}) (${sourcePath})`);
   }
   const lines = source.split('\n');
-  if (end.line < start.line || start.line >= lines.length || end.line >= lines.length) {
+  if (end.line < start.line || start.line > lines.length || end.line > lines.length) {
     throw new CliError(`surviving mutant ${mutantId} in "${file}" has a location out of range: start ${start.line}:${start.column}, end ${end.line}:${end.column}, source has ${lines.length} lines (${sourcePath})`);
   }
   if (start.line === end.line && end.column < start.column) {
@@ -195,13 +197,13 @@ function extractOriginal(source, file, mutantId, location, sourcePath) {
   }
   let original;
   if (start.line === end.line) {
-    original = lines[start.line].slice(start.column, end.column);
+    original = lines[start.line - 1].slice(start.column - 1, end.column - 1);
   } else {
-    const parts = [lines[start.line].slice(start.column)];
-    for (let l = start.line + 1; l < end.line; l++) {
+    const parts = [lines[start.line - 1].slice(start.column - 1)];
+    for (let l = start.line; l < end.line - 1; l++) {
       parts.push(lines[l]);
     }
-    parts.push(lines[end.line].slice(0, end.column));
+    parts.push(lines[end.line - 1].slice(0, end.column - 1));
     original = parts.join('\n');
   }
   if (original === '') {
@@ -240,8 +242,8 @@ function toUnifiedMutant(file, rawFile, mutant, source, sourcePath) {
   return {
     id: `stryker-${idText}`,
     file,
-    line: start.line + 1,
-    column: start.column + 1,
+    line: start.line,
+    column: start.column,
     mutationType: STRYKER_MUTATOR_NAMES.has(mutatorName) ? mutatorName : 'Unknown',
     original,
     mutated: mutant.replacement,
@@ -381,8 +383,10 @@ function printHelp() {
     'Accepted input shapes (StrykerJS v6 and v7 JSON reports):',
     '  { "schemaVersion": "...", "files": { "<path>": { "source": "...", "mutants": [...] } } }',
     '  v7 reports may add "testFiles" and per-mutant fields; extra sections are ignored.',
-    '  Stryker coordinates are 0-based and converted to 1-based, pointing at the first',
-    '  character of "original". "original" is sliced from the report source.',
+    '  Stryker report coordinates are already 1-based (the schema converts Stryker\'s',
+    '  internal 0-based positions before writing the file) and are passed through',
+    '  unchanged, pointing at the first character of "original", which is sliced from',
+    '  the report source.',
     '',
     'Output:',
     '  Unified report JSON (UTF-8, LF, 2-space indent):',

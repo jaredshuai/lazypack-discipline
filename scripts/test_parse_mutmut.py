@@ -306,6 +306,58 @@ def case_computed_score(base):
     assert_case(report['score'] == 50.0, '分数应为 (4 killed + 1 timeout) / 10 总数 * 100 = 50.0，实际 %r' % report['score'])
 
 
+def case_summary_counts_authoritative(base):
+    """回归：节标题计数是分数的权威口径，条目行缺失/截断不改变分数。
+
+    Killed 节报 (9) 但捕获里没有任何 killed 条目行：分数必须按节计数
+    9 检出 / 10 总数 = 90.0，而不是按重数条目得出的错误值。
+    """
+    dir_path = make_case_dir(base, 'summary-authoritative')
+    text = '\n'.join([
+        'Survived 🙈 (1)',
+        'src/domain/pricing.py:4   - Mutation 7',
+        'Killed 🔪 (9)',
+        'Timeout ⏰ (0)',
+        '',
+        '--- src/domain/pricing.py',
+        '+++ src/domain/pricing.py',
+        '@@ -4 +4 @@',
+        '-    if total <= 0:',
+        '+    if total < 0:',
+        ''
+    ]) + '\n'
+    input_path = write_text(dir_path, 'mutmut_results.txt', text)
+    cli = run_cli(['--input', input_path])
+    report = parse_stdout_json(cli, 'summary-authoritative')
+    assert_case(len(report['mutants']) == 1, '输出仍应只有 1 个存活变异体，实际 %d' % len(report['mutants']))
+    assert_case(report['mutants'][0]['status'] == 'Survived', '输出变异体应为 Survived，实际 %r' % report['mutants'][0].get('status'))
+    assert_case(report['score'] == 90.0, '分数应按节计数 9/10 计为 90.0，实际 %r' % report.get('score'))
+
+
+def case_score_fallback_without_counts(base):
+    """节标题无计数时回退按条目行统计分数（旧口径保持可用）。"""
+    dir_path = make_case_dir(base, 'fallback-no-counts')
+    text = '\n'.join([
+        'Survived',
+        'src/domain/pricing.py:4   - Mutation 7',
+        'Killed',
+        'src/adapters/cli.py:5   - Mutation 1',
+        'src/adapters/cli.py:9   - Mutation 2',
+        '',
+        '--- src/domain/pricing.py',
+        '+++ src/domain/pricing.py',
+        '@@ -4 +4 @@',
+        '-    if total <= 0:',
+        '+    if total < 0:',
+        ''
+    ]) + '\n'
+    input_path = write_text(dir_path, 'mutmut_results.txt', text)
+    cli = run_cli(['--input', input_path])
+    report = parse_stdout_json(cli, 'fallback-no-counts')
+    assert_case(len(report['mutants']) == 1, '应提取 1 个存活变异体，实际 %d' % len(report['mutants']))
+    assert_case(report['score'] == 66.67, '无计数时分数应按条目 2/3 计为 66.67，实际 %r' % report.get('score'))
+
+
 def case_explicit_score(base):
     """显式分数原样保留；越界分数拒绝。"""
     dir_path = make_case_dir(base, 'explicit-score')
@@ -579,6 +631,8 @@ def main():
         case_schema_strict_shape,
         case_json_export_rich,
         case_computed_score,
+        case_summary_counts_authoritative,
+        case_score_fallback_without_counts,
         case_explicit_score,
         case_entry_with_diff,
         case_string_survivor_rejected,

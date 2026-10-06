@@ -113,7 +113,7 @@
 ### 3.3 line（行号）
 
 - 1-based：文件第一行为 1，与[统一格式文档 §3.3](unified-mutation-report.md) 同口径；`original` 片段跨多行时取其首行。
-- **来源警告**：优先从统一报告的 mutant 对象复制 `file` / `line` / `mutationType`（解析器已完成归一化）。直接从工具原生报告取数时注意坐标系差异——Stryker JSON 的 `position.start.line` 是 0-based，统一报告已归一为 1-based；差一行会让三元组永远匹配不上（症状是「明明写了豁免，issue 里还是出现这个变异体」）。
+- **来源警告**：优先从统一报告的 mutant 对象复制 `file` / `line` / `mutationType`（解析器已完成归一化）。直接从工具原生报告取数时注意坐标系口径——Stryker JSON 报告（schema v1.0）的坐标已是 1-based，与统一报告同口径、可直接复制（工具内部 0-based 坐标在写报告前已 +1），但从 Stryker 内部 API 等 0-based 来源取数则须先换算；差一行会让三元组永远匹配不上（症状是「明明写了豁免，issue 里还是出现这个变异体」）。
 
 ### 3.4 mutationType
 
