@@ -7,8 +7,8 @@
 **状态与边界**：本文档覆盖 lazypack-discipline 提供的工具链和模板的使用方法。所有工具均为参考实现（reference implementation），可根据项目需求调整。
 
 **配套工具**（位于 `scripts/`）：
-- `parse-stryker-report.mjs` - Stryker JSON 报告解析器（#37）
-- `parse_mutmut_report.py` - mutmut 报告解析器（#37）
+- `parse-stryker-report.mjs` - Stryker JSON 报告解析器
+- `parse_mutmut_report.py` - mutmut 报告解析器
 - `mutation-baseline.mjs` - 基线管理工具（init/check/update）
 - `create-mutation-issues.mjs` - GitHub issue 创建工具
 
@@ -229,10 +229,11 @@ cp templates/scripts/nightly-mutation-runner.sh your-project/scripts/
 chmod +x your-project/scripts/nightly-mutation-runner.sh
 
 # 工具脚本一并复制到目标项目 scripts/（runner 逐步调用它们）：
-# TypeScript：parse-stryker-report.mjs、mutation-baseline.mjs、create-mutation-issues.mjs
-# Python：parse_mutmut_report.py、mutation-baseline.mjs、create-mutation-issues.mjs
-cp scripts/parse-stryker-report.mjs scripts/mutation-baseline.mjs \
-   scripts/create-mutation-issues.mjs your-project/scripts/
+# TypeScript：parse-stryker-report.mjs；Python：parse_mutmut_report.py
+# 两种语言共用：mutation-baseline.mjs、create-mutation-issues.mjs
+cp scripts/parse-stryker-report.mjs scripts/parse_mutmut_report.py \
+   scripts/mutation-baseline.mjs scripts/create-mutation-issues.mjs \
+   your-project/scripts/
 ```
 
 2. **用 CLI 旗标配置**（脚本没有配置文件，无需编辑脚本本身）：
@@ -1006,10 +1007,11 @@ pip install "mutmut<3"
 
 ## 9. 交叉引用（Cross References）
 
+- [质检分层节奏工单 #37](https://github.com/jaredshuai/lazypack-discipline/issues/37) - 白天秒级门禁 + 夜间重型质检的分层节奏，夜跑闭环对应其中的夜间档位
 - [变异测试运营手册](mutation-testing.md) (#42) - 门槛冻结策略、等价变异豁免、胶水代码边界
 - [工具用法文档](../../README.md) - 所有工具的详细 CLI 参数
-- [Stryker 报告解析器](../../scripts/parse-stryker-report.mjs) (#37) - 源码与 CLI 说明
-- [mutmut 报告解析器](../../scripts/parse_mutmut_report.py) (#37) - 源码与 CLI 说明
+- [Stryker 报告解析器](../../scripts/parse-stryker-report.mjs) - 源码与 CLI 说明
+- [mutmut 报告解析器](../../scripts/parse_mutmut_report.py) - 源码与 CLI 说明
 - [等价变异体文件格式](../formats/equivalent-mutants.md) - 豁免文件详细规范
 - [统一变异报告格式](../formats/unified-mutation-report.md) - 解析器输出格式
 - [基线文件格式](../formats/mutation-baseline.md) - 基线文件详细规范
@@ -1088,6 +1090,6 @@ node scripts/mutation-baseline.mjs check \
 
 ---
 
-**文档版本**：1.1  
+**文档版本**：1.2  
 **最后更新**：2026-10-07  
 **维护者**：lazypack-discipline 团队

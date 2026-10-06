@@ -517,3 +517,13 @@
 - 处理结果：P1、P2、P3、P5、P8 为未发现差异（本轮未改这些声明的来源与目标）。P4 为未发现差异（登记行只改行内文字与新增一条登记行，链接均可解析，收尾复跑 6/6 PASS、退出码 0）。固定层正文与 setup 快照为未发现差异（P1，本轮未改这两份文件）。检查器运行前后 `git status` 差异仅为本轮改动（scripts 两份、docs/ARTIFACTS.md）与既有未跟踪目录。
 - 未覆盖：validators 单测以纯函数直断校验器，未经 readDryRunManifest 全流程驱动队列闭合字段集（调用点语义同一份常量，端到端 22 步实跑覆盖正路径）；基线 score >2 位小数在真实管线中不可达（见设计取舍），拒绝路径仅由单测覆盖；manifest 顶层未加闭合字段集断言（契约权威是 create-mutation-issues.mjs 施工票而非已发布 schema 文档，超出本票范围）。hook/CI 未接线、未运行。
 - 未决：无新增未决。
+
+2026-10-07（夜跑闭环验证轮修复：运营指引 #37 引用与 §3.1 工具随迁清单补齐）：按验证特征 fix-guide-references-commands，修正 `docs/quality-gates/nightly-mutation-loop.md`（v1.1 → v1.2）两处。其一，§3.1 步骤 1 的工具脚本随迁 `cp` 命令补入 `parse_mutmut_report.py`：原命令只复制 TypeScript 三件，与紧邻注释列出的 Python 工具集不符（runner 脚本 py 路径实际调用该解析器），注释同步改写为「TypeScript：parse-stryker-report.mjs；Python：parse_mutmut_report.py；两种语言共用：mutation-baseline.mjs、create-mutation-issues.mjs」，复制集与 runner 逐步调用面一致；其二，删除全文四处 `(#37)` 占位标记（开头配套工具两行、§9 交叉引用两行）——解析器属 #38 施工票交付物，#37 是质检分层节奏，占位挂在解析器条目上不适用；§9 新增「质检分层节奏工单 #37」真实链接（GitHub issue URL）指向 #37，保持 #37（质检分层节奏）与 #42（变异测试运营手册）两类交叉引用在场且可解析。scripts/ 与 templates/ 正文未动。验证：指引 15 条交叉引用逐一核对——14 条相对链接机器检查全部可解析（临时脚本抽链，跳过围栏与反引号），GitHub issue URL 经 `gh issue view 37`（与 42）实查存在（均 CLOSED）；§3.1 复制命令在 WSL bash 对临时副本仓库实跑（mkdir/cp/chmod/ls，五个文件全部落位、退出码 0，临时目录即删）；四个工具 `--help` 退出码全 0；§3.1 运行器选项表与脚本实际旗标（`--lang`/`--project-dir`/`--log-dir`/`--log-keep`/`--dry-run`/`-h` 及 `MUTATION_LOG_DIR` 缺省）逐一核对一致；§1-§8 与附录引用的 `scripts/`、`templates/`、`.vscode/tasks.json`、`docs/formats/` 路径全部存在；`node scripts/check_doc_pairs.mjs` 开工与本段写入后各跑一次，均 6/6 PASS、退出码 0。固定层未改。未跟踪目录 `round-1/`、`round-2/`、`.codegraph/` 未纳入、未删除。
+
+本轮防腐检查记录：
+
+- 检查范围：机器检查 P1、P2、P3、P4、P5、P8 共跑两次（开工与本段写入后收尾复跑）。人工阅读：本段与指引改动不把文档修正写成工具行为变更（脚本与模板正文未动，`cp` 命令补齐只是指引对齐 runner 的实际调用面）；既有登记段、历史验收段与历史未决项未被改写；§3 `quality-gates/nightly-mutation-loop.md` 登记行为概要口径（交叉引用概述含 #37 质检分层节奏与 #42），修正后 §9 仍同时引用两者，登记行与新正文不冲突，未改写；无新的纪律决策。
+- 依据版本：开工提交 `51c07fbb11cf9d86a31087cadf3390e849ed3e81`。收尾核对在包含本段的工作区；提交号与本段同一提交，写入时还没有。声明正文为 `docs/agents/doc-pairs.md`。命令为仓库根 `node scripts/check_doc_pairs.mjs`。开工检查 6/6 PASS、退出码 0（P4 links=71 failures=0，P5 agents=6 readme=8，P8 commands=generate,verify）；本段写入后复跑 6/6 PASS、退出码 0（本段不新增 Markdown 链接，P4 links=71 不变）。
+- 处理结果：P1、P2、P3、P5、P8 为未发现差异（本轮未改这些声明的来源与目标）。P4 为未发现差异（本段与指引改动均不新增登记册 Markdown 链接，收尾复跑 6/6 PASS、退出码 0）。固定层正文与 setup 快照为未发现差异（P1，本轮未改这两份文件）。检查器运行前后 `git status` 差异仅为本轮两份文件改动与既有未跟踪目录。
+- 未覆盖：#37 GitHub issue 链接为外网 URL，可解析性以 `gh issue view` 实查为准（2026-10-07 快照，issue 均 CLOSED），未在浏览器复核渲染；§3.1 复制命令实跑在 WSL bash 执行（文档目标面之一），macOS/Git-Bash 未复核；`bash -n`/shellcheck 未跑（宿主策略限制直接调用 bash，runner 模板本轮未改动，沿其既有验证轮结论）；指引未改动章节的 YAML/INI 片段本轮未做机器语法解析（沿上一轮 fix-operational-guide-accuracy 的验证结论）。任意代码 diff 到文档段落的语义定位器未建设、未运行。hook/CI 未接线、未运行。
+- 未决：无新增未决。
