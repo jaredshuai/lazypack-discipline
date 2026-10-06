@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mutmut-cache
+.mutmut-show-all.txt
+mutmut-results-export.json
+unified-mutation-report.json
+.mutation-baseline.json
+.mutation-queue/
+*.egg-info/
+build/
+dist/
+.venv/

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sample-py"
+version = "1.0.0"
+description = "Deliberately under-tested Python fixture for the nightly mutation loop (produces surviving mutants)."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+# mutmut 固定 2.x：3.x 不再写夜跑闭环工具链读取的 .mutmut-cache
+# （见 templates/.github/workflows/nightly-mutation-py.yml 头注）。
+dev = [
+  "pytest>=7.0,<9",
+  "mutmut>=2.4,<3",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

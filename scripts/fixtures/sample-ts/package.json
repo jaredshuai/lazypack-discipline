@@ -1,0 +1,20 @@
+{
+  "name": "sample-ts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deliberately under-tested TypeScript fixture for the nightly mutation loop (produces surviving mutants).",
+  "scripts": {
+    "build": "tsc",
+    "test": "mocha --require ts-node/register \"tests/**/*.spec.ts\"",
+    "mutation": "stryker run"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/mocha-runner": "^10.0.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.0.0",
+    "mocha": "^10.8.2",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.9.0"
+  }
+}
