@@ -179,7 +179,13 @@ const FAKE_GH_SOURCE = [
   "  process.stdout.write(JSON.stringify(issues) + '\\n');",
   "} else if (cmd === 'issue' && sub === 'create') {",
   '  const lines = logPath ? fs.readFileSync(logPath, "utf8").trim().split("\\n") : [];',
-  "  const n = 100 + lines.filter((l) => l.includes('[\"issue\",\"create\"')).length;",
+  "  const creates = lines.filter((l) => l.includes('[\"issue\",\"create\"')).length;",
+  '  const failFrom = Number(process.env.FAKE_GH_FAIL_CREATE_FROM || "0");',
+  '  if (failFrom > 0 && creates >= failFrom) {',
+  '    process.stderr.write("fake gh: simulated issue create failure\\n");',
+  '    process.exit(1);',
+  '  }',
+  "  const n = 100 + creates;",
   "  process.stdout.write(`https://ghe.example/owner/repo/issues/${n}\\n`);",
   '} else {',
   "  process.stderr.write(`fake gh: unsupported command ${argv.join(' ')}\\n`);",
@@ -190,8 +196,9 @@ const FAKE_GH_SOURCE = [
 
 /**
  * 在用例目录写假 gh 脚本与日志路径，返回对应环境变量。
+ * failCreateFrom：1 起算的第 N 次 issue create 起模拟失败（0/缺省不失败）。
  */
-function setupFakeGh(dir, { labels = [], existing = [] } = {}) {
+function setupFakeGh(dir, { labels = [], existing = [], failCreateFrom = 0 } = {}) {
   const fakeGh = writeText(dir, 'fake-gh.mjs', FAKE_GH_SOURCE);
   const logPath = path.join(dir, 'gh-log.jsonl');
   return {
@@ -199,6 +206,7 @@ function setupFakeGh(dir, { labels = [], existing = [] } = {}) {
     FAKE_GH_LOG: logPath,
     FAKE_GH_LABELS: JSON.stringify(labels),
     FAKE_GH_EXISTING: JSON.stringify(existing),
+    FAKE_GH_FAIL_CREATE_FROM: String(failCreateFrom),
     __logPath: logPath
   };
 }
@@ -899,7 +907,8 @@ function caseCreateIssuesFakeGh(base) {
 }
 
 /**
- * 去重：已有 open 的同名前缀 issue 时跳过创建并计数（VAL-ISSUES-006）。
+ * 去重：已有 open 的同名前缀 issue 时跳过创建并计数（VAL-ISSUES-006）；
+ * 跳过组的队列文件带既有 issue 编号（fix-queue-reliability）。
  */
 function caseDedupSkip(base) {
   const dir = makeCaseDir(base, 'dedup-skip');
@@ -923,13 +932,43 @@ function caseDedupSkip(base) {
   assertCase(cli.stdout.includes('issues skipped: 1'), `摘要应计 skipped: 1，实际：${cli.stdout}`);
   assertCase(cli.stdout.includes('#12'), `跳过消息应含目标 issue 编号，实际：${cli.stdout}`);
   const cartQueue = JSON.parse(fs.readFileSync(queuePath(dir, 'src/services/cart.ts'), 'utf8'));
-  assertCase(!('issueNumber' in cartQueue), '跳过组的队列文件不应写 issueNumber');
+  assertCase(cartQueue.issueNumber === 12, `跳过组的队列文件应带既有 issue 编号 12，实际 ${cartQueue.issueNumber}`);
   assertCase(cartQueue.mutants.length === 1, '跳过组的队列文件照常重写');
   const manifest = JSON.parse(fs.readFileSync(output, 'utf8'));
   const cartEntry = manifest.issues.find((e) => e.file === 'src/services/cart.ts');
   assertCase(cartEntry.status === 'skipped', 'manifest 跳过条目 status 应为 skipped');
   assertCase(cartEntry.skippedIssueNumber === 12, 'manifest 跳过条目应含既有 issue 编号');
   assertCase(manifest.summary.issuesCreated === 1 && manifest.summary.issuesSkipped === 1, 'manifest 摘要计数应正确');
+}
+
+/**
+ * 部分 gh 失败：第 2 次 issue create 失败时，已完成的第 1 组队列文件已
+ * 即时落盘（含编号），失败组不写，队列目录不残留临时文件
+ * （fix-queue-reliability：逐组原子持久化）。
+ */
+function casePartialGhFailureKeepsCompletedQueues(base) {
+  const dir = makeCaseDir(base, 'partial-gh-failure');
+  const input = writeJson(dir, 'report.json', validReport());
+  // 组按 file 升序：pricing 先创建成功（101），cart 第 2 次创建时失败
+  const fake = setupFakeGh(dir, { labels: ['mutation', 'nightly'], failCreateFrom: 2 });
+  const cli = runCli(['--input', input, '--create-issues'], dir, fake);
+  assertCase(cli.status === 2, `部分失败退出码应为 2，实际 ${cli.status}`);
+  assertCase(/gh/i.test(cli.stderr), `stderr 应含 gh 错误细节，实际：${cli.stderr}`);
+  const log = readGhLog(fake.__logPath);
+  const creates = log.filter((argv) => argv[0] === 'issue' && argv[1] === 'create');
+  assertCase(creates.length === 2, `应恰有 2 次 issue create（第 2 次失败），实际 ${creates.length}`);
+  // 已完成组：队列文件即时落盘，带本轮编号与全部 mutant
+  const pricingQueue = JSON.parse(fs.readFileSync(queuePath(dir, 'src/domain/pricing.ts'), 'utf8'));
+  assertCase(pricingQueue.issueNumber === 101, `已完成组队列应带 issueNumber 101，实际 ${pricingQueue.issueNumber}`);
+  assertCase(pricingQueue.mutants.length === 2, '已完成组队列应含该组全部 mutant');
+  assertCase(pricingQueue.file === 'src/domain/pricing.ts', '已完成组队列 file 应正确');
+  // 失败组：不写队列文件
+  assertCase(!fs.existsSync(queuePath(dir, 'src/services/cart.ts')), '失败组的队列文件不应存在');
+  // 原子写：队列目录只含成品文件，无 .tmp- 残留
+  const leftovers = fs
+    .readdirSync(path.join(dir, '.mutation-queue'))
+    .filter((name) => name.includes('.tmp-'));
+  assertCase(leftovers.length === 0, `队列目录不应残留临时文件，实际：${JSON.stringify(leftovers)}`);
 }
 
 /**
@@ -1023,6 +1062,7 @@ function main() {
     caseGhFailureGraceful,
     caseCreateIssuesFakeGh,
     caseDedupSkip,
+    casePartialGhFailureKeepsCompletedQueues,
     caseAssigneeFlag,
     caseAssigneeWithoutCreateRejected,
     caseDryRunCreateConflict,

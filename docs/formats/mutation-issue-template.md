@@ -231,7 +231,7 @@ mutated：
 | `file` | string | 是 | 分组键，等于该组 mutant 的 `file` 字段 |
 | `tool` | string | 是 | 复制报告顶层 `tool` |
 | `timestamp` | string | 是 | 复制报告顶层 `timestamp` |
-| `issueNumber` | integer | 实跑必填；dry-run 省略 | 创建成功的 issue 编号。dry-run 未调用 GitHub，故无此字段；这是它与实跑输出的唯一差异 |
+| `issueNumber` | integer | 实跑必填；dry-run 省略 | 本轮实跑的 issue 编号：创建组为新建 issue 编号，去重跳过组为既有 open issue 编号（§7）。dry-run 未调用 GitHub，故无此字段；这是它与实跑输出的唯一差异 |
 | `mutants` | array | 是 | 该组 mutant 对象，**逐字段原样复制**统一报告的 mutant（八个字段全带），顺序同报告 |
 
 - 统一报告 §8 允许机读文件「复用 mutant 对象的字段子集」；本契约 v1.0 选择**全量原样复制**：issue body 与队列文件的一致性检查因此退化为纯文本对比（§4.4），agent 也不需要回到统一报告补数据。
@@ -264,7 +264,7 @@ issue body 清单与队列文件 `mutants` 必须来自同一分组、同序、�
 - **去重键**：`[Mutation] {file} - ` 前缀（注意结尾含一个空格）+ `mutation` 标签 + open 状态。存在匹配的 open issue 时不创建新 issue，在运行摘要中记一条跳过（含目标 issue 编号）。
 - **前缀匹配而非全等匹配**的理由：标题里的 `N` 是创建时刻的计数，下一轮该文件存活数变化后全等匹配会失配，从而为同一文件再开一条 open issue——这正是要去掉的噪音。
 - **检索实现约定**：`gh issue list --state open --label mutation --json number,title` 取回候选后，在脚本内做**精确字符串前缀过滤**。不依赖 GitHub 搜索语法解析 `[Mutation]` 这类方括号词（搜索分词不可靠），客户端过滤才是权威判定。
-- **跳过创建不影响队列文件**：队列文件每轮照常重写覆盖，agent 读到的永远是本轮数据。open issue 里旧的 `N` 与本轮计数可以不一致——issue 是入口指针，队列文件才是事实。
+- **跳过创建不影响队列文件**：队列文件每轮照常重写覆盖，agent 读到的永远是本轮数据；去重跳过组的队列文件带既有 open issue 编号（`issueNumber`，§4.3）。创建与跳过都在各自操作完成后**立即原子落盘**（临时文件 + rename 覆盖），gh 中途失败时已完成组的条目保留、失败组不写。open issue 里旧的 `N` 与本轮计数可以不一致——issue 是入口指针，队列文件才是事实。
 - **同名 issue 已关闭不阻塞新建**：文件修复（issue 被关闭）后再次出现存活变异体，是新的补测需求，应当建新 issue。
 - **dry-run**：不调用 GitHub API，不创建 issue、不确保标签；队列文件照常写出（`issueNumber` 省略，§4.3），并把每组的 body 预览写盘供检查（预览文件路径由施工票确定）。
 

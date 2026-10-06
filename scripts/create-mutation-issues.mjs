@@ -9,8 +9,8 @@
  * 契约 v1.0）：
  *   - GitHub issue（人读，经 gh CLI 创建，标题 [Mutation] {file} - N survivors，
  *     标签 mutation + nightly，body 三小节固定）；
- *   - 机读队列文件 .mutation-queue/{file}.json（agent 解析，dry-run 省略
- *     issueNumber）。
+ *   - 机读队列文件 .mutation-queue/{file}.json（agent 解析；实跑创建组带
+ *     新编号、去重跳过组带既有 open issue 编号，dry-run 省略 issueNumber）。
  *
  * 模式：
  *   默认 / --dry-run  预览模式：写队列文件与 body 预览
@@ -20,6 +20,8 @@
  *                     （[Mutation] {file} -  + mutation 标签 + open 状态），
  *                     已有 open issue 的组跳过并计数，其余经
  *                     gh issue create --title --body-file --label 创建。
+ *                     每组创建/跳过完成后队列文件立即原子写盘（临时文件 +
+ *                     rename 覆盖），gh 中途失败时已完成组的条目保留。
  *
  * 可选：--exemptions <path> 指定豁免文件（缺省不过滤；文件缺失/畸形/schema
  * 非法退出码 1）；--output <path> 写 manifest（issue 列表 + 元数据 + 四计数
@@ -587,12 +589,13 @@ function renderIssueBody(tool, timestamp, file, mutants, queuePath) {
 
 /**
  * 渲染队列文件对象（模板契约 §4.3；mutants 逐字段原样复制；
- * issueNumber 仅实跑创建成功时在场）。
+ * issueNumber 实跑在场——创建组为新建编号，去重跳过组为既有 open
+ * issue 编号；dry-run 省略）。
  * @param {string} tool - 报告顶层 tool
  * @param {string} timestamp - 报告顶层 timestamp
  * @param {string} file - 分组文件路径
  * @param {object[]} mutants - 该组变异体（报告顺序）
- * @param {number|undefined} issueNumber - 本轮创建的 issue 编号
+ * @param {number|undefined} issueNumber - 创建组的新编号 / 跳过组的既有编号
  * @returns {object} 队列文件对象
  */
 function buildQueueDoc(tool, timestamp, file, mutants, issueNumber) {
@@ -607,6 +610,21 @@ function buildQueueDoc(tool, timestamp, file, mutants, issueNumber) {
     doc.issueNumber = issueNumber;
   }
   return doc;
+}
+
+/**
+ * 把某组的队列文件原子写盘。实跑在每组创建/跳过完成后立即调用（逐组
+ * 持久化，gh 中途失败时已完成组的条目保留）；dry-run 在收尾循环调用。
+ * @param {{tool: string, timestamp: string}} report - 已校验的统一报告
+ * @param {{file: string, mutants: object[], queuePath: string}} plan - 组计划
+ * @param {number|undefined} issueNumber - 创建组的新编号 / 跳过组的既有编号
+ * @returns {void}
+ */
+function writeQueueFile(report, plan, issueNumber) {
+  writeTextFile(
+    plan.queuePath,
+    `${JSON.stringify(buildQueueDoc(report.tool, report.timestamp, plan.file, plan.mutants, issueNumber), null, 2)}\n`
+  );
 }
 
 /**
@@ -745,7 +763,8 @@ function createIssue(title, body, bodyFile, assignee) {
 }
 
 /**
- * 写文本文件（UTF-8、LF、按需递归建目录）。
+ * 原子写文本文件（UTF-8、LF、按需递归建目录）：先写同目录临时文件再
+ * rename 覆盖目标，写入中断或失败都不会留下半截目标文件。
  * @param {string} filePath - 目标路径（相对运行目录或绝对）
  * @param {string} content - 内容
  * @returns {void}
@@ -753,7 +772,18 @@ function createIssue(title, body, bodyFile, assignee) {
 function writeTextFile(filePath, content) {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(filePath, content, 'utf8');
+  const tmpPath = path.join(dir, `.${path.basename(filePath)}.tmp-${process.pid}`);
+  try {
+    fs.writeFileSync(tmpPath, content, 'utf8');
+    fs.renameSync(tmpPath, filePath);
+  } catch (err) {
+    try {
+      fs.rmSync(tmpPath, { force: true });
+    } catch {
+      // 清理失败不掩盖原始写入错误
+    }
+    throw err;
+  }
 }
 
 /**
@@ -787,9 +817,12 @@ function printHelp() {
     '',
     'Output:',
     '  Queue file .mutation-queue/{file}.json: { version: "1.0", file, tool, timestamp,',
-    '  issueNumber (real run, created groups only), mutants: [8-field copies in report',
-    '  order] }. Queue files are overwritten every run; skipped groups keep no',
-    '  issueNumber (see the manifest for the existing issue).',
+    '  issueNumber (real run: the created issue number, or the existing open issue',
+    '  number for skipped groups), mutants: [8-field copies in report order] }.',
+    '  Queue files are written atomically (temp file + rename) immediately after each',
+    '  create/skip completes, so a partial gh failure keeps entries for completed',
+    '  operations; each run overwrites the previous queue files. Dry-run omits',
+    '  issueNumber.',
     '  Body preview (dry-run): .mutation-queue/{file}.body.md, identical to the issue body.',
     '  Manifest (--output): { version, mode, tool, timestamp, generatedAt, input,',
     '  exemptionsFile, summary: { totalMutants, exempted, nonSurvivedDropped,',
@@ -805,8 +838,9 @@ function printHelp() {
     '  creation time). Labels: mutation + nightly. Body: three fixed sections',
     '  (survivor list, machine-readable data link, fixed testing guide).',
     '  Dedup key: open issue whose title starts with "[Mutation] {file} - " and has',
-    '  the mutation label; matches are skipped and counted, queue files are still',
-    '  rewritten. Closed same-name issues do not block new ones.',
+    '  the mutation label; matches are skipped and counted, and their queue file',
+    '  carries the existing issue number as issueNumber. Closed same-name issues do',
+    '  not block new ones.',
     '',
     'Environment:',
     '  MUTATION_ISSUES_GH  "|"-separated argv prefix replacing gh (testing hook),',
@@ -894,6 +928,8 @@ function main(argv) {
           plan.status = 'skipped';
           plan.skippedIssueNumber = hit.number;
           issuesSkipped++;
+          // 跳过也是完成态：队列文件（带既有编号）立即落盘
+          writeQueueFile(report, plan, hit.number);
           process.stdout.write(
             `create-mutation-issues: skip "${plan.title}" -> existing open issue #${hit.number}\n`
           );
@@ -906,6 +942,8 @@ function main(argv) {
         plan.issueNumber = created.number;
         plan.issueUrl = created.url;
         issuesCreated++;
+        // 创建成功即刻持久化该组队列文件，后续 gh 失败不影响已完成组
+        writeQueueFile(report, plan, created.number);
       });
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -913,16 +951,7 @@ function main(argv) {
   } else {
     for (const plan of plans) {
       plan.status = 'dry-run';
-    }
-  }
-
-  for (const plan of plans) {
-    const issueNumber = plan.status === 'created' ? plan.issueNumber : undefined;
-    writeTextFile(
-      plan.queuePath,
-      `${JSON.stringify(buildQueueDoc(report.tool, report.timestamp, plan.file, plan.mutants, issueNumber), null, 2)}\n`
-    );
-    if (!createMode) {
+      writeQueueFile(report, plan, undefined);
       writeTextFile(plan.previewPath, plan.body);
     }
   }
