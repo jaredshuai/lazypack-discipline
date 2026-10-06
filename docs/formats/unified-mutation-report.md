@@ -2,7 +2,7 @@
 
 本文档定义夜跑变异测试闭环中「统一变异体报告」的 JSON 契约。它是 Stryker 解析器（`scripts/parse-stryker-report.mjs`）与 mutmut 解析器（`scripts/parse_mutmut_report.py`）的**输出规范**，也是 baseline 检查、豁免过滤与 issue 创建脚本的**输入规范**。两个解析器产出同一结构，下游工具只通过 `tool` 字段感知原始报告来自哪个工具。
 
-**契约版本**：1.0（演进规则见 §9）。
+**契约版本**：1.1（演进规则见 §9；1.1 按解析器施工票新增可选顶层 `score` 字段，见 §1 与 §8，旧消费者可忽略）。
 
 **状态与边界**：本文档先于实现冻结契约。文中提到的解析器与消费脚本属夜跑闭环后续施工范围，落地之前本文档只是契约，不表示任何脚本已存在或闭环可运行。本仓不运行夜跑闭环，也不安装 Stryker 或 mutmut；两个工具的接入与配置方法见[变异测试运营手册](../quality-gates/mutation-testing.md)。配套格式文档：基线文件 `.mutation-baseline.json` 与豁免文件 `.equivalent-mutants.json` 的细化定义同属夜跑闭环后续施工，落点 `docs/formats/`（现有雏形见运营手册 §1.3 与 §2）。
 
@@ -35,7 +35,7 @@
 
 要点：
 
-- 顶层只有 `tool`、`timestamp`、`mutants` 三个字段，全部必填。
+- 顶层字段为 `tool`、`timestamp`、`mutants`（全部必填）与 `score`（1.1 起可选）。
 - 每个 mutant 恰好八个字段，全部必填、全部有值；工具缺失的信息按 §3 的兜底规则填充，不省略字段、不写 `null`。
 - 夜跑管线当前只输出存活变异体（`status` 恒为 `"Survived"`），但 schema 保留全部状态（见 §5）。
 - 报告文件名约定 `unified-mutation-report.json`；管线中间产物可加后缀（如 `unified-mutation-report.filtered.json`）。
@@ -57,13 +57,14 @@
 | --- | --- | --- | --- | --- |
 | `tool` | string | 是 | `"stryker"` 或 `"mutmut"`，闭合枚举 | 产生原始报告的变异测试工具。新增工具属于契约演进（§9） |
 | `timestamp` | string | 是 | ISO-8601 UTC，`YYYY-MM-DDTHH:MM:SSZ` | 解析器写出本报告的时刻。由解析器生成，不取自原始报告 |
-| `mutants` | array | 是 | 允许空数组 | 变异体列表，排序规则见 §3.5。**1.0 不含任何统计字段**（分数、killed/total 计数），分数类消费的边界见 §8 |
+| `mutants` | array | 是 | 允许空数组 | 变异体列表，排序规则见 §3.5。**报告不含 killed/total 统计字段**，分数类消费的边界见 §8（1.1 新增的 `score` 见下一行） |
+| `score` | number | 否 | 0–100 | 变异分数，1.1 新增的可选字段，由解析器写出，旧消费者必须可忽略。报告带显式分数（`metrics.mutationScore`、顶层 `mutationScore`/`score`）时原样记录（不取整不截断）；否则按检出口径计算 `round2((killed + timeout) / total * 100)`（Timeout 计入检出）；变异范围为空（total=0）时记 100 |
 
 约束：
 
 - `mutants` 为空数组是合法输出（全部被杀死、目标无变异体或全部被豁免时），生产者必须以退出码 0 正常写出，不得视为错误。
 - 报告文件编码 UTF-8（无 BOM）、LF 换行、2 空格缩进、结尾一个换行符。
-- 除本表三个字段外不得有其他顶层字段（schema `additionalProperties: false`）。
+- 除本表字段外不得有其他顶层字段（schema `additionalProperties: false`）；1.0 仅有 `tool`、`timestamp`、`mutants`，1.1 新增可选 `score`。
 
 ## 2. mutant 对象
 
@@ -222,7 +223,7 @@ mutmut 没有公开稳定的机器可读变异类型标签，解析器按 `mutmu
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Unified Mutation Report",
-  "description": "夜跑变异测试闭环统一变异体报告契约 v1.0，正文见 docs/formats/unified-mutation-report.md",
+  "description": "夜跑变异测试闭环统一变异体报告契约 v1.1，正文见 docs/formats/unified-mutation-report.md",
   "type": "object",
   "additionalProperties": false,
   "required": ["tool", "timestamp", "mutants"],
@@ -241,6 +242,12 @@ mutmut 没有公开稳定的机器可读变异类型标签，解析器按 `mutmu
       "type": "array",
       "description": "变异体列表；夜跑管线当前只含 Survived；允许空数组；排序见正文 §3.5",
       "items": { "$ref": "#/definitions/mutant" }
+    },
+    "score": {
+      "type": "number",
+      "description": "可选（1.1 起）：变异分数 0–100，解析器写出，消费者可忽略",
+      "minimum": 0,
+      "maximum": 100
     }
   },
   "definitions": {
@@ -433,7 +440,8 @@ mutmut 没有公开稳定的机器可读变异类型标签，解析器按 `mutmu
 ## 8. 消费者约定
 
 - **豁免过滤**：豁免条目与报告变异体的匹配键是 `file + line + mutationType`（语义三元组，精确定义见 [equivalent-mutants.md](./equivalent-mutants.md) §4）。id 不参与匹配（§3.1）。命中的变异体从报告中剔除后才进入 issue 创建。
-- **门槛检查**：统一报告只含存活变异体且无统计字段，1.0 **不能**直接算出变异分数（需要 killed/total）。baseline 工具 `mutation-baseline.mjs` 的分数数据源（读工具原生报告，或将来经 §9 扩展统一报告）由该工具的施工票确定；本文档不预留统计字段。
+- **门槛检查**：统一报告只含存活变异体、不含 killed/total 计数，1.0 **不能**直接算出变异分数（需要 killed/total）；1.1 新增的顶层 `score` 是解析器写出的展示性字段（§1），消费者不得依赖它做门槛判断。baseline 工具 `mutation-baseline.mjs` 的分数数据源为原始工具报告；本文档不预留 killed/total 统计字段。
+- **分数字段（1.1）**：顶层 `score` 仅供人读与日志展示，旧消费者可安全忽略，1.0 报告不含此字段；其口径与兜底规则见 §1 表。
 - **issue 创建**：按 `file` 精确分组（大小写敏感），每组生成一个人读 issue 与一个机读 JSON（`.mutation-queue/` 下）。机读 JSON 可复用 mutant 对象的字段子集；issue 与 queue 文件的具体格式由 `create-mutation-issues.mjs` 的施工票定义，不在本契约内。
 - **补测 agent**：读 issue 附带的 JSON（含 `file`、`line`、`mutationType`、`original`、`mutated`）即可生成针对性测试，无需读统一报告全文。
 

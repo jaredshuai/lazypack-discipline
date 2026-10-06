@@ -261,7 +261,7 @@ node scripts/mutation-baseline.mjs update --input reports/mutation/mutation.json
 - **门槛判定只看 `score`**：`killed`/`survived`/`total` 用于审计与追溯（§3）。
 - **更换工具或调整 mutate 范围 = 重新 init**：分数只在同工具、同范围、同口径下可比。Stryker 与 mutmut 的分母口径不同，扩大或收缩 mutate 范围也会改变分数基线。这些操作之后旧基线失去比较意义，必须人工确认后删除旧文件重新 `init`，并以一次显式提交说明原因；禁止用 `update` 掩盖口径变化。
 - **基线文件必须随代码演进提交**：update 后随提升分数的测试改动一并提交，让门槛历史在 git 里可追溯。
-- **与统一报告的边界**：统一报告 v1.0（[unified-mutation-report.md](unified-mutation-report.md)）只含存活变异体、没有统计字段；分数与计数的来源是原始工具报告。衔接实现由基线工具施工票落实，本契约不修改统一报告。
+- **与统一报告的边界**：统一报告 v1.0（[unified-mutation-report.md](unified-mutation-report.md)）只含存活变异体、没有统计字段；v1.1 新增的可选顶层 `score` 是解析器写出的展示性字段，基线工具不消费它，分数与计数的来源仍是原始工具报告。衔接实现由基线工具施工票落实。
 - **与豁免的交互**：`.equivalent-mutants.json` 的豁免条目增删会改变 total 与分数（等价体不再计入存活）。分数因此上涨时按 §5.3 走 `update` 固化；分数回落（如清理错误豁免）不许 `update` 下调，需要人工评估是否重新 `init` 并留痕。
 
 ## 9. 演进规则
@@ -273,7 +273,7 @@ node scripts/mutation-baseline.mjs update --input reports/mutation/mutation.json
 ## 参考
 
 - [变异测试运营手册](../quality-gates/mutation-testing.md)：门槛冻结策略与棘轮规则的来源（§1）。
-- [统一变异体报告格式](unified-mutation-report.md)：同目录契约；统一报告不含统计字段，分数类消费的边界见其 §8。
+- [统一变异体报告格式](unified-mutation-report.md)：同目录契约；统一报告不含 killed/total 统计字段（1.1 起有可选展示性 `score`），分数类消费的边界见其 §8。
 - [CRAP 计算器](../../scripts/calculate_crap.mjs)：本仓 CLI 工具结构参考。
 - StrykerJS 配置（`thresholds.break` 语义）：<https://stryker-mutator.io/docs/stryker-js/configuration/>
 - mutmut 官方文档：<https://mutmut.readthedocs.io/en/latest/>
