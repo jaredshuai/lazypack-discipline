@@ -1,0 +1,20 @@
+# =============================================================================
+# 夜跑变异测试闭环 systemd timer 模板（user 级）
+# =============================================================================
+# 作用：每天定时触发同名的 mutation-testing.service（安装步骤见其文件头）。
+# =============================================================================
+
+[Unit]
+Description=Nightly schedule for mutation testing loop
+
+[Timer]
+# 每天 02:00 本地时间触发（systemd 按本机时区解释；GitHub Actions 的 cron
+# 按 UTC，两边不同）。Python 版复制改名后建议改 03:30 错峰
+OnCalendar=*-*-* 02:00:00
+# 因关机/休眠错过的触发在下次启动后补跑一次（配合 oneshot service）
+Persistent=true
+# 在触发时刻上加 0~15 分钟随机延迟，避免整点集中跑；不需要可删除此行
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

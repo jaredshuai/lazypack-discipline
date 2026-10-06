@@ -1,0 +1,43 @@
+# =============================================================================
+# 夜跑变异测试闭环 systemd service 模板（user 级，无需 root）
+# =============================================================================
+# 作用：定义由 mutation-testing.timer 每天定时触发的一次性任务，实际执行
+#       scripts/nightly-mutation-runner.sh（完整闭环与前置条件见该脚本头注）。
+#
+# 安装（与 mutation-testing.timer 配套）：
+#   1. 把本仓 scripts/ 工具与 templates/scripts/nightly-mutation-runner.sh
+#      复制到目标项目 scripts/（见脚本头注），手动跑通一次；
+#   2. 把本文件与 mutation-testing.timer 复制到 ~/.config/systemd/user/；
+#   3. 把下面 ExecStart 里的 YOUR_USER_HERE / YOUR_REPO_HERE 改成实际值
+#      （也按需调整 --log-dir 日志目录）；
+#   4. systemctl --user daemon-reload
+#      systemctl --user enable --now mutation-testing.timer
+#      systemctl --user list-timers                        # 确认调度生效
+#      systemctl --user start mutation-testing.service     # 立即手动跑一次
+#      journalctl --user -u mutation-testing.service       # 查看运行日志
+#
+# 说明：
+#   - user 级服务随用户会话运行；笔记本等常关机的机器建议
+#     loginctl enable-linger $USER，让 timer 在未登录时也能触发；
+#   - Python 版把 ExecStart 的 --lang 改为 py；同机同仓两种语言都要跑时，
+#     复制一份 service/timer 改名错峰（如 mutation-testing-py，03:30）；
+#   - 定时与补跑行为见 mutation-testing.timer 的 OnCalendar / Persistent；
+#   - 包装脚本自身也写文件日志（--log-dir），journal 这里只看控制台输出；
+#   - ExecStart 经 /usr/bin/env bash 调用：占位路径阶段也能通过
+#     systemd-analyze verify（argv[0] 恒存在），安装后也可改为直接路径。
+# =============================================================================
+
+[Unit]
+Description=Nightly mutation test loop (run -> parse -> baseline -> issues)
+# 由同名 mutation-testing.timer 触发；本单元不设 [Install]，
+# 避免被误 enable 成开机自跑
+
+[Service]
+Type=oneshot
+# 占位路径按目标项目实际位置修改（YOUR_USER_HERE / YOUR_REPO_HERE）
+ExecStart=/usr/bin/env bash /home/YOUR_USER_HERE/projects/YOUR_REPO_HERE/scripts/nightly-mutation-runner.sh --lang ts --project-dir /home/YOUR_USER_HERE/projects/YOUR_REPO_HERE --log-dir %h/.local/state/nightly-mutation
+# issue 创建需要 gh 凭据：默认用 gh auth login 的持久凭据；无人值守环境可
+# 取消下行注释改用显式 token（用 systemctl --user show-environment 核对注入）
+#Environment=GH_TOKEN=YOUR_TOKEN_HERE
+# 变异测试常以小时计，超时按项目规模调整；超时按失败处理并中止闭环
+TimeoutStartSec=4h

@@ -1,0 +1,39 @@
+# =============================================================================
+# 夜跑变异测试闭环 crontab 示例
+# =============================================================================
+# 作用：每天定时运行 scripts/nightly-mutation-runner.sh（完整闭环见该脚本
+#       头注：变异测试 -> 解析 -> baseline -> issues；日志写 --log-dir 并按
+#       --log-keep 自动清理）。
+#
+# 安装：
+#   1. 把本仓 scripts/ 工具与 templates/scripts/nightly-mutation-runner.sh
+#      复制到目标项目 scripts/（见脚本头注），手动跑通一次；
+#   2. crontab -e 粘贴下面内容，把 YOUR_USER_HERE / YOUR_REPO_HERE 改成
+#      实际值；
+#   3. crontab -l 核对已生效。
+#
+# cron 三个最常见的坑（务必核对）：
+#   1. PATH 很短（通常只有 /usr/bin:/bin）：node/npx/mutmut/gh 装在
+#      nvm、homebrew、$HOME/.local 等位置时必须补 PATH，否则第一步就失败；
+#   2. cron 不加载 .bashrc/.profile，环境靠下面这类显式声明；
+#   3. 时间按本机时区解释（GitHub Actions 的 cron 按 UTC，两边不同）。
+#
+# gh 凭据：包装脚本优先读环境变量 GH_TOKEN，其次 gh auth login 的持久凭据
+# （cron 默认带正确 HOME，一般可直接读）。都没有时先给脚本加 --dry-run
+# 验证链路，再补凭据。
+# =============================================================================
+
+# 按实际安装位置补齐（用 which node npx mutmut gh 逐个核对）
+PATH=/usr/local/bin:/usr/bin:/bin:/home/YOUR_USER_HERE/.local/bin
+
+# 每天 02:00 本地时间跑 TypeScript（Stryker）。控制台输出丢弃以免 cron 邮件
+# 刷屏——完整日志已由脚本写入 /tmp/nightly-mutation/（按运行带时间戳）
+0 2 * * * /home/YOUR_USER_HERE/projects/YOUR_REPO_HERE/scripts/nightly-mutation-runner.sh --lang ts --project-dir /home/YOUR_USER_HERE/projects/YOUR_REPO_HERE >/dev/null 2>&1
+
+# 每天 03:30 跑 Python（mutmut），与 TypeScript 错峰
+30 3 * * * /home/YOUR_USER_HERE/projects/YOUR_REPO_HERE/scripts/nightly-mutation-runner.sh --lang py --project-dir /home/YOUR_USER_HERE/projects/YOUR_REPO_HERE >/dev/null 2>&1
+
+# 可选：防止上一轮没跑完时重叠（cron 本身不防重叠；systemd timer 天然防）。
+# 需要时把上面两行换成 flock 版本（util-linux；macOS 无 flock，可用 shlock 替代）：
+# 0 2 * * * flock -n /tmp/nightly-mutation-ts.lock /home/YOUR_USER_HERE/projects/YOUR_REPO_HERE/scripts/nightly-mutation-runner.sh --lang ts --project-dir /home/YOUR_USER_HERE/projects/YOUR_REPO_HERE >/dev/null 2>&1
+# 30 3 * * * flock -n /tmp/nightly-mutation-py.lock /home/YOUR_USER_HERE/projects/YOUR_REPO_HERE/scripts/nightly-mutation-runner.sh --lang py --project-dir /home/YOUR_USER_HERE/projects/YOUR_REPO_HERE >/dev/null 2>&1

@@ -1,0 +1,4 @@
+# 夜跑闭环模板必须保持 LF：bash 与 cron/systemd 解析器都不容忍 CRLF，
+# Windows 检出时也不要转换
+templates/scripts/*.sh text eol=lf
+templates/config/* text eol=lf
