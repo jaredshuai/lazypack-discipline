@@ -1,0 +1,116 @@
+# =============================================================================
+# 夜跑变异测试闭环 workflow 模板（TypeScript / Stryker）
+# =============================================================================
+# 作用：每晚定时全量运行 Stryker 变异测试，解析存活变异体为统一报告，
+#       对照 .mutation-baseline.json 做只涨不跌检查，按文件分组创建补测
+#       issue（人读 GitHub issue + agent 队列 JSON），并上传全部报告作为
+#       artifacts 供排查。
+#
+# 使用方式（复制到目标项目，本仓自身不运行该闭环）：
+#   1. 把本文件复制为目标项目的 .github/workflows/nightly-mutation-ts.yml；
+#   2. 把本仓 scripts/ 的工具脚本一并复制到目标项目 scripts/：
+#      parse-stryker-report.mjs、mutation-baseline.mjs、create-mutation-issues.mjs；
+#   3. 目标项目配置 stryker.conf.json，reporters 必须含 "json"
+#      （原生 JSON 报告默认落 reports/mutation/mutation.json）；
+#   4. 首次运行自动 init 基线，之后每轮做 check（见下面步骤 6/7）；
+#      .mutation-baseline.json 按契约应提交进版本库，否则每轮都会重新 init、
+#      棘轮检查形同虚设；
+#   5. 可选豁免文件 .equivalent-mutants.json：存在即自动应用（等价变异体
+#      不再建 issue），格式契约见本仓 docs/formats/equivalent-mutants.md。
+#
+# 前置条件：
+#   - 目标项目 npm 依赖可安装（npm ci 需要 package-lock.json）；
+#   - issue 创建经 gh CLI 完成，凭据用仓库自带的 GITHUB_TOKEN，无需额外 secret；
+#   - 定时说明：cron 为 UTC 时间（02:00 UTC），按需调整；若同仓同时启用
+#     Python 版 workflow，建议错开时间避免同一时刻双跑。
+# =============================================================================
+
+name: Nightly mutation tests (TypeScript)
+
+on:
+  # 每晚 02:00 UTC 触发（GitHub Actions 的 cron 一律按 UTC 解读）
+  schedule:
+    - cron: '0 2 * * *'
+  # 允许在 Actions 页面手动触发，便于首次配置时验证整条链路
+  workflow_dispatch:
+
+# 最小权限：读代码 + 写 issues（建 issue、去重检索、确保标签都需要 issues: write）
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  mutation-ts:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 检出目标项目代码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. 安装 Node.js（工具链在 Node 24 验证；下面的解析器、baseline、
+      #    issue 创建脚本都是 Node 程序）
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 3. 安装项目依赖（npm ci 需要 lockfile；没有 lockfile 的项目改成 npm install）
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. 运行 Stryker 变异测试（依赖列表安装后才有 npx stryker）
+      #    要求 stryker.conf.json 的 reporters 含 "json"。注意：若配置了
+      #    thresholds.break，分数低于阈值时 Stryker 以非零码退出并在此失败，
+      #    后续 issue 创建不会执行；本闭环的门槛是下面的 baseline check，
+      #    建议不要配置 thresholds.break。
+      - name: Run mutation tests (Stryker)
+        run: npx stryker run
+
+      # 5. 解析存活变异体为统一变异体报告（契约 v1.1）
+      #    统一报告落项目根：解析器的 --output 不创建父目录（与
+      #    .vscode/tasks.json 模板同一口径）
+      - name: Parse surviving mutants into unified report
+        run: node scripts/parse-stryker-report.mjs --input reports/mutation/mutation.json --output unified-mutation-report.json
+
+      # 6. 首次运行（工作区还没有基线文件）：把当前分数冻结为基线。
+      #    跑完后请把生成的 .mutation-baseline.json 提交进版本库。
+      - name: Initialize baseline (first run only)
+        if: hashFiles('.mutation-baseline.json') == ''
+        run: node scripts/mutation-baseline.mjs init --input reports/mutation/mutation.json --lang ts
+
+      # 7. 常规运行（基线文件已提交）：只涨不跌检查。
+      #    分数回归时退出码 2，本步骤失败并中止后续 issue 创建（回归先由人
+      #    处理，不自动放行）；报告仍会被最后一步上传（if: always()）。
+      - name: Check baseline (ratchet; exit 2 on regression)
+        if: hashFiles('.mutation-baseline.json') != ''
+        run: node scripts/mutation-baseline.mjs check --input reports/mutation/mutation.json --lang ts
+
+      # 8. 按文件分组创建补测 issue + agent 队列 JSON
+      #    - gh CLI 从 GH_TOKEN 环境变量读取凭据，值为仓库自带的 GITHUB_TOKEN；
+      #    - 与 open 状态的同名 issue 去重，重复夜跑只会跳过不会重复创建；
+      #    - 存在 .equivalent-mutants.json 时自动应用豁免过滤；
+      #    - 配置期验证可临时加 --dry-run（零 gh 调用，只写 .mutation-queue/
+      #      下的队列文件与 body 预览）。
+      - name: Create per-file mutation issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f .equivalent-mutants.json ]; then
+            node scripts/create-mutation-issues.mjs --input unified-mutation-report.json --exemptions .equivalent-mutants.json
+          else
+            node scripts/create-mutation-issues.mjs --input unified-mutation-report.json
+          fi
+
+      # 9. 上传本轮全部报告作为 artifacts（即便中途失败也上传，便于排查；
+      #    none of the paths exist 时只告警不失败）
+      - name: Upload mutation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-reports-ts
+          path: |
+            reports/mutation/mutation.json
+            unified-mutation-report.json
+            .mutation-queue/
+          if-no-files-found: warn
+          retention-days: 30

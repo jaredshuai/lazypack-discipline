@@ -1,0 +1,136 @@
+# =============================================================================
+# 夜跑变异测试闭环 workflow 模板（Python / mutmut）
+# =============================================================================
+# 作用：每晚定时全量运行 mutmut 变异测试，解析 .mutmut-cache 中的存活变异体
+#       为统一报告，可选地做基线只涨不跌检查，按文件分组创建补测 issue
+#       （人读 GitHub issue + agent 队列 JSON），并上传全部报告作为 artifacts。
+#
+# 使用方式（复制到目标项目，本仓自身不运行该闭环）：
+#   1. 把本文件复制为目标项目的 .github/workflows/nightly-mutation-py.yml；
+#   2. 把本仓 scripts/ 的工具脚本一并复制到目标项目 scripts/：
+#      parse_mutmut_report.py、mutation-baseline.mjs、create-mutation-issues.mjs；
+#   3. 配置 mutmut（setup.cfg 的 [mutmut] 段或命令行参数）：
+#      paths_to_mutate、runner 等，见 mutmut 文档；
+#   4. 首次运行不需要手工步骤；基线检查为可选步骤（见下面步骤 7 的边界说明）。
+#
+# 已知边界（如实暴露，不做伪装）：
+#   - 本模板按 mutmut 2.x 口径（结果缓存在 .mutmut-cache）；mutmut 3.x 不再
+#     写该缓存文件，因此安装时固定 "mutmut<3"；
+#   - mutation-baseline.mjs 不读 .mutmut-cache，需要项目自备 mutmut
+#     results-export JSON（文件名 mutmut-results-export.json，shape 见
+#     parse_mutmut_report.py --help 的第 2 种输入形态；killed/timeout 等
+#     只计数类别可以是字符串数组）。没有该文件时基线步骤自动跳过，
+#     其余环节照常。缺口说明见本仓 docs/research/vscode-scheduled-tasks.md §7.1。
+#
+# 前置条件：
+#   - 目标项目 Python 依赖可安装（默认 pip install -r requirements.txt，
+#     用 poetry/uv 等的项目改成对应安装命令）；
+#   - issue 创建经 gh CLI 完成，凭据用仓库自带的 GITHUB_TOKEN，无需额外 secret；
+#   - 定时说明：cron 为 UTC 时间（02:00 UTC）；若同仓同时启用 TypeScript 版
+#     workflow，建议错开时间避免同一时刻双跑。
+# =============================================================================
+
+name: Nightly mutation tests (Python)
+
+on:
+  # 每晚 02:00 UTC 触发（GitHub Actions 的 cron 一律按 UTC 解读）
+  schedule:
+    - cron: '0 2 * * *'
+  # 允许在 Actions 页面手动触发，便于首次配置时验证整条链路
+  workflow_dispatch:
+
+# 最小权限：读代码 + 写 issues（建 issue、去重检索、确保标签都需要 issues: write）
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  mutation-py:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 检出目标项目代码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. 安装 Python（解析器 parse_mutmut_report.py 要求 3.8+）
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 3. 安装 Node.js：基线检查（mutation-baseline.mjs）与 issue 创建
+      #    （create-mutation-issues.mjs）是 Node 程序，Python workflow 也需要
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 4. 安装项目依赖与 mutmut（固定 2.x：mutmut 3.x 不再写本模板读取的
+      #    .mutmut-cache；用 poetry/uv 等的项目替换第一行为对应安装命令）
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install "mutmut<3"
+
+      # 5. 运行 mutmut 变异测试
+      #    mutmut 在存在存活/可疑变异体时以非零码退出，而这正是夜跑闭环要
+      #    处理的输入，不应让 workflow 在此失败（continue-on-error 让该步骤
+      #    显示为「已容忍」但不中断）；若测试套件本身崩溃，下一步解析会因
+      #    配不出有效结果而失败，不会静默放过。
+      - name: Run mutation tests (mutmut)
+        continue-on-error: true
+        run: mutmut run
+
+      # 6. 捕获 mutmut show 输出并把 .mutmut-cache 解析为统一变异体报告
+      #    （契约 v1.1）。缓存不含替换片段，存活条目必须配到 "mutmut show"
+      #    的 diff，所以先落盘 show all 输出再经 --show 传入解析器；
+      #    临时捕获文件与统一报告都落项目根（解析器 --output 不创建父目录）。
+      - name: Parse surviving mutants into unified report
+        run: |
+          mutmut show all > .mutmut-show-all.txt
+          python scripts/parse_mutmut_report.py --input .mutmut-cache --show .mutmut-show-all.txt --output unified-mutation-report.json
+
+      # 7. 基线只涨不跌检查（可选步骤）
+      #    需要 mutmut results-export JSON 作为输入（见文件头「已知边界」）：
+      #    文件不存在时本步骤跳过；存在时首次运行 init 冻结基线，之后每轮
+      #    check。分数回归时退出码 2，本步骤失败并中止后续 issue 创建；
+      #    报告仍会被最后一步上传（if: always()）。
+      - name: Check baseline (needs mutmut results-export JSON)
+        if: hashFiles('mutmut-results-export.json') != ''
+        run: |
+          if [ -f .mutation-baseline.json ]; then
+            node scripts/mutation-baseline.mjs check --input mutmut-results-export.json --lang py
+          else
+            node scripts/mutation-baseline.mjs init --input mutmut-results-export.json --lang py
+          fi
+
+      # 8. 按文件分组创建补测 issue + agent 队列 JSON
+      #    - gh CLI 从 GH_TOKEN 环境变量读取凭据，值为仓库自带的 GITHUB_TOKEN；
+      #    - 与 open 状态的同名 issue 去重，重复夜跑只会跳过不会重复创建；
+      #    - 存在 .equivalent-mutants.json 时自动应用豁免过滤；
+      #    - 配置期验证可临时加 --dry-run（零 gh 调用，只写 .mutation-queue/
+      #      下的队列文件与 body 预览）。
+      - name: Create per-file mutation issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f .equivalent-mutants.json ]; then
+            node scripts/create-mutation-issues.mjs --input unified-mutation-report.json --exemptions .equivalent-mutants.json
+          else
+            node scripts/create-mutation-issues.mjs --input unified-mutation-report.json
+          fi
+
+      # 9. 上传本轮全部报告作为 artifacts（即便中途失败也上传，便于排查；
+      #    none of the paths exist 时只告警不失败）
+      - name: Upload mutation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-reports-py
+          path: |
+            .mutmut-cache
+            .mutmut-show-all.txt
+            unified-mutation-report.json
+            .mutation-queue/
+          if-no-files-found: warn
+          retention-days: 30
