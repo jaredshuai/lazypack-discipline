@@ -25,7 +25,7 @@
 | `docs/formats/` | 夜跑闭环数据契约四份：统一变异体报告、基线文件、等价变异体豁免、补测 issue 模板 |
 | `docs/interviews/` | 立项访谈的去敏整理稿；原始记录在私有 vault |
 | `docs/reviews/` | 多 AI 讨论留档（按 `<日期>-<议题>/`）；使用具体材料前按登记册核实其状态 |
-| `scripts/` | 通用辅助脚本；`scripts/handoff_manifest.js` 提供跨阶段交接同源清单生成与核验；`scripts/calculate_crap.mjs` 为 CRAP 值计算器（支持 TypeScript/Python 覆盖率与复杂度报告），`scripts/test_calculate_crap.mjs` 为其测试套件；夜跑变异测试闭环工具：`scripts/mutation-baseline.mjs`（基线 init/check/update 与只涨不跌棘轮）、`scripts/parse-stryker-report.mjs` 与 `scripts/parse_mutmut_report.py`（Stryker/mutmut 报告解析为统一变异体报告）、`scripts/create-mutation-issues.mjs`（补测 issue 创建，`--dry-run` 预览）、`scripts/test_nightly_loop.mjs`（端到端验证）；`scripts/fixtures/sample-{ts,py}/` 为配套端到端测试夹具 |
+| `scripts/` | 通用辅助脚本；`scripts/handoff_manifest.js` 提供跨阶段交接同源清单生成与核验；`scripts/calculate_crap.mjs` 为 CRAP 值计算器（支持 TypeScript/Python 覆盖率与复杂度报告），`scripts/test_calculate_crap.mjs` 为其测试套件；夜跑变异测试闭环工具：`scripts/mutation-baseline.mjs`（基线 init/check/update 与只涨不跌棘轮）、`scripts/parse-stryker-report.mjs` 与 `scripts/parse_mutmut_report.py`（Stryker/mutmut 报告解析为统一变异体报告）、`scripts/create-mutation-issues.mjs`（补测 issue 创建，`--dry-run` 预览）、`scripts/test_nightly_loop.mjs`（端到端验证）、`scripts/test_workflow_templates.mjs`（GitHub Actions workflow 模板验证）；`scripts/fixtures/sample-{ts,py}/` 为配套端到端测试夹具 |
 | `skills/` | [`skills/lazypack-setup`](skills/lazypack-setup/) 已实现（支持门禁装配、项目自选访谈材料留存指引，以及文档归属首期原位保留与安全登记，当前宿主沙箱已验收）；[`skills/lazypack-harvest`](skills/lazypack-harvest/) 已实现（有限离线验证） |
 
 ## 来源
