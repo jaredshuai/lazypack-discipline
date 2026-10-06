@@ -16,6 +16,7 @@ import os
 import py_compile
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -123,6 +124,114 @@ def make_export(score=None):
 
 
 # --------------------------------------------------------------------
+# 夹具：mutmut 2.x 原生缓存（.mutmut-cache，Pony ORM schema v4）与 show 输出
+# --------------------------------------------------------------------
+
+# 与 mutmut 2.5.1（Pony ORM）落盘的 DDL 一致：Line.sourcefile → SourceFile.id，
+# Mutant.line → Line.id，行号 0 基（junitxml 输出 +1 可证）。
+CACHE_DDL = (
+    'CREATE TABLE "MiscData" ("key" VARCHAR PRIMARY KEY NOT NULL, "value" VARCHAR)',
+    'CREATE TABLE "SourceFile" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,'
+    ' "filename" VARCHAR NOT NULL, "hash" VARCHAR)',
+    'CREATE TABLE "Line" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,'
+    ' "line_number" INTEGER NOT NULL, "line" VARCHAR,'
+    ' "sourcefile" INTEGER NOT NULL REFERENCES "SourceFile" ("id"))',
+    'CREATE TABLE "Mutant" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,'
+    ' "index" INTEGER NOT NULL, "status" VARCHAR NOT NULL, "tested_against_hash" VARCHAR,'
+    ' "line" INTEGER NOT NULL REFERENCES "Line" ("id"))',
+)
+
+
+def write_cache(dir_path, name, source_files, lines, mutants, version='4'):
+    """按真实 Pony schema 生成 .mutmut-cache 夹具。
+
+    source_files: [(filename, hash)]；lines: [(filename, line_number_0based, text)]；
+    mutants: [(filename, line_number_0based, index, status)]；version=None 时不写版本行。
+    """
+    file_path = os.path.join(dir_path, name)
+    conn = sqlite3.connect(file_path)
+    try:
+        for ddl in CACHE_DDL:
+            conn.execute(ddl)
+        if version is not None:
+            conn.execute('INSERT INTO "MiscData" ("key", "value") VALUES (?, ?)',
+                         ('version', version))
+        file_ids = {}
+        for index, (filename, file_hash) in enumerate(source_files, 1):
+            file_ids[filename] = index
+            conn.execute('INSERT INTO "SourceFile" ("id", "filename", "hash") VALUES (?, ?, ?)',
+                         (index, filename, file_hash))
+        line_ids = {}
+        line_cursor = 1
+        for filename, line_number, text in lines:
+            line_ids[(filename, line_number)] = line_cursor
+            conn.execute('INSERT INTO "Line" ("id", "line_number", "line", "sourcefile") VALUES (?, ?, ?, ?)',
+                         (line_cursor, line_number, text, file_ids[filename]))
+            line_cursor += 1
+        for filename, line_number, index, status in mutants:
+            conn.execute('INSERT INTO "Mutant" ("index", "status", "line") VALUES (?, ?, ?)',
+                         (index, status, line_ids[(filename, line_number)]))
+        conn.commit()
+    finally:
+        conn.close()
+    return file_path
+
+
+CACHE_FILES = [
+    ('src/domain/pricing.py', 'hash-pricing'),
+    ('src/services/cart.py', 'hash-cart'),
+    ('src/adapters/cli.py', 'hash-cli'),
+]
+
+CACHE_LINES = [
+    ('src/domain/pricing.py', 3, '    if total <= 0:'),
+    ('src/services/cart.py', 22, '    if a and b:'),
+    ('src/adapters/cli.py', 4, 'x = 1'),
+    ('src/adapters/cli.py', 8, 'y = 2'),
+    ('src/adapters/cli.py', 14, 'z = 3'),
+    ('src/adapters/cli.py', 20, 'w = 4'),
+]
+
+# 全缓存 5 个变异体（按插入序 id=1..5）：2 ok_killed + 1 bad_timeout +
+# 1 bad_survived + 1 ok_suspicious，分数 (2+1)/5 = 60，与 CAPTURE_TEXT 同口径。
+CACHE_MUTANTS = [
+    ('src/adapters/cli.py', 4, 1, 'ok_killed'),
+    ('src/adapters/cli.py', 8, 1, 'ok_killed'),
+    ('src/adapters/cli.py', 14, 1, 'bad_timeout'),
+    ('src/domain/pricing.py', 3, 7, 'bad_survived'),
+    ('src/services/cart.py', 22, 12, 'ok_suspicious'),
+]
+
+# mutmut results --diffs 口径的 show 输出："# mutant <id>" 标记 + diff 块，
+# 前置指引行与节标题行作为噪声一并容忍。
+SHOW_TEXT = '\n'.join([
+    'To apply a mutant on disk:',
+    '    mutmut apply 4',
+    '',
+    'Survived 🙁 (1)',
+    '---- src/domain/pricing.py (1) ----',
+    '',
+    '# mutant 4',
+    '--- src/domain/pricing.py',
+    '+++ src/domain/pricing.py',
+    '@@ -4 +4 @@',
+    '-    if total <= 0:',
+    '+    if total < 0:',
+    '',
+    'Suspicious 🤔 (1)',
+    '---- src/services/cart.py (1) ----',
+    '',
+    '# mutant 5',
+    '--- src/services/cart.py',
+    '+++ src/services/cart.py',
+    '@@ -23 +23 @@',
+    '-    if a and b:',
+    '+    if a or b:',
+    ''
+]) + '\n'
+
+
+# --------------------------------------------------------------------
 # 用例
 # --------------------------------------------------------------------
 
@@ -133,9 +242,11 @@ def case_help(base):
     assert_case('Usage' in cli['stdout'], '--help 输出应含用法说明，实际：%s' % cli['stdout'])
     assert_case('--input' in cli['stdout'], '--help 应说明 --input')
     assert_case('--output' in cli['stdout'], '--help 应说明 --output')
+    assert_case('--show' in cli['stdout'], '--help 应说明 --show')
     assert_case('Survived' in cli['stdout'], '--help 应说明保留 Survived')
     assert_case('Suspicious' in cli['stdout'], '--help 应说明保留 Suspicious')
     assert_case('mutmut' in cli['stdout'], '--help 应说明 mutmut 输入形态')
+    assert_case('.mutmut-cache' in cli['stdout'], '--help 应说明 .mutmut-cache 缓存输入形态')
 
 
 def case_h_alias(base):
@@ -610,6 +721,265 @@ def case_id_ordering(base):
     assert_case([m['id'] for m in report['mutants']] == ['mutmut-1', 'mutmut-2'], 'id 应排序后从 1 起编号')
 
 
+def case_cache_valid(base):
+    """缓存 + show：状态映射、0 基行号 +1、标记按 id 配对、坐标、片段、分数、--output。"""
+    dir_path = make_case_dir(base, 'cache-valid')
+    cache_path = write_cache(dir_path, '.mutmut-cache', CACHE_FILES, CACHE_LINES, CACHE_MUTANTS)
+    show_path = write_text(dir_path, 'show.txt', SHOW_TEXT)
+    cli = run_cli(['--input', cache_path, '--show', show_path])
+    report = parse_stdout_json(cli, '缓存有效')
+
+    assert_case(report['tool'] == 'mutmut', "tool 应为 'mutmut'，实际 %r" % report.get('tool'))
+    assert_case(TIMESTAMP_RE.match(report['timestamp'] or ''), 'timestamp 应为 ISO-8601 UTC，实际 %r' % report.get('timestamp'))
+    assert_case(len(report['mutants']) == 2, '应提取 2 个变异体（1 Survived + 1 Suspicious），实际 %d' % len(report['mutants']))
+
+    first = report['mutants'][0]
+    assert_case(first['id'] == 'mutmut-1', '排序后首个 id 应为 mutmut-1，实际 %r' % first.get('id'))
+    assert_case(first['file'] == 'src/domain/pricing.py', '路径应保留，实际 %r' % first.get('file'))
+    assert_case(first['line'] == 4, '缓存 0 基行号 3 应输出 4，实际 %r' % first.get('line'))
+    assert_case(first['column'] == 14, '列号应为 14（<= 所在列），实际 %r' % first.get('column'))
+    assert_case(first['mutationType'] == 'ComparisonOperator', '类型应为 ComparisonOperator，实际 %r' % first.get('mutationType'))
+    assert_case(first['original'] == '<=' and first['mutated'] == '<', '片段应为 "<="→"<"，实际 %r→%r' % (first.get('original'), first.get('mutated')))
+    assert_case(first['status'] == 'Survived', 'bad_survived 应映射为 Survived，实际 %r' % first.get('status'))
+
+    second = report['mutants'][1]
+    assert_case(second['id'] == 'mutmut-2', '第二个 id 应为 mutmut-2，实际 %r' % second.get('id'))
+    assert_case(second['file'] == 'src/services/cart.py', '第二个路径应为 cart.py，实际 %r' % second.get('file'))
+    assert_case(second['line'] == 23 and second['column'] == 10, '坐标应为 23:10，实际 %s:%s' % (second.get('line'), second.get('column')))
+    assert_case(second['mutationType'] == 'LogicalOperator', '类型应为 LogicalOperator，实际 %r' % second.get('mutationType'))
+    assert_case(second['status'] == 'Suspicious', 'ok_suspicious 应映射为 Suspicious，实际 %r' % second.get('status'))
+
+    assert_case(report['score'] == 60, '分数应为 60（(2 ok_killed + 1 bad_timeout) / 5），实际 %r' % report.get('score'))
+
+    output_path = os.path.join(dir_path, 'unified-mutation-report.json')
+    cli2 = run_cli(['--input', cache_path, '--show', show_path, '--output', output_path])
+    assert_case(cli2['status'] == 0, '--output 退出码应为 0，实际 %s: %s' % (cli2['status'], cli2['stderr']))
+    assert_case('wrote' in cli2['stdout'] and 'survived=1' in cli2['stdout'], 'stdout 应有摘要行，实际：%s' % cli2['stdout'])
+    with open(output_path, 'rb') as handle:
+        saved = json.loads(handle.read().decode('utf-8'))
+    assert_case(saved['tool'] == 'mutmut' and len(saved['mutants']) == 2, '落盘内容应为统一报告')
+
+
+def case_cache_autodetect_content_based(base):
+    """自动识别按内容而非文件名：文本捕获命名为 .mutmut-cache 仍按文本解析。"""
+    dir_path = make_case_dir(base, 'cache-autodetect-text')
+    input_path = write_text(dir_path, '.mutmut-cache', CAPTURE_TEXT)
+    cli = run_cli(['--input', input_path])
+    report = parse_stdout_json(cli, '文本命名的缓存')
+    assert_case(len(report['mutants']) == 2 and report['score'] == 60,
+                '非 SQLite 内容应按文本捕获解析，实际 %d 个变异体/分数 %r' % (len(report['mutants']), report.get('score')))
+
+
+def case_cache_corrupt_sqlite(base):
+    """SQLite 魔数 + 损坏内容：退出码 1，stderr 提示缓存读取失败。"""
+    dir_path = make_case_dir(base, 'cache-corrupt')
+    input_path = write_text(dir_path, 'corrupt.cache', 'SQLite format 3\x00not a real database body')
+    cli = run_cli(['--input', input_path])
+    assert_case(cli['status'] == 1, '损坏缓存退出码应为 1，实际 %s: %s' % (cli['status'], cli['stdout']))
+    assert_case('cache' in cli['stderr'], 'stderr 应提示缓存读取失败，实际：%s' % cli['stderr'])
+
+
+def case_cache_requires_show(base):
+    """缓存有存活者但缺 --show：退出码 1，stderr 指引 --show 并点名缺失 id。"""
+    dir_path = make_case_dir(base, 'cache-needs-show')
+    cache_path = write_cache(dir_path, '.mutmut-cache', CACHE_FILES, CACHE_LINES, CACHE_MUTANTS)
+    cli = run_cli(['--input', cache_path])
+    assert_case(cli['status'] == 1, '缺 --show 退出码应为 1，实际 %s: %s' % (cli['status'], cli['stdout']))
+    assert_case('--show' in cli['stderr'] and 'mutmut show' in cli['stderr'],
+                'stderr 应指引 --show 与 mutmut show，实际：%s' % cli['stderr'])
+    assert_case('mutant 4' in cli['stderr'], 'stderr 应点名缺失的 mutant id，实际：%s' % cli['stderr'])
+
+
+def case_cache_missing_diff(base):
+    """--show 缺一个存活者的 diff：退出码 1 并给出对应 mutmut show 命令。"""
+    dir_path = make_case_dir(base, 'cache-missing-diff')
+    cache_path = write_cache(dir_path, '.mutmut-cache', CACHE_FILES, CACHE_LINES, CACHE_MUTANTS)
+    show_path = write_text(dir_path, 'show.txt', '\n'.join([
+        '# mutant 4',
+        '--- src/domain/pricing.py',
+        '+++ src/domain/pricing.py',
+        '@@ -4 +4 @@',
+        '-    if total <= 0:',
+        '+    if total < 0:',
+        ''
+    ]) + '\n')
+    cli = run_cli(['--input', cache_path, '--show', show_path])
+    assert_case(cli['status'] == 1, '缺 diff 退出码应为 1，实际 %s: %s' % (cli['status'], cli['stdout']))
+    assert_case('mutant 5' in cli['stderr'] and '"mutmut show 5"' in cli['stderr'],
+                'stderr 应点名缺失 id 并给出命令，实际：%s' % cli['stderr'])
+    assert_case('src/services/cart.py' in cli['stderr'], 'stderr 应包含缺失位置，实际：%s' % cli['stderr'])
+
+
+def case_cache_no_survivors(base):
+    """无存活缓存不需 --show：空清单 + 分数 100；skipped/untested 状态映射不报错。"""
+    dir_path = make_case_dir(base, 'cache-no-survivors')
+    files = [('src/a.py', 'hash-a')]
+    lines = [('src/a.py', 0, 'x = 1'), ('src/a.py', 4, 'y = 2')]
+    mutants = [
+        ('src/a.py', 0, 1, 'ok_killed'),
+        ('src/a.py', 4, 1, 'bad_timeout'),
+        ('src/a.py', 0, 2, 'skipped'),
+        ('src/a.py', 4, 2, 'untested'),
+    ]
+    cache_path = write_cache(dir_path, '.mutmut-cache', files, lines, mutants)
+    cli = run_cli(['--input', cache_path])
+    report = parse_stdout_json(cli, '缓存无存活')
+    assert_case(report['mutants'] == [], 'mutants 应为空数组，实际 %r' % report.get('mutants'))
+    assert_case(report['score'] == 50.0,
+                '分数应按全缓存计数 (1 killed + 1 timeout) / 4 计为 50.0，实际 %r' % report.get('score'))
+    assert_case(cli['stderr'] == '', '无存活时不应有警告，实际：%s' % cli['stderr'])
+
+    dir_path2 = make_case_dir(base, 'cache-all-killed')
+    cache_path2 = write_cache(dir_path2, '.mutmut-cache',
+                              [('src/b.py', 'hash-b')], [('src/b.py', 0, 'x = 1')],
+                              [('src/b.py', 0, 1, 'ok_killed')])
+    cli2 = run_cli(['--input', cache_path2])
+    report2 = parse_stdout_json(cli2, '缓存全杀死')
+    assert_case(report2['mutants'] == [], '全杀死时 mutants 应为空数组')
+    assert_case(report2['score'] == 100, '全杀死时分数应为 100，实际 %r' % report2.get('score'))
+
+
+def case_cache_unknown_status(base):
+    """缓存出现未知状态值：按契约 §5.3 退出码 1 并点名状态。"""
+    dir_path = make_case_dir(base, 'cache-unknown-status')
+    cache_path = write_cache(dir_path, '.mutmut-cache',
+                             [('src/a.py', 'hash-a')], [('src/a.py', 0, 'x = 1')],
+                             [('src/a.py', 0, 1, 'dead')])
+    cli = run_cli(['--input', cache_path])
+    assert_case(cli['status'] == 1, '未知状态退出码应为 1，实际 %s: %s' % (cli['status'], cli['stdout']))
+    assert_case("'dead'" in cli['stderr'], 'stderr 应点名未知状态值，实际：%s' % cli['stderr'])
+
+
+def case_cache_not_mutmut(base):
+    """普通 SQLite 文件（缺缓存表）：退出码 1 并提示缺表。"""
+    dir_path = make_case_dir(base, 'cache-foreign')
+    path = os.path.join(dir_path, 'foreign.db')
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute('CREATE TABLE stuff (a INTEGER)')
+        conn.commit()
+    finally:
+        conn.close()
+    cli = run_cli(['--input', path])
+    assert_case(cli['status'] == 1, '非 mutmut 缓存退出码应为 1，实际 %s: %s' % (cli['status'], cli['stdout']))
+    assert_case('not a mutmut cache' in cli['stderr'] and 'Line' in cli['stderr'],
+                'stderr 应提示缺失的缓存表，实际：%s' % cli['stderr'])
+
+
+def case_cache_version_mismatch(base):
+    """缓存版本异常仍尝试解析：版本 9 打警告；缺版本行不告警。"""
+    dir_path = make_case_dir(base, 'cache-version-9')
+    cache_path = write_cache(dir_path, '.mutmut-cache', CACHE_FILES, CACHE_LINES, CACHE_MUTANTS, version='9')
+    show_path = write_text(dir_path, 'show.txt', SHOW_TEXT)
+    cli = run_cli(['--input', cache_path, '--show', show_path])
+    report = parse_stdout_json(cli, '版本 9')
+    assert_case(len(report['mutants']) == 2, '版本失配仍应解析出 2 个变异体，实际 %d' % len(report['mutants']))
+    assert_case('version' in cli['stderr'], 'stderr 应有版本警告，实际：%s' % cli['stderr'])
+
+    dir_path2 = make_case_dir(base, 'cache-no-version')
+    cache_path2 = write_cache(dir_path2, '.mutmut-cache', CACHE_FILES, CACHE_LINES, CACHE_MUTANTS, version=None)
+    cli2 = run_cli(['--input', cache_path2, '--show', show_path])
+    report2 = parse_stdout_json(cli2, '缺版本行')
+    assert_case(len(report2['mutants']) == 2, '缺版本行仍应解析，实际 %d' % len(report2['mutants']))
+    assert_case(cli2['stderr'] == '', '缺版本行不应告警，实际：%s' % cli2['stderr'])
+
+
+def case_cache_position_pairing(base):
+    """无标记的纯 mutmut show 输出按 file+line 回退配对，全部命中时无警告。"""
+    dir_path = make_case_dir(base, 'cache-pos-pairing')
+    cache_path = write_cache(dir_path, '.mutmut-cache', CACHE_FILES, CACHE_LINES, CACHE_MUTANTS)
+    show_path = write_text(dir_path, 'show.txt', '\n'.join([
+        '--- src/domain/pricing.py',
+        '+++ src/domain/pricing.py',
+        '@@ -4 +4 @@',
+        '-    if total <= 0:',
+        '+    if total < 0:',
+        '',
+        '--- src/services/cart.py',
+        '+++ src/services/cart.py',
+        '@@ -23 +23 @@',
+        '-    if a and b:',
+        '+    if a or b:',
+        ''
+    ]) + '\n')
+    cli = run_cli(['--input', cache_path, '--show', show_path])
+    report = parse_stdout_json(cli, '回退配对')
+    assert_case(len(report['mutants']) == 2 and report['score'] == 60,
+                '回退配对应提取 2 个变异体且分数 60，实际 %d/%r' % (len(report['mutants']), report.get('score')))
+    assert_case(cli['stderr'] == '', '回退配对全部命中时不应有警告，实际：%s' % cli['stderr'])
+
+
+def case_cache_extra_show_blocks(base):
+    """show 里 killed 变异体的多余标记块：告警忽略，输出不受影响。"""
+    dir_path = make_case_dir(base, 'cache-extra-blocks')
+    cache_path = write_cache(dir_path, '.mutmut-cache', CACHE_FILES, CACHE_LINES, CACHE_MUTANTS)
+    show_path = write_text(dir_path, 'show.txt', '\n'.join([
+        '# mutant 4',
+        '--- src/domain/pricing.py',
+        '+++ src/domain/pricing.py',
+        '@@ -4 +4 @@',
+        '-    if total <= 0:',
+        '+    if total < 0:',
+        '',
+        '# mutant 5',
+        '--- src/services/cart.py',
+        '+++ src/services/cart.py',
+        '@@ -23 +23 @@',
+        '-    if a and b:',
+        '+    if a or b:',
+        '',
+        '# mutant 1',
+        '--- src/adapters/cli.py',
+        '+++ src/adapters/cli.py',
+        '@@ -5 +5 @@',
+        '-    x = 1',
+        '+    x = 2',
+        ''
+    ]) + '\n')
+    cli = run_cli(['--input', cache_path, '--show', show_path])
+    report = parse_stdout_json(cli, '多余块')
+    assert_case(len(report['mutants']) == 2, '多余 killed 块不应进入输出，实际 %d' % len(report['mutants']))
+    assert_case('ignoring' in cli['stderr'] and 'mutant 1' in cli['stderr'],
+                '多余 killed 块应告警忽略，实际：%s' % cli['stderr'])
+
+
+def case_cache_line_mismatch(base):
+    """diff hunk 行号与缓存不一致：告警并以缓存坐标（缓存权威）。"""
+    dir_path = make_case_dir(base, 'cache-line-mismatch')
+    cache_path = write_cache(dir_path, '.mutmut-cache', CACHE_FILES, CACHE_LINES, CACHE_MUTANTS)
+    show_path = write_text(dir_path, 'show.txt', '\n'.join([
+        '# mutant 4',
+        '--- src/domain/pricing.py',
+        '+++ src/domain/pricing.py',
+        '@@ -9 +9 @@',
+        '-    if total <= 0:',
+        '+    if total < 0:',
+        '',
+        '# mutant 5',
+        '--- src/services/cart.py',
+        '+++ src/services/cart.py',
+        '@@ -23 +23 @@',
+        '-    if a and b:',
+        '+    if a or b:',
+        ''
+    ]) + '\n')
+    cli = run_cli(['--input', cache_path, '--show', show_path])
+    report = parse_stdout_json(cli, '行号失配')
+    assert_case(cli['status'] == 0, '行号失配退出码应为 0，实际 %s: %s' % (cli['status'], cli['stderr']))
+    assert_case(report['mutants'][0]['line'] == 4, '行号应以缓存为准（4），实际 %r' % report['mutants'][0].get('line'))
+    assert_case('disagrees' in cli['stderr'], '失配应打警告，实际：%s' % cli['stderr'])
+
+
+def case_show_flag_with_text_input(base):
+    """--show 与非缓存输入同用：退出码 1 并说明旗标只用于缓存。"""
+    dir_path = make_case_dir(base, 'show-flag-text')
+    input_path = write_text(dir_path, 'capture.txt', CAPTURE_TEXT)
+    show_path = write_text(dir_path, 'show.txt', '')
+    cli = run_cli(['--input', input_path, '--show', show_path])
+    assert_case(cli['status'] == 1, '--show 误用退出码应为 1，实际 %s: %s' % (cli['status'], cli['stdout']))
+    assert_case('--show' in cli['stderr'], 'stderr 应点名 --show 误用，实际：%s' % cli['stderr'])
+
+
 def case_syntax_compat(base):
     """VAL-MUTMUT-012（本机仅 3.14 可用）：源码可编译，无高版本语法。"""
     py_compile.compile(CLI, cfile=os.path.join(base, 'parse_mutmut_report.pyc'), doraise=True)
@@ -645,6 +1015,19 @@ def main():
         case_multi_line_diff,
         case_classification_matrix,
         case_id_ordering,
+        case_cache_valid,
+        case_cache_autodetect_content_based,
+        case_cache_corrupt_sqlite,
+        case_cache_requires_show,
+        case_cache_missing_diff,
+        case_cache_no_survivors,
+        case_cache_unknown_status,
+        case_cache_not_mutmut,
+        case_cache_version_mismatch,
+        case_cache_position_pairing,
+        case_cache_extra_show_blocks,
+        case_cache_line_mismatch,
+        case_show_flag_with_text_input,
         case_syntax_compat
     ]
     try:

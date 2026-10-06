@@ -3,9 +3,9 @@
 """
 scripts/parse_mutmut_report.py
 
-mutmut 结果解析器（夜跑闭环 M2）：读取 mutmut 的运行输出文本捕获或结果导出
-JSON，提取 Survived / Suspicious 两类变异体，转换为统一变异体报告格式
-（docs/formats/unified-mutation-report.md，契约 v1.1）：
+mutmut 结果解析器（夜跑闭环 M2）：读取 mutmut 的运行输出文本捕获、结果导出
+JSON 或原生 .mutmut-cache（SQLite），提取 Survived / Suspicious 两类变异体，
+转换为统一变异体报告格式（docs/formats/unified-mutation-report.md，契约 v1.1）：
     { tool: 'mutmut', timestamp, mutants: [...], score? }
 mutant 字段 id/file/line/column/mutationType/original/mutated/status 按契约
 §2/§3 归一化：id 为 mutmut-<序号>（按 §3.5 排序后从 1 起数）；mutmut 原生
@@ -26,12 +26,20 @@ file/line/column 升序。
 diff 块，survived/suspicious 条目必须有配对 diff，否则报错退出；
 (2) mutmut 结果导出 JSON { killed/survived/timeout/suspicious/untested/
 skipped: [...] }，survived/suspicious 条目必须是带 original+mutated 或 diff
-的富对象，纯字符串无法提供替换片段，报错退出。
+的富对象，纯字符串无法提供替换片段，报错退出；
+(3) mutmut 2.x 原生缓存 .mutmut-cache（SQLite，按文件头魔数识别，只读
+打开）：缓存有权威的 mutant id、状态（ok_killed/bad_survived/bad_timeout/
+ok_suspicious/skipped/untested）、源文件路径与 0 基行号（输出统一 +1 转
+1 基），但没有替换片段，survived/suspicious 条目须用 --show 提供
+`mutmut show` 输出配对（`mutmut results --diffs` 的 "# mutant <id>" 标记
+按 id 精确配对，纯 `mutmut show` 输出按 file+line 回退配对，带标记的块
+只按 id 认领以免 killed 块误配同行存活者），缺配对报错退出；分数按全
+缓存计数计算（ok_killed 计检出、bad_timeout 计入检出）。
 零依赖（Python 标准库，3.8+），解析为纯函数，CLI 入口在文件底部。
 未接 hook/CI。
 
 用法:
-    python scripts/parse_mutmut_report.py --input <path> [--output <path>] [--help]
+    python scripts/parse_mutmut_report.py --input <path> [--show <path>] [--output <path>] [--help]
 
 退出码: 0 成功（含空清单）；1 用户错误（缺参、文件缺失、输入不是 mutmut
         格式、survived/suspicious 条目缺片段、未知状态类别、片段非法）。
@@ -40,17 +48,20 @@ skipped: [...] }，survived/suspicious 条目必须是带 original+mutated 或 d
 import errno
 import json
 import math
+import os
 import re
+import sqlite3
 import sys
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
+from pathlib import Path
 
 
 class CliError(Exception):
     """CLI 用法/输入错误：只向 stderr 输出 message 并以退出码 1 结束。"""
 
 
-VALUE_FLAGS = ('--input', '--output')
+VALUE_FLAGS = ('--input', '--output', '--show')
 
 # 契约 §5.2 的 mutmut 状态词 → 统一状态（文本节标题与导出类别共用，小写键）。
 STATUS_WORDS = {
@@ -69,6 +80,24 @@ STATUS_WORDS = {
 # 导出 JSON 的已知状态类别（"untested" 为 mutation-baseline.mjs 既有口径）。
 EXPORT_KEYS = ('killed', 'survived', 'timeout', 'suspicious', 'untested', 'skipped',
                'no tests', 'not checked', 'excluded', 'ignored')
+
+# mutmut 2.x 原生缓存（.mutmut-cache，SQLite）Mutant.status 取值 → 统一状态
+# （取值集合依据 mutmut 2.5.1 源码：UNTESTED/OK_KILLED/OK_SUSPICIOUS/
+# BAD_TIMEOUT/BAD_SURVIVED/SKIPPED；未知值按契约 §5.3 报错退出）。
+CACHE_STATUS_WORDS = {
+    'bad_survived': 'Survived',
+    'ok_suspicious': 'Suspicious',
+    'bad_timeout': 'Timeout',
+    'ok_killed': 'Killed',
+    'skipped': 'Skipped',
+    'untested': 'NoCoverage'
+}
+
+# SQLite 文件头魔数（缓存与文本/JSON 输入的自动识别依据）。
+SQLITE_MAGIC = b'SQLite format 3\x00'
+
+# mutmut 2.5.1（Pony ORM）的缓存 schema 版本；其他版本仍尝试解析并打警告。
+CACHE_DB_VERSION = 4
 
 # 夜跑闭环提取的变异体状态（施工票：survived + suspicious）。
 EXTRACTED_STATUSES = ('Survived', 'Suspicious')
@@ -104,6 +133,14 @@ ENTRY_RE = re.compile(r'^\s*(?P<path>\S+?\.py):(?P<line>\d+)(?::\d+)?\s*(?:-\s*.
 DIFF_OLD_RE = re.compile(r'^--- (?:a/)?(?P<path>.+?)\s*$')
 DIFF_NEW_RE = re.compile(r'^\+\+\+ (?:b/)?(?P<path>.+?)\s*$')
 HUNK_RE = re.compile(r'^@@ -(?P<line>\d+)(?:,\d+)? \+\d+(?:,\d+)? @@')
+
+# mutmut results --diffs 在每个 diff 前打印的 mutant id 标记。
+SHOW_MARKER_RE = re.compile(r'^#\s*mutant\s+(\d+)\s*$', re.IGNORECASE)
+
+# mutmut results --diffs 的文件分隔头（"---- <path> (n) ----"）。以 4+ 个
+# 连字符开头，与 unified diff 的 "--- <path>" 头和 "- <del>" 行都不同形；
+# 在 diff 块未闭合时出现应终结当前块，而不是被当成删除行吞掉。
+SHOW_FILE_HEADER_RE = re.compile(r'^-{4,}\s.*\s-{4,}$')
 
 # 词法记号：空白、多字符运算符优先、词、单字符标点（用于最小片段与列号）。
 TOKEN_RE = re.compile(r'\s+|\*\*|//|<<|>>|<=|>=|==|!=|->|\w+|[^\w\s]')
@@ -151,7 +188,7 @@ def warn(message):
 
 def parse_args(argv):
     """解析命令行参数（手写以保持退出码契约并检出重复旗标）。"""
-    args = {'help': False, 'input': None, 'output': None}
+    args = {'help': False, 'input': None, 'output': None, 'show': None}
     index = 0
     while index < len(argv):
         token = argv[index]
@@ -180,6 +217,25 @@ def read_text_file(path, label):
         if err.errno == errno.ENOENT:
             raise CliError('%s not found: %s' % (label, path))
         raise CliError('failed to read %s %s: %s' % (label, path, err))
+
+
+def read_binary_file(path, label):
+    """读取原始字节（SQLite 魔数识别与文本解码共用入口）。"""
+    try:
+        with open(path, 'rb') as handle:
+            return handle.read()
+    except OSError as err:
+        if err.errno == errno.ENOENT:
+            raise CliError('%s not found: %s' % (label, path))
+        raise CliError('failed to read %s %s: %s' % (label, path, err))
+
+
+def decode_text(raw, path):
+    """字节解码为 UTF-8 文本（容忍 BOM），非法序列给出清晰提示。"""
+    try:
+        return raw.decode('utf-8-sig')
+    except UnicodeDecodeError as err:
+        raise CliError('input is not valid UTF-8 text: %s (%s)' % (err, path))
 
 
 def parse_json_text(raw, path):
@@ -390,23 +446,41 @@ def finalize_diff_block(block, source_path):
     return {'file': old_file, 'line': block['line'], 'original': original, 'mutated': mutated, 'column': column}
 
 
-def parse_diff_blocks(text, source_path):
+def parse_diff_blocks(text, source_path, collect_markers=False):
     """扫描文本中的 mutmut show unified diff 块（其余行视为噪声忽略）。
 
     行号取第一个 - 行在源文件中的行号（hunk 头起点 + 前置上下文行推进）。
+    collect_markers 为真时返回 (标记 id 或 None, 块) 列表：标记来自
+    `mutmut results --diffs` 在 diff 前打印的 "# mutant <id>" 行，绑定到
+    其后紧跟的第一个 diff 块。
     """
     blocks = []
     block = None
+    pending_marker = None
+
+    def finish(current):
+        finished = finalize_diff_block(current, source_path)
+        if finished is None:
+            return
+        if collect_markers:
+            blocks.append((current.get('marker'), finished))
+        else:
+            blocks.append(finished)
+
     for raw_line in text.split('\n'):
         line = raw_line[:-1] if raw_line.endswith('\r') else raw_line
+        marker_match = SHOW_MARKER_RE.match(line)
+        if marker_match:
+            pending_marker = int(marker_match.group(1))
+            continue
         old_match = DIFF_OLD_RE.match(line)
         if old_match:
             if block is not None:
-                finished = finalize_diff_block(block, source_path)
-                if finished is not None:
-                    blocks.append(finished)
+                finish(block)
             block = {'path': old_match.group('path'), 'new_path': None, 'line': None,
-                     'deleted': [], 'added': [], 'in_hunk': False, 'old_cursor': 0}
+                     'deleted': [], 'added': [], 'in_hunk': False, 'old_cursor': 0,
+                     'marker': pending_marker}
+            pending_marker = None
             continue
         if block is None:
             continue
@@ -421,6 +495,11 @@ def parse_diff_blocks(text, source_path):
             block['in_hunk'] = True
             continue
         if block['new_path'] is not None and block['in_hunk']:
+            if SHOW_FILE_HEADER_RE.match(line):
+                # results --diffs 的下一个文件分隔头：终结当前块。
+                finish(block)
+                block = None
+                continue
             if line.startswith('+'):
                 block['added'].append(line[1:])
                 continue
@@ -433,9 +512,7 @@ def parse_diff_blocks(text, source_path):
             # 上下文行（含空行）推进旧侧行号。
             block['old_cursor'] += 1
     if block is not None:
-        finished = finalize_diff_block(block, source_path)
-        if finished is not None:
-            blocks.append(finished)
+        finish(block)
     return blocks
 
 
@@ -545,6 +622,140 @@ def stats_from_summary_counts(section_counts):
         elif status == 'Timeout':
             stats['timeout'] = count
     return stats
+
+
+def read_mutmut_cache(path):
+    """只读解析 mutmut 2.x 的 .mutmut-cache（SQLite，Pony ORM schema）。
+
+    返回 (survived/suspicious 条目列表, 全缓存统计)。缓存是状态、路径与
+    0 基行号的权威来源（输出统一 +1 转 1 基），但不含替换片段；片段由
+    pair_cache_entries 按 --show 文本配对补齐。以 mode=ro URI 打开，不在
+    缓存旁产生任何副作用文件。
+    """
+    uri = Path(os.path.abspath(path)).as_uri() + '?mode=ro'
+    try:
+        conn = sqlite3.connect(uri, uri=True)
+    except sqlite3.Error as err:
+        raise CliError('failed to open mutmut cache %s: %s' % (path, err))
+    try:
+        try:
+            tables = {row[0] for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            missing = sorted({'SourceFile', 'Line', 'Mutant'} - tables)
+            if missing:
+                raise CliError('not a mutmut cache: missing tables %s (%s)'
+                               % (', '.join(missing), path))
+            version_row = None
+            if 'MiscData' in tables:
+                version_row = conn.execute(
+                    "SELECT value FROM MiscData WHERE key='version'").fetchone()
+            total = conn.execute('SELECT COUNT(*) FROM "Mutant"').fetchone()[0]
+            rows = conn.execute(
+                'SELECT m."id", m."status", l."line_number", l."line", f."filename"'
+                ' FROM "Mutant" AS m'
+                ' JOIN "Line" AS l ON m."line" = l."id"'
+                ' JOIN "SourceFile" AS f ON l."sourcefile" = f."id"'
+                ' ORDER BY m."id"').fetchall()
+        except sqlite3.DatabaseError as err:
+            raise CliError('failed to read mutmut cache %s: %s' % (path, err))
+    finally:
+        conn.close()
+    if version_row is not None and version_row[0] is not None:
+        raw_version = str(version_row[0]).strip()
+        if raw_version != str(CACHE_DB_VERSION):
+            warn('mutmut cache version %s differs from the supported version %d; '
+                 'parsing may be inaccurate (%s)' % (raw_version, CACHE_DB_VERSION, path))
+    if len(rows) != total:
+        raise CliError('broken mutmut cache: %d of %d mutants have no line/sourcefile rows (%s)'
+                       % (total - len(rows), total, path))
+    entries = []
+    stats = {'total': total, 'killed': 0, 'timeout': 0}
+    for cache_id, status_raw, line_number, line_text, filename in rows:
+        status = CACHE_STATUS_WORDS.get(status_raw) if isinstance(status_raw, str) else None
+        if status is None:
+            raise CliError('unknown mutmut cache status %r for mutant %s (expected one of %s) (%s)'
+                           % (status_raw, cache_id, ', '.join(sorted(CACHE_STATUS_WORDS)), path))
+        if status == 'Killed':
+            stats['killed'] += 1
+        elif status == 'Timeout':
+            stats['timeout'] += 1
+        if status not in EXTRACTED_STATUSES:
+            continue
+        if not isinstance(line_number, int) or isinstance(line_number, bool) or line_number < 0:
+            raise CliError('mutmut cache line_number must be an integer >= 0, got %r for mutant %s (%s)'
+                           % (line_number, cache_id, path))
+        entries.append({
+            'cache_id': cache_id,
+            'status': status,
+            'file': normalize_path(filename, path),
+            'line': line_number + 1,
+            'source_line': line_text if isinstance(line_text, str) else ''
+        })
+    return entries, stats
+
+
+def pair_cache_entries(entries, show_path, source_path):
+    """把缓存存活条目配对到 --show 文本的 diff 块并构造 mutant。
+
+    "# mutant <id>" 标记按缓存 mutant id 精确认领（mutmut results --diffs
+    口径，同 file+line 的多个变异体也能区分）；无标记的纯 `mutmut show`
+    输出按 file+line 回退配对。带标记的块只按 id 认领，避免把 killed
+    变异体的 diff 误配给同行存活者；缺配对的条目整体报错退出，落单块
+    打警告忽略。
+    """
+    if not entries:
+        return []
+    if not show_path:
+        listing = '; '.join('mutant %s at %s:%s' % (entry['cache_id'], entry['file'], entry['line'])
+                            for entry in entries)
+        raise CliError('survived/suspicious mutants in the cache carry no replaced fragments; '
+                       'pass the "mutmut show" output via --show '
+                       '(e.g. `mutmut results --diffs > show.txt`); missing: %s (%s)'
+                       % (listing, source_path))
+    marked_blocks = parse_diff_blocks(read_text_file(show_path, 'show output'),
+                                      source_path, collect_markers=True)
+    by_id = {}
+    by_pos = {}
+    for marker, block in marked_blocks:
+        if marker is not None:
+            by_id.setdefault(marker, []).append(block)
+        else:
+            by_pos.setdefault((block['file'], block['line']), []).append(block)
+    mutants = []
+    missing = []
+    for entry in entries:
+        block = None
+        id_queue = by_id.get(entry['cache_id'])
+        if id_queue:
+            block = id_queue.pop(0)
+        else:
+            pos_queue = by_pos.get((entry['file'], entry['line']))
+            if pos_queue:
+                block = pos_queue.pop(0)
+        if block is None:
+            missing.append('mutant %s at %s:%s' % (entry['cache_id'], entry['file'], entry['line']))
+            continue
+        if block['file'] != entry['file'] or block['line'] != entry['line']:
+            warn('show diff header %s:%s disagrees with cache entry mutant %s at %s:%s; '
+                 'using the cache location (%s)' % (block['file'], block['line'], entry['cache_id'],
+                                                    entry['file'], entry['line'], source_path))
+            block['file'] = entry['file']
+            block['line'] = entry['line']
+        mutants.append(mutant_from_block(block, entry['status'], source_path))
+    if missing:
+        commands = ', '.join('"mutmut show %s"' % item.split()[1] for item in missing)
+        raise CliError('survived/suspicious mutants in the cache have no matching diff in the '
+                       'show output: %s; run %s and pass the output via --show (%s)'
+                       % ('; '.join(missing), commands, source_path))
+    for cache_id, queue in by_id.items():
+        for block in queue:
+            warn('ignoring show diff marked "# mutant %s": not a survived/suspicious mutant '
+                 'in the cache (%s)' % (cache_id, source_path))
+    for (file_path, line), queue in by_pos.items():
+        for block in queue:
+            warn('ignoring show diff for %s:%s: no survived/suspicious cache entry at that '
+                 'location (%s)' % (file_path, line, source_path))
+    return mutants
 
 
 def looks_like_mutmut_export(data, source_path):
@@ -691,12 +902,17 @@ def print_help():
     lines = [
         'Usage: python scripts/parse_mutmut_report.py --input <path> [options]',
         '',
-        'Parse mutmut output (text capture or results-export JSON), keep the mutants',
-        'with status Survived or Suspicious, and convert them to the unified mutation',
-        'report format (docs/formats/unified-mutation-report.md, contract v1.1).',
+        'Parse mutmut output (text capture, results-export JSON, or the native',
+        '.mutmut-cache SQLite file), keep the mutants with status Survived or',
+        'Suspicious, and convert them to the unified mutation report format',
+        '(docs/formats/unified-mutation-report.md, contract v1.1).',
         '',
         'Options:',
-        '  --input <path>     Path to the mutmut capture or results-export JSON (required)',
+        '  --input <path>     Path to the mutmut capture, results-export JSON, or',
+        '                     .mutmut-cache SQLite file (required)',
+        '  --show <path>      Text file holding "mutmut show" outputs (unified diffs,',
+        '                     optionally preceded by "# mutant <id>" markers); required',
+        '                     with a .mutmut-cache input to fill original/mutated',
         '  --output <path>    Write the unified report JSON to this file (default: stdout)',
         '  -h, --help         Show this help and exit',
         '',
@@ -716,6 +932,17 @@ def print_help():
         '       {"file": "src/a.py", "line": 4, "original": "<=", "mutated": "<"}',
         '       {"file": "src/a.py", "line": 4, "diff": "--- src/a.py\\n+++ ..."}',
         '     Plain string entries carry no fragment data and are rejected (exit code 1).',
+        '  3. mutmut 2.x SQLite cache (.mutmut-cache), auto-detected by the SQLite file',
+        '     header and opened read-only. The cache is the authoritative source for',
+        '     mutant ids, statuses (ok_killed, bad_survived, bad_timeout, ok_suspicious,',
+        '     skipped, untested), file paths, and 0-based line numbers (converted to',
+        '     1-based in the output), but it does NOT store the replaced fragments.',
+        '     Survived/suspicious mutants therefore need their "mutmut show" diffs via',
+        '     --show: the output of `mutmut results --diffs` is matched exactly by its',
+        '     "# mutant <id>" markers (safe when several mutants share one line);',
+        '     concatenated `mutmut show <id>` output without markers is matched by file',
+        '     and line. Survivors without a matching diff fail with exit code 1 and list',
+        '     the "mutmut show <id>" commands to run.',
         '',
         'Output:',
         '  Unified report JSON (UTF-8, LF, 2-space indent):',
@@ -731,7 +958,9 @@ def print_help():
         '  score = round2((killed + timeout) / total * 100) (Timeout counts as detected,',
         '  Suspicious does not). In text captures the section header counts (e.g.',
         '  "Killed (9) Survived (1)") are the authoritative run statistics for the',
-        '  score; entry lines are only counted when no header carries a count. An',
+        '  score; entry lines are only counted when no header carries a count. For a',
+        '  .mutmut-cache input the score is computed from the full cache counts',
+        '  (killed = ok_killed, timeout = bad_timeout, total = all mutants). An',
         '  empty mutation range scores 100. Show-only diff captures carry no run',
         '  statistics, so the optional score field is omitted.',
         '',
@@ -739,7 +968,7 @@ def print_help():
         '  0  success (including an empty survivors list)',
         '  1  user error: bad arguments, missing file, invalid JSON, input that is not',
         '     mutmut output, survived/suspicious entries without diff fragments, unknown',
-        '     status categories, inconsistent fragments'
+        '     status categories, broken or foreign SQLite caches, inconsistent fragments'
     ]
     write_out('\n'.join(lines) + '\n')
 
@@ -751,20 +980,30 @@ def main(argv):
         return 0
     if not args['input']:
         write_err('Error: --input <mutmut-output> is required\n')
-        write_err('Usage: python scripts/parse_mutmut_report.py --input <path> [--output <path>]\n')
+        write_err('Usage: python scripts/parse_mutmut_report.py --input <path> [--show <path>] [--output <path>]\n')
         write_err('Run with --help for details.\n')
         return 1
-    raw = read_text_file(args['input'], 'mutmut output')
-    if raw.lstrip().startswith('{'):
-        data = parse_json_text(raw, args['input'])
-        if not looks_like_mutmut_export(data, args['input']):
-            raise CliError('mutmut report format not recognized: expected a results-export object '
-                           'with category arrays {"killed": [...], "survived": [...], ...} (%s)' % args['input'])
-        mutants, stats, has_summary = parse_json_export(data, args['input'])
-        score = resolve_score(data, stats, has_summary, args['input'])
+    raw = read_binary_file(args['input'], 'mutmut output')
+    is_cache = raw.startswith(SQLITE_MAGIC)
+    if args['show'] and not is_cache:
+        raise CliError('--show is only used when --input is a mutmut SQLite cache (.mutmut-cache) (%s)'
+                       % args['input'])
+    if is_cache:
+        entries, stats = read_mutmut_cache(args['input'])
+        mutants = pair_cache_entries(entries, args['show'], args['input'])
+        score = resolve_score(None, stats, True, args['input'])
     else:
-        mutants, stats, has_summary = parse_text_capture(raw, args['input'])
-        score = resolve_score(None, stats, has_summary, args['input'])
+        text = decode_text(raw, args['input'])
+        if text.lstrip().startswith('{'):
+            data = parse_json_text(text, args['input'])
+            if not looks_like_mutmut_export(data, args['input']):
+                raise CliError('mutmut report format not recognized: expected a results-export object '
+                               'with category arrays {"killed": [...], "survived": [...], ...} (%s)' % args['input'])
+            mutants, stats, has_summary = parse_json_export(data, args['input'])
+            score = resolve_score(data, stats, has_summary, args['input'])
+        else:
+            mutants, stats, has_summary = parse_text_capture(text, args['input'])
+            score = resolve_score(None, stats, has_summary, args['input'])
     report = assemble_report(mutants, score)
     text = json.dumps(report, ensure_ascii=False, indent=2) + '\n'
     if args['output']:
