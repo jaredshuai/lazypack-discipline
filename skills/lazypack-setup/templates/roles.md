@@ -1,7 +1,7 @@
-<!-- lazypack:start block=agent-roles src=DECISIONS.md@0.4.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
+<!-- lazypack:start block=agent-roles src=DECISIONS.md@0.5.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
 # 角色与 Skill 映射表 (docs/agents/roles.md)
 
-> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.4.0（依据 lazypack-setup 内置快照编译，来源内容标识: b0bfa054107a9a4c18d8e64a500b4db9bae059bb；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§3。
+> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.5.0（依据 lazypack-setup 内置快照编译，来源内容标识: 5f0e31b4b4965f2affc198bf8c76ef1e33f14b5a；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§3。
 > 角色是跨项目不变的固定层；角色到具体 Skill 的映射是可换的适配层。换 Skill 只改本表。
 
 ## 1. 角色职责与防撞车边界
