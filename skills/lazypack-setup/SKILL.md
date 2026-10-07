@@ -67,8 +67,12 @@ description: >-
        · 优先级 6（显式选择 TS 的新仓分支）：**恢复明确选择 TS 的新仓分支**；当目标目录为空目录或未初始化工程，且用户显式指定/选择了 TypeScript 时，**绝对不因无清单而直接退出，亦不自行猜测语言**；直接提供标准 TS 最小化工程模板初始化（ESM `"type": "module"`、最小 package/scripts、双 tsconfig、CLI `parseArgs`、bin/files、可选 MCP、单包 `pnpm-workspace.yaml: verifyDepsBeforeRun: error` 契约）。
    - **解耦声明**：缺对应清单或缺对应包管理器仅限制特定语言配方补缺，**绝对不关闭、不改写仓库已有的其他有效门禁**，亦不阻断通用纪律装配。
 4. **既有质量门禁命令**：检查 `scripts` 或配置文件中已有的 `format`、`lint`、`type`、`test` 命令（如 `eslint`, `prettier`, `biome`, `ruff`, `pytest`, `tsc` 等）。已有命令原样保留。
-5. **既有 Hook 管理器**：探测 `.husky/`、`lefthook.yml`、`package.json` 中的 `simple-git-hooks` 等。
-6. **既有产物状态与受管 Hook 出处读回**：
+5. **既有变异测试配置**：检查是否存在变异测试工具配置：
+   - TypeScript 项目：检查 `stryker.conf.js`、`stryker.conf.mjs`、`.stryker.conf.json`；
+   - Python 项目：检查 `pyproject.toml` 中的 `[tool.mutmut]` 段、`setup.cfg` 中的 `[mutmut]` 段。
+   已有配置原样保留。
+6. **既有 Hook 管理器**：探测 `.husky/`、`lefthook.yml`、`package.json` 中的 `simple-git-hooks` 等。
+7. **既有产物状态与受管 Hook 出处读回**：
    - 检查根目录与 `docs/` 下是否已存在六类产物，解析是否存在有效 lazypack 托管标记（见 [references/managed-blocks.md](references/managed-blocks.md)）；
    - **受管 Hook 出处读回与重跑恢复 (Hook Provenance Read-back)**：
      * 探测目标 Hook（如 `.githooks/pre-commit`）是否存在；
@@ -81,11 +85,11 @@ description: >-
      * 若 Hook 包含有效托管块但**无 `# lazypack:preset` 出处行**（旧版 setup 或非配方 Hook）：将其中的门禁命令统一按通用既有命令处理（`source=existing`, `reason=pre-existing`）；
      * **退出配方后的状态认知**：若此前已执行配方退出，Hook 中的出处行已移除；环境中遗留的工具**绝不代表用户重新接受了配方**；再次接线必须经由用户显式选择；
      * **未变重跑幂等**：若恢复的出处与命令与当前仓库状态一致（未变重跑），完整保留原出处与原 input，**不重复报价、不重复发起安装、不重复执行基线、不写盘（稳定 NO-OP）**。
-7. **访谈材料与想法留存现状探测**：
+8. **访谈材料与想法留存现状探测**：
    - 读取 `docs/agents/roles.md` §3 或常驻入口中是否已存在生效的留存策略与路径配置；
    - 探测是否存在 `docs/plantree/ideas/`、`docs/ideas/`、`docs/interviews/` 等线索目录；
    - **约束（探测不等于授权，失效指针具体判定）**：目录存在仅作为路径线索。具体判定“失效指针”：①目标缺失（历史配置记录了路径但磁盘上目标文件/目录不存在）；②标记损坏（协作文件或登记中标记残缺破坏）；③规则与路径不自洽（条文与实际路径冲突）。严格区分“用户确认计划新建”与“历史失效”：历史失效列入必要未知澄清，不能凡发现目录缺失就擅自自动修改路径；仅当存在明确生效条文且路径自洽时，才判定为“已知策略（0 提问）”。
-8. **角色技能可用性核实**：只读核实分配给各角色的 Skill / MCP 的实际可用证据，严格区分四种正交维度：
+9. **角色技能可用性核实**：只读核实分配给各角色的 Skill / MCP 的实际可用证据，严格区分四种正交维度：
    - **技能已安装证据**（如定义文件存在、命令在 PATH 中）；
    - **实际可调用证据**（如会话中实测调用通过）；
    - **门禁接线状态**（如 pre-commit Hook 已接线并配置对应检查命令）；
@@ -95,7 +99,7 @@ description: >-
    - **明确缺失**（环境中未检测到工具）：`依赖缺失 (宿主环境未检测到对应工具/Skill) [未安装]`；
    - **未验证**（未经当前会话调用或项目图谱未建）：`依赖约束 (...)；工具可用但本项目未建立 .codegraph/ 索引目录 [部分依赖未验证/图谱未建]` 或 `未验证 (...) [未验证]`。
    不将所有 MCP 的安装作为前置双检的阻断项（非阻断项，仅如实反映在角色表中）。
-9. **存量文档与归属探测 (Document Homes Discovery)**：
+10. **存量文档与归属探测 (Document Homes Discovery)**：
    - 遵循 [references/document-routing.md](references/document-routing.md) 执行指针先行探测与八大逻辑区域归属识别；
    - **指针先行**:
      * 优先读取目标项目现存 `docs/ARTIFACTS.md` 提取已登记项；
@@ -122,6 +126,20 @@ description: >-
   - 当代码仓完全缺失某项检查命令时，根据固定层 §6.2 推荐默认工具：
     * Python 项目（满足优先级 3 条件）：推荐 `uv` + `ruff` + `ty` + `pytest` 配方（按项补缺提问：用户可按门禁槽位独立选择采纳或拒绝）；
     * TS/JS 项目（满足优先级 3 或优先级 6 新仓 TS 分支）：推荐 `ts-biome-vitest` 配方（包含 Biome、tsc 与 Vitest；按项补缺提问：用户可按 format, lint, type, test 槽位独立选择采纳或拒绝；CLI 产物询问是否需要 bin/parseArgs，询问是否启用 MCP 服务；配置所有权遵循 `tool-or-user` 原则，setup 实行零工具私有配置写入；单包 `pnpm-workspace.yaml` 仅用于自安装保护，不等同授权 monorepo）；
+    * **Recipe 4: 变异测试配方**（多语言优先级 0，可与基础配方并存的补充质检层）：
+      - **适用条件探测**（遵循 [presets/mutation-testing.md](presets/mutation-testing.md) §2）：
+        · TypeScript 路径：探测到 `package.json` 且依赖中包含测试框架（vitest / jest / mocha / karma）；
+        · Python 路径：探测到 `pyproject.toml` 或 `requirements.txt`；
+        · 可同时支持 TypeScript 与 Python（混合项目）。
+      - **推荐时机**：在基础配方推荐之后、作为独立可选层询问；
+      - **推荐内容**：
+        · TypeScript：安装 `@stryker-mutator/{runner}`（根据探测到的测试框架选择 vitest-runner / jest-runner / mocha-runner / karma-runner）；
+        · Python：安装 `mutmut<3`（固定 2.x 以兼容工具链）；
+        · 分发 4 个核心工具脚本到 `scripts/`（mutation-baseline.mjs, parse-stryker-report.mjs, parse_mutmut_report.py, create-mutation-issues.mjs）；
+        · 多选触发面配置（GitHub Actions / 本地 cron/systemd / VS Code tasks）。
+      - **未探测到测试框架处理**：若 TypeScript 项目未探测到支持的测试框架，给出信息性警告并跳过 Stryker 安装，但**仍分发工具脚本**（框架无关，可用于手动配置）；
+      - **退出处理**：用户可选择退出变异测试配方；退出后不自动删除工具脚本与触发面文件（保护用户修改），再次 setup 时将其作为未接线的环境既有工具展示，需用户显式选择是否重新启用；
+      - **边界声明**：变异测试**不进入 pre-commit Hook**（属于夜跑质检层，不是秒级提交前门禁）；零工具私有配置写入（不创建 `stryker.conf.js` / `setup.cfg [mutmut]`）。
   - **未命中配方适用条件时的处理**：若缺少 `pyproject.toml` 或不满足配方条件，明确告知退出 Python 门禁配方，通用纪律装配继续，不向用户发起无意义的配方提问；
   - **重跑与退出后的澄清边界**：
     * 若重跑探测成功恢复了有效出处与接线事实，且仓库状态未变：**默认零提问 (0 questions)**，不向用户重复报价或再次询问是否采纳已决定项；
@@ -329,6 +347,7 @@ description: >-
 - [references/DECISIONS.md](references/DECISIONS.md)：本包固定层 0.5.0 派生快照（只读事实源）。
 - [presets/python-uv-ruff.md](presets/python-uv-ruff.md)：首发 Python 质量门禁配方数据卡（只读源）。
 - [presets/ts-biome-vitest.md](presets/ts-biome-vitest.md)：TypeScript/JavaScript 质量门禁配方数据卡（只读源）。
+- [presets/mutation-testing.md](presets/mutation-testing.md)：变异测试配方数据卡（只读源，多语言优先级 0 补充质检层）。
 - [references/retention-sections.md](references/retention-sections.md)：规划者访谈与碎片想法留存指引正文库（单一事实源）。
 - [references/document-routing.md](references/document-routing.md)：既有文档归属与 8 大知识区路由规范（原位保留与安全登记）。
 - [references/managed-blocks.md](references/managed-blocks.md)：标记语法、换行/编码规范、指纹与输入摘要算法、重跑决策树。
