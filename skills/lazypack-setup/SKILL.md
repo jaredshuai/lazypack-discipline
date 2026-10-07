@@ -347,6 +347,10 @@ description: >-
      * **minutes 入口 (P8)**：若确认启用了纪要归档，目标目录读取自 `retention.paths.minutes`（默认 `docs/interviews`）。若磁盘上该目录不存在，经整体确认后在目标路径建立空目录或入口索引，**严禁虚构伪造任何虚假访谈纪要会议记录**；若已存在则保护引用；
      * **raw_qa 绑定与核验 (P3, P8, R2)**：若确认启用了原始问答片段，必须在写前通过当前可见会话检查别名到宿主私有物理路径的显式授权映射（`session-authorized`）。若已在当前会话安全绑定，仅在授权私有位置写入初始引导/片段，公开产物仅存安全别名（如 `vault:raw-qa`），严禁落绝对私有路径或凭据；若当前会话未提供安全绑定映射，状态严格保持为 `unbound`（待绑定），不向任何地方写入文件，不虚报已可用，不预登记；
    - `docs/agents/roles.md`（若未暂停）：若留存策略已明确（非 pending 待确认），从 [references/retention-sections.md](references/retention-sections.md) 单一事实源获取对应正文，严格按替换表展开占位符（其中 `__RAW_QA_VISIBILITY__` 统一替换为 schema枚举值 `private-storage` 或 `private-repo`）后渲染 §3 规划者指引，并计算包含规范 `retention` 字段与 `retentionSrc` 权威正文源摘要的 input 摘要写盘；若留存策略处于 pending 状态，则不渲染 §3 亦不写入留存 input，杜绝生成假 header。
+   - `docs/agents/section9-discussion-protocol.md`（§9 多 AI 讨论执行规程）：
+     * **条件**：总是生成（与 AGENTS.md 同级）
+     * **来源**：`templates/section9-discussion-protocol.md`（原样复制，不做变量替换）
+     * **用途**：当需要改固定层条文时，提供 §9 多 AI 讨论的详细执行流程（临时目录、提示词隔离、三轮流程、独立性约束等）
 6. **受控迁移与文档登记单批次顺序执行与补偿保护 (Deterministic Execution with Single Atomic Write & Rollback Defense)**：
    - 若本次变更包含文档归属整理或物理迁移，Agent 调用确定性执行器：
      `node skills/lazypack-setup/scripts/doc_helper.mjs execute --cwd <targetRepo> --plan <plan.json> --approved-fp <plan_fp>`
