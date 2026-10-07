@@ -1,7 +1,7 @@
-<!-- lazypack:start block=release-discipline src=DECISIONS.md@0.5.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
+<!-- lazypack:start block=release-discipline src=DECISIONS.md@0.6.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
 # 发版与提交纪律 (RELEASE)
 
-> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.5.0（依据 lazypack-setup 内置快照编译，来源内容标识: 5f0e31b4b4965f2affc198bf8c76ef1e33f14b5a；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§5。
+> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.6.0（依据 lazypack-setup 内置快照编译，来源内容标识: 5f0e31b4b4965f2affc198bf8c76ef1e33f14b5a；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§5。
 
 ## 1. 提交与版本规则（固定段）
 
@@ -9,7 +9,7 @@
 - 格式：`type(scope)!: 描述`
 - 允许的 8 个 Angular type：`build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `test`，加上 `chore`, `revert`。
 - 破坏性改动使用 `!` 或正文注明 `BREAKING CHANGE`。
-- 脚注使用 `Closes #n` 或 `Fixes #n` 关联票据。
+- 脚注用 `Refs #n` 关联 issue（阶段性进展），用 `Closes #n` 关闭 issue（满足关闭条件）。
 
 ### 1.2 提交正文 (Google CL 规范)
 - 第一行独立说清「改了什么」。

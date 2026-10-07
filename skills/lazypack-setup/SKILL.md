@@ -1,7 +1,7 @@
 ---
 name: lazypack-setup
 description: >-
-  Compiles project-layer engineering discipline from lazypack-discipline fixed layer (0.5.0)
+  Compiles project-layer engineering discipline from lazypack-discipline fixed layer (0.6.0)
   after Matt Pocock skills setup. Probes repository, asks only necessary unknowns, confirms
   changes once, and generates six managed artifacts with fingerprint protection.
 ---
@@ -417,7 +417,7 @@ description: >-
 
 ## 参考文献与资源
 
-- [references/DECISIONS.md](references/DECISIONS.md)：本包固定层 0.5.0 派生快照（只读事实源）。
+- [references/DECISIONS.md](references/DECISIONS.md)：本包固定层 0.6.0 派生快照（只读事实源）。
 - [presets/python-uv-ruff.md](presets/python-uv-ruff.md)：首发 Python 质量门禁配方数据卡（只读源）。
 - [presets/ts-biome-vitest.md](presets/ts-biome-vitest.md)：TypeScript/JavaScript 质量门禁配方数据卡（只读源）。
 - [presets/mutation-testing.md](presets/mutation-testing.md)：变异测试配方数据卡（只读源，多语言优先级 0 补充质检层）。

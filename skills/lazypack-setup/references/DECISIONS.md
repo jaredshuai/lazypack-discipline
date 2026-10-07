@@ -1,6 +1,6 @@
 # 固定层条文
 
-版本：0.5.0（2026-10-07 §6.6 提示词瘦工具肥原则，二轮讨论通过并经维护者裁定）
+版本：0.6.0（2026-01-07 §5.1 脚注词表语义澄清，二轮讨论通过并经维护者裁定）
 状态：生效。改动任何一条须走 §9 讨论章程，并按 SemVer 升本文件版本号。
 
 本文件是 lazypack-discipline 固定层的**唯一事实源**。项目层文件（`AGENTS.md`、`CODING_STANDARDS.md`、`RELEASE.md` 等）由 `/lazypack-setup` 从本文件编译得出，出现分歧以本文件为准。
@@ -76,7 +76,11 @@
 
 ## 5. 提交、版本、发版
 
-5.1 提交头：Conventional Commits 1.0.0，`type(scope)!: 描述`。type 用 Angular 8 个（`build ci docs feat fix perf refactor test`）加 `chore` `revert`。脚注 `Closes #n` 关联票。
+5.1 脚注用 `Refs #n` 关联 issue（表示相关但未完成关闭条件），用 `Closes #n` 关闭 issue（表示该提交满足关闭条件）。审查者以此判定提交与 issue 的关系：阶段性进展须用 `Refs`，满足关闭条件才用 `Closes`。`Fixes` 与其他平台保留关闭词不在本规范白名单内。
+
+边界场景：(1) 提交无关联 issue 时可不写脚注；(2) 同时关联与关闭不同 issue 时可同时使用两种脚注（如 `Refs #12, Closes #34`）；(3) 跨仓关联使用完整 URL（如 `Refs owner/repo#56`）；(4) 描述性文本中出现 `#n` 不触发平台关联，脚注位置严格限定为提交正文末尾独立行；(5) Revert 提交的脚注关联原提交相关 issue，不自动继承原提交脚注；(6) 一个提交推进多个 issue 时，只有全部满足关闭条件的 issue 才用 `Closes`，部分完成的仍用 `Refs`。
+
+5.1.1 提交头：Conventional Commits 1.0.0，`type(scope)!: 描述`。type 用 Angular 8 个（`build ci docs feat fix perf refactor test`）加 `chore` `revert`。
 5.2 提交正文：Google CL 描述法——第一行独立说清「改了什么」；正文说「为什么」、有哪些没做好的地方、关联 bug 号。
 5.3 版本号：SemVer 2.0.0。
 5.4 提交 → 版本：`!` 或 `BREAKING CHANGE` → major；`feat` → minor；`fix` / `perf` → patch；其余不触发发版。
@@ -143,3 +147,10 @@
 - §5.4「提交 → 版本」的版本升位与「不触发发版」两职之间的张力，待多 AI 复审（2026-09-22 §9 会议遗留，release-tag-semantics）。
 - 本仓以 skill/模板供下游钉版消费，是否构成 §5.7 意义上的发布意图（同上遗留，材料不足判）。
 - §6.6 与既有 §2.3、§6.4、freshness-check.md:68 的授权边界条文的最终统一表述（2026-10-07 §6.6 通过时，采纳 P1 的口径/执行分离，保留各处既有授权表述，待后续统一整理）。
+
+---
+
+## 版本历史
+
+- 0.6.0 (2026-01-07): 澄清 §5.1 脚注词表语义（`Refs` 关联 vs `Closes` 关闭），封闭白名单排除 `Fixes` 等平台保留词，补充 6 类边界场景处理规则。经 §9 讨论（issue #29，5 位参与者，两轮互评）达成共识并经维护者裁定通过。
+- 0.5.0 (2026-10-07): §6.6 提示词瘦工具肥原则，二轮讨论通过并经维护者裁定。
