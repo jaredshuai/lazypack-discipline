@@ -12,6 +12,13 @@ description: >-
 
 ## 核心原则与边界限制
 
+> **运行契约（Runtime Contract）**
+> 
+> 本技能的固定目标平台为 **GitHub 仓库 `jaredshuai/lazypack-discipline`**，不继承当前工作项目的 GitLab/GitHub/其他 issue-tracker 规则。
+> 
+> - **推荐写入通道**：`gh` CLI 是推荐方式，但也可使用 GitHub REST/GraphQL API、GitHub 连接器或其他等价写入通道。
+> - **依赖探测语义**：步骤 4 的依赖探测失败时，应报告"GitHub 写入通道不可用"，而不是特定要求某个工具。
+
 1. **真实传感器，不越权裁决**：
    - 忠实于当前会话可见事实与用户最终意图。
    - 提交的 Issue 标签锁定为 `harvest`，严禁打上 `ready-for-agent`，不代替维护者 Matt 的 triage 分诊流程。
@@ -56,8 +63,8 @@ description: >-
 
 ### 步骤 4：前置依赖核验与标签核对
 在发起任何外发网络创建请求前：
-1. 核验当前环境对目标仓 `jaredshuai/lazypack-discipline` 是否具备可用写通道（如 `gh` CLI 或写入连接器）。
-2. 若环境离线或缺乏写入通道，将全部候选保存为本地脱敏草稿，标记为 `CANDIDATE_DRAFT`（附带 `blocked_by_dependency: true`），批次汇总为 **`DEPENDENCY_BLOCKED`**。
+1. 核验当前环境对目标仓 `jaredshuai/lazypack-discipline`（GitHub）是否具备可用的 GitHub 写入通道（推荐 `gh` CLI，也可使用 GitHub API、GitHub 连接器或其他等价方式）。
+2. 若 GitHub 写入通道不可用，将全部候选保存为本地脱敏草稿，标记为 `CANDIDATE_DRAFT`（附带 `blocked_by_dependency: true`），批次汇总为 **`DEPENDENCY_BLOCKED`**。
 3. 动态查询目标仓库是否存在 `harvest` 标签（以当次实际查询为准）：
    - 若查询失败或证实不存在该标签：**严禁自动创建标签，严禁发送无标签 Issue**！保存本地草稿，输出建标指引，批次汇总为 **`DEPENDENCY_BLOCKED`**。
 
