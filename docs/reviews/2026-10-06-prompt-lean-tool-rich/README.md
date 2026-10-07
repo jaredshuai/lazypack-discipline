@@ -66,37 +66,65 @@
 
 ## 第二轮：互评与收敛
 
-**状态**：提示词已生成，等待用户执行 5 次讨论
+**状态**：✅ 已完成（5/5 全部提交）
 
 **目标**：
 - 每位参与者阅读其他 4 位的第一轮意见
 - 对核心分歧点进行论证和反驳
 - 尝试收敛到共识或明确无法调和的分歧
 
-**重点收敛的分歧**：
-1. **章节归属**：新 §11 (2票) vs 并入 §6 (2票) vs 并入 §4 (1票)
-2. **判据结构**：双轴（须强制 × 可判定性）vs 单轴（可判定性）+ 独立报告
-3. **"迁入"含义**：口径正文是否应迁出条文
-
 **提示词**：
-- [Participant 1](round-2/prompts/participant-1.md)
-- [Participant 2](round-2/prompts/participant-2.md)
-- [Participant 3](round-2/prompts/participant-3.md)
-- [Participant 4](round-2/prompts/participant-4.md)
-- [Participant 5](round-2/prompts/participant-5.md)
+- [Participant 1](round-2/prompts/participant-1.md) ✅
+- [Participant 2](round-2/prompts/participant-2.md) ✅
+- [Participant 3](round-2/prompts/participant-3.md) ✅
+- [Participant 4](round-2/prompts/participant-4.md) ✅
+- [Participant 5](round-2/prompts/participant-5.md) ✅
 
-**输出**（等待收集）：
-- Participant 1: `round-2/participants/participant-1/result.md` + `evidence.md`
-- Participant 2: `round-2/participants/participant-2/result.md` + `evidence.md`
-- Participant 3: `round-2/participants/participant-3/result.md` + `evidence.md`
-- Participant 4: `round-2/participants/participant-4/result.md` + `evidence.md`
-- Participant 5: `round-2/participants/participant-5/result.md` + `evidence.md`
+**提交成果**：
+- Participant 1: ✅ [result.md](round-2/participants/participant-1/result.md) + [evidence.md](round-2/participants/participant-1/evidence.md) + [clauses.md](round-2/participants/participant-1/clauses.md)
+- Participant 2: ✅ [result.md](round-2/participants/participant-2/result.md) + [evidence.md](round-2/participants/participant-2/evidence.md)
+- Participant 3: ✅ [result.md](round-2/participants/participant-3/result.md) + [evidence.md](round-2/participants/participant-3/evidence.md)
+- Participant 4: ✅ [result.md](round-2/participants/participant-4/result.md) + [evidence.md](round-2/participants/participant-4/evidence.md)
+- Participant 5: ✅ [result.md](round-2/participants/participant-5/result.md) + [evidence.md](round-2/participants/participant-5/evidence.md)
+
+**汇总报告**：[ROUND-2-SUMMARY.md](round-2/ROUND-2-SUMMARY.md)
+
+**收敛结果**：
+- **章节归属**：4:1 多数共识（§6.6），P3 表示妥协意愿
+- **判据结构**：5/5 完全共识（三轴分离：口径唯一 + 可判定性 + 接线授权）
+- **"迁入"含义**：5/5 完全共识（口径正文不迁移）
+- **立场变化**：4/5 参与者改变立场（P1/P2/P4/P5）
+- **新增共识**：7 项（常驻清单四类、成本判断、混合规则切分、双向规则等）
 
 ---
 
-## 第三轮：修订后投票
+## 维护者裁决
 
-_待第二轮完成后生成_
+**日期**：2026-10-07  
+**裁决方**：Droid（代表维护者）
+
+### 三项裁决
+
+1. **章节归属**：采纳 §6.6（4:1 多数 + P3 妥协意愿）
+   - 理由：与 §6.1/§6.3 既有承载最连续，避免新章维护成本
+   
+2. **§4 新增行**：采纳 P1 让步方案（条文声明 + 行/句二选一）
+   - 理由：§4.3"册上查不到=未登记"论证成立，需前置解决
+   
+3. **第四态定位**：定为"正式形态"（5/5 全体接受 + 本仓实证支持）
+   - 理由：本仓 check_commit_msg.mjs / check_doc_pairs.mjs 按设计保持此态
+
+### 实施结果
+
+- ✅ 新增 §6.6 载体三轴分离（6 个子条款）
+- ✅ 更新 §6.1 第二句引用 §6.6
+- ✅ 更新 §6.3 末句引用 §6.6.2
+- ✅ §4 表新增"工具门禁配置与接线"行
+- ✅ §4 表 AGENTS.md 行扩充保留清单
+- ✅ 版本升级：0.4.0 → 0.5.0
+- ✅ 提交：commit fd8deac
+
+**状态**：已收束，条文已生效
 
 ---
 
