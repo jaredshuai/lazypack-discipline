@@ -39,21 +39,28 @@
 
 ## 第一轮：独立意见（各席互不可见）
 
-**状态**：提示词已生成，等待用户执行 5 次讨论
+**状态**：✅ 已完成（4/5 提交，1 位缺席）
 
 **提示词**：
-- [Participant 1](round-1/prompts/participant-1.md)
-- [Participant 2](round-1/prompts/participant-2.md)
-- [Participant 3](round-1/prompts/participant-3.md)
-- [Participant 4](round-1/prompts/participant-4.md)
-- [Participant 5](round-1/prompts/participant-5.md)
+- [Participant 1](round-1/prompts/participant-1.md) ❌ 未提交
+- [Participant 2](round-1/prompts/participant-2.md) ✅
+- [Participant 3](round-1/prompts/participant-3.md) ✅
+- [Participant 4](round-1/prompts/participant-4.md) ✅
+- [Participant 5](round-1/prompts/participant-5.md) ✅
 
-**输出**（等待收集）：
-- Participant 1: `round-1/participants/participant-1/result.md` + `evidence.md`
-- Participant 2: `round-1/participants/participant-2/result.md` + `evidence.md`
-- Participant 3: `round-1/participants/participant-3/result.md` + `evidence.md`
-- Participant 4: `round-1/participants/participant-4/result.md` + `evidence.md`
-- Participant 5: `round-1/participants/participant-5/result.md` + `evidence.md`
+**提交成果**：
+- Participant 1: ❌ 未提交实质内容
+- Participant 2: ✅ [result.md](round-1/participants/participant-2/result.md) + [evidence.md](round-1/participants/participant-2/evidence.md)
+- Participant 3: ✅ [result.md](round-1/participants/participant-3/result.md) + [evidence.md](round-1/participants/participant-3/evidence.md)
+- Participant 4: ✅ [result.md](round-1/participants/participant-4/result.md) + [evidence.md](round-1/participants/participant-4/evidence.md)
+- Participant 5: ✅ [result.md](round-1/participants/participant-5/result.md) + [evidence.md](round-1/participants/participant-5/evidence.md)
+
+**汇总报告**：[ROUND-1-SUMMARY.md](round-1/ROUND-1-SUMMARY.md)
+
+**核心发现**：
+- 总体立场：4/4 修改后支持，0 人同意草案原文
+- 核心共识：判据应按「可判定性」而非「强制后果」分类
+- 最大分歧：章节归属（新 §11 / 并入 §6 / 并入 §4 各有支持者）
 
 ---
 
