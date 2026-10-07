@@ -6,4 +6,5 @@
 - 开工与收尾按 [文档防腐检查](docs/agents/freshness-check.md) 识别要核对的文档并留下检查记录。关系声明在 [文档关系声明](docs/agents/doc-pairs.md)。
 - 讨论产品定位、setup 交互或模板取舍时，读 [产品愿景](docs/VISION.md)。
 - 修改纪律或 skill 时，读 [固定层条文](docs/DECISIONS.md) 及对应 skill 正文；固定层与产品愿景的关系见登记册。
+- 需要进行 §9 多 AI 讨论（改固定层条文）时，读 [§9 讨论执行规程](docs/agents/section9-discussion-protocol.md)。
 - 交付或核验其他 Agent 的结果时，读 [交接核验指引](docs/agents/handoff-verification.md)。
