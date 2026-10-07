@@ -78,19 +78,50 @@
    ├── EXECUTION-PLAN.md（可选，复杂议题用）
    ├── round-1/
    │   ├── prompts/
+   │   │   ├── participant-1/prompt.md
+   │   │   ├── participant-2/prompt.md
+   │   │   ├── participant-3/prompt.md
+   │   │   ├── participant-4/prompt.md
+   │   │   └── participant-5/prompt.md
    │   └── participants/（预留，各参与者稍后创建子目录）
    ├── round-2/
    │   ├── prompts/
+   │   │   ├── participant-1/prompt.md
+   │   │   ├── participant-2/prompt.md
+   │   │   ├── participant-3/prompt.md
+   │   │   ├── participant-4/prompt.md
+   │   │   └── participant-5/prompt.md
    │   └── participants/
    └── round-3/（可选，视第二轮结果决定）
        ├── prompts/
+       │   ├── participant-1/prompt.md
+       │   ├── participant-2/prompt.md
+       │   ├── participant-3/prompt.md
+       │   ├── participant-4/prompt.md
+       │   └── participant-5/prompt.md
        └── participants/
    ```
 
+   **临时工作目录**（参与者输出位置）：
+   ```
+   %TEMP%/lazypack-discussion/<session-id>/
+   ├── participant-1/
+   ├── participant-2/
+   ├── participant-3/
+   ├── participant-4/
+   └── participant-5/
+   ```
+   - Windows: `%TEMP%` 或 `C:\Users\<user>\AppData\Local\Temp\`
+   - Unix: `/tmp/`
+   - session-id 格式：`YYYY-MM-DD-<议题>`，如 `2026-10-06-prompt-lean-tool-rich`
+
 2. **生成第一轮提示词**
-   - 路径：`round-1/prompts/participant-{1-5}.md`
+   - 路径：`round-1/prompts/participant-{1-5}/prompt.md`（每个参与者独立子目录）
    - 内容包含：议题背景、输出要求、路径指引
-   - 明确输出路径：`docs/reviews/YYYY-MM-DD-<议题>/round-1/participants/participant-N/`
+   - **必须包含讨论独立性约束**（见下文"提示词必须包含的约束项"）
+   - 明确输出路径（临时目录的绝对路径）：
+     - Windows 示例：`C:\Users\<user>\AppData\Local\Temp\lazypack-discussion\2026-10-06-<议题>\participant-N\`
+     - Unix 示例：`/tmp/lazypack-discussion/2026-10-06-<议题>/participant-N/`
 
 3. **提交准备阶段成果**
    - 让维护者检查目录结构和提示词
@@ -103,25 +134,55 @@
 
 ---
 
+### 提示词必须包含的约束项
+
+所有轮次的提示词都必须包含以下约束，确保讨论独立性和流程隔离：
+
+**讨论独立性约束**
+
+"你是独立评审者，不是项目维护者。讨论期间你只能：
+1. 阅读提示词提供的材料
+2. 进行独立思考和论证
+3. 输出到指定临时目录（提示词中提供的绝对路径）
+4. 第二轮起阅读其他参与者意见
+
+禁止调用任何项目工具、流程、检查器或读取项目当前状态。你的任务是基于提供的材料进行独立评审，而非对项目进行维护操作。"
+
+**路径隔离说明**
+
+提示词必须明确告知参与者：
+- 输出到系统临时目录（提供绝对路径）
+- 不在项目 git 目录下工作
+- 主持人负责最终搬运存档
+
+---
+
 ### 第一轮：独立意见
 
 **路径规范**
-- 提示词：`round-1/prompts/participant-{1-5}.md`
-- 输出目录：`round-1/participants/participant-{1-5}/`（统一有 s）
+- 提示词：`round-1/prompts/participant-{1-5}/prompt.md`（独立子目录）
+- 输出目录（临时）：`%TEMP%/lazypack-discussion/<session-id>/participant-{1-5}/`
 - 交付物：
   - `result.md`（核心意见，强制）
   - `evidence.md`（支撑论据，强制）
 
 **执行流程**
 1. 维护者用 5 个提示词分别调用 AI
-2. 各参与者在各自目录下输出交付物
+2. 各参与者在临时目录（提示词提供的绝对路径）下输出交付物
 3. 维护者说"好了" / "完成了"表示全部提交完成
+4. **主持人职责**：从临时目录读取各参与者输出并汇总
+
+**讨论独立性约束**（提示词必须包含）
+- 参与者是独立评审者，不是项目维护者
+- 只能阅读提示词提供的材料
+- 只能输出到指定临时目录
+- 禁止调用项目工具、流程、检查器或读取项目当前状态
 
 **汇总触发**
 - **用户信号**：维护者说"好了" / "完成了" / "可以汇总了"
-- **主持人行为**：直接汇总，不逐个验证文件是否存在
+- **主持人行为**：从临时目录读取输出并汇总，不逐个验证文件是否存在
 - **信任机制**：信任维护者的确认信号
-- **汇总输出**：`round-1/ROUND-1-SUMMARY.md`
+- **汇总输出**：`round-1/ROUND-1-SUMMARY.md`（项目目录）
 
 **缺席处理**
 - 如某参与者未输出，维护者告知主持人
@@ -138,21 +199,28 @@
 - 维护者决定进入第二轮
 
 **提示词定制化**
-- 路径：`round-2/prompts/participant-{1-5}.md`
+- 路径：`round-2/prompts/participant-{1-5}/prompt.md`（独立子目录）
 - 内容针对每位参与者的第一轮立场定制
 - 包含：第一轮汇总、其他参与者意见、互评要求
+- **必须包含讨论独立性约束**（见上文"提示词必须包含的约束项"）
 
 **交付物要求**
-- 输出目录：`round-2/participants/participant-{1-5}/`
+- 输出目录（临时）：`%TEMP%/lazypack-discussion/<session-id>/participant-{1-5}/`
 - **强制交付物**：
   - `result.md`（互评后的立场）
   - `evidence.md`（支撑论据）
 - **可选交付物**：
   - `clauses.md`（具体条文建议，如适用）
 
+**讨论独立性约束**（提示词必须包含）
+- 第二轮可以阅读其他参与者的第一轮意见
+- 仍然只能输出到指定临时目录
+- 仍然禁止调用项目工具或读取项目当前状态
+
 **汇总触发**
 - 同第一轮，维护者说"好了"即触发汇总
-- 汇总输出：`round-2/ROUND-2-SUMMARY.md`
+- **主持人行为**：从临时目录读取输出并汇总
+- 汇总输出：`round-2/ROUND-2-SUMMARY.md`（项目目录）
 - 汇总内容增加：收敛度评估、是否需要第三轮的建议
 
 ---
@@ -164,14 +232,16 @@
 - 维护者认为需要更多信息辅助裁决
 
 **投票机制**
-- 提示词：`round-3/prompts/participant-{1-5}.md`
+- 提示词：`round-3/prompts/participant-{1-5}/prompt.md`（独立子目录）
 - 提供修订后的方案（基于第二轮收敛结果）
 - 要求投票 + 简要理由
-- 输出目录：`round-3/participants/participant-{1-5}/`
+- **必须包含讨论独立性约束**（见上文"提示词必须包含的约束项"）
+- 输出目录（临时）：`%TEMP%/lazypack-discussion/<session-id>/participant-{1-5}/`
 - 交付物：`result.md`（投票 + 理由）
 
 **汇总输出**
-- `round-3/ROUND-3-SUMMARY.md`
+- **主持人行为**：从临时目录读取输出并汇总
+- `round-3/ROUND-3-SUMMARY.md`（项目目录）
 - 包含最终投票分布和关键理由
 
 ---
@@ -191,9 +261,17 @@
 - **裁决前**：中立主持，不投票不提方案
 - **裁决后**：执行维护者决策，可提出具体实施方案
 
+**主持人搬运职责**
+- 维护者裁决后，主持人负责从临时目录搬运所有参与者输出到项目存档目录
+- 搬运路径：
+  - 源：`%TEMP%/lazypack-discussion/<session-id>/participant-N/`
+  - 目标：`docs/reviews/YYYY-MM-DD-<议题>/round-N/participants/participant-N/`
+- 搬运完成后确认：所有 `result.md`、`evidence.md`、`clauses.md`（如有）已复制
+- **用户不做任何复制粘贴工作**
+
 **维护者信号**
 - 说"作为维护者裁决" / "我裁决为" / "最终决定"
-- 主持人识别后切换角色
+- 主持人识别后切换角色并执行搬运
 
 ---
 
@@ -252,21 +330,30 @@
 
 以 issue #36 为标准模板：
 
+**项目存档目录**（最终存档位置）：
 ```
 docs/reviews/YYYY-MM-DD-<议题>/
 ├── README.md                         # 状态追踪、背景、当前进度
 ├── EXECUTION-PLAN.md                  # 可选，复杂议题用
 ├── round-1/
 │   ├── prompts/
-│   │   └── participant-{1-5}.md      # 第一轮提示词
+│   │   ├── participant-1/prompt.md   # 独立子目录隔离
+│   │   ├── participant-2/prompt.md
+│   │   ├── participant-3/prompt.md
+│   │   ├── participant-4/prompt.md
+│   │   └── participant-5/prompt.md
 │   ├── participants/
-│   │   └── participant-{1-5}/        # 注意有 s
+│   │   └── participant-{1-5}/        # 注意有 s，最终存档位置
 │   │       ├── result.md
 │   │       └── evidence.md
 │   └── ROUND-1-SUMMARY.md
 ├── round-2/
 │   ├── prompts/
-│   │   └── participant-{1-5}.md
+│   │   ├── participant-1/prompt.md
+│   │   ├── participant-2/prompt.md
+│   │   ├── participant-3/prompt.md
+│   │   ├── participant-4/prompt.md
+│   │   └── participant-5/prompt.md
 │   ├── participants/
 │   │   └── participant-{1-5}/
 │   │       ├── result.md
@@ -275,22 +362,45 @@ docs/reviews/YYYY-MM-DD-<议题>/
 │   └── ROUND-2-SUMMARY.md
 └── round-3/                           # 可选
     ├── prompts/
-    │   └── participant-{1-5}.md
+    │   ├── participant-1/prompt.md
+    │   ├── participant-2/prompt.md
+    │   ├── participant-3/prompt.md
+    │   ├── participant-4/prompt.md
+    │   └── participant-5/prompt.md
     ├── participants/
     │   └── participant-{1-5}/
     │       └── result.md
     └── ROUND-3-SUMMARY.md
 ```
 
+**临时工作目录**（参与者输出位置，主持人搬运前）：
+```
+%TEMP%/lazypack-discussion/<session-id>/
+├── participant-1/
+│   ├── result.md
+│   ├── evidence.md
+│   └── clauses.md（可选）
+├── participant-2/
+├── participant-3/
+├── participant-4/
+└── participant-5/
+```
+- Windows: `%TEMP%` 或 `C:\Users\<user>\AppData\Local\Temp\`
+- Unix: `/tmp/`
+- session-id 格式：`YYYY-MM-DD-<议题>`，如 `2026-10-06-prompt-lean-tool-rich`
+- **作用**：隔离讨论输出，避免污染项目 git diff
+
 ### 命名规范
 
 **统一规则**
-- 参与者目录：`participants/participant-N/`（有 s，小写）
-- 提示词文件：`participant-N.md`（N 为 1-5）
+- 提示词目录：`prompts/participant-N/prompt.md`（独立子目录，防止参与者 AI 用 ls 时看到其他提示词）
+- 临时输出目录：`%TEMP%/lazypack-discussion/<session-id>/participant-N/`（无 s）
+- 最终存档目录：`participants/participant-N/`（有 s，小写）
 - 汇总文件：`ROUND-N-SUMMARY.md`（全大写）
 - 状态追踪：`README.md`（在议题根目录）
 
 **避免的错误**
+- ❌ `prompts/participant-1.md`（缺少子目录隔离）
 - ❌ `participant/`（缺 s）
 - ❌ `Participant-1/`（首字母大写）
 - ❌ `round-1-summary.md`（全小写）
@@ -304,10 +414,10 @@ docs/reviews/YYYY-MM-DD-<议题>/
 
 | 用户说什么 | 主持人理解为 | 主持人行为 |
 |-----------|------------|----------|
-| "好了" / "完成了" / "可以汇总了" | 所有参与者已提交 | 直接汇总，不逐个验证 |
+| "好了" / "完成了" / "可以汇总了" | 所有参与者已提交 | 从临时目录读取输出并汇总，不逐个验证 |
 | "进入第二轮" / "开始第二轮" | 第一轮完成，启动第二轮 | 生成第二轮提示词 |
 | "进入第三轮" / "需要投票" | 第二轮后仍有分歧 | 生成第三轮提示词 |
-| "作为维护者裁决" / "我裁决为" | 维护者最终决策 | 角色切换，执行维护者决策 |
+| "作为维护者裁决" / "我裁决为" | 维护者最终决策 | 角色切换，执行搬运，然后执行维护者决策 |
 
 ### 主持人不做的事
 
@@ -327,6 +437,20 @@ docs/reviews/YYYY-MM-DD-<议题>/
 4. **不在裁决阶段调用 mission-planning**
    - 维护者裁决后，角色已切换为"执行者"
    - 此时可直接提出实施方案，不需要再规划
+
+### 用户不做的事
+
+1. **不做任何复制粘贴工作**
+   - 所有文件搬运由主持人负责
+   - 用户只需调用 AI 并确认"好了"
+
+2. **不手动整理目录结构**
+   - 主持人负责从临时目录搬运到存档目录
+   - 用户不介入文件操作
+
+3. **不需要记住复杂路径**
+   - 提示词中已包含完整绝对路径
+   - 参与者 AI 直接使用提示词提供的路径
 
 ---
 
@@ -460,3 +584,8 @@ docs/reviews/YYYY-MM-DD-<议题>/
 5. **参与者缺席处理不规范**
    - 问题：补发提示词时路径不一致
    - 解决：补发时提供绝对路径，标记补发状态
+
+6. **讨论输出污染项目 git diff**
+   - 问题：参与者直接输出到项目目录，污染 git diff，与其他 AI 编程会话产生干扰
+   - 解决：参与者输出到系统临时目录（`%TEMP%/lazypack-discussion/<session-id>/`），主持人裁决后统一搬运到存档目录
+   - 附加收益：提示词隔离（独立子目录），参与者 AI 用 ls 不会看到其他提示词
