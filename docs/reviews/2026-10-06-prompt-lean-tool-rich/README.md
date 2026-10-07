@@ -66,7 +66,31 @@
 
 ## 第二轮：互评与收敛
 
-_待第一轮完成后生成_
+**状态**：提示词已生成，等待用户执行 5 次讨论
+
+**目标**：
+- 每位参与者阅读其他 4 位的第一轮意见
+- 对核心分歧点进行论证和反驳
+- 尝试收敛到共识或明确无法调和的分歧
+
+**重点收敛的分歧**：
+1. **章节归属**：新 §11 (2票) vs 并入 §6 (2票) vs 并入 §4 (1票)
+2. **判据结构**：双轴（须强制 × 可判定性）vs 单轴（可判定性）+ 独立报告
+3. **"迁入"含义**：口径正文是否应迁出条文
+
+**提示词**：
+- [Participant 1](round-2/prompts/participant-1.md)
+- [Participant 2](round-2/prompts/participant-2.md)
+- [Participant 3](round-2/prompts/participant-3.md)
+- [Participant 4](round-2/prompts/participant-4.md)
+- [Participant 5](round-2/prompts/participant-5.md)
+
+**输出**（等待收集）：
+- Participant 1: `round-2/participants/participant-1/result.md` + `evidence.md`
+- Participant 2: `round-2/participants/participant-2/result.md` + `evidence.md`
+- Participant 3: `round-2/participants/participant-3/result.md` + `evidence.md`
+- Participant 4: `round-2/participants/participant-4/result.md` + `evidence.md`
+- Participant 5: `round-2/participants/participant-5/result.md` + `evidence.md`
 
 ---
 
