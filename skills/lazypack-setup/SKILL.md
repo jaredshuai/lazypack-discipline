@@ -119,11 +119,69 @@ description: >-
 
 ---
 
-### 第 3 步：必要未知澄清 (Minimal Questions)
+### 第 3 步：必要未知澄清 (拆分为通用澄清与门禁配置)
+
+**执行顺序说明**：本步骤拆分为两个子阶段，按顺序执行：
+- **3.A 通用纪律澄清**：语言无关，总是执行（访谈留存、文档归属）
+- **3.B 语言与质量门禁配置**：语言相关，按探测结果条件触发（仅当探测到语言或用户显式选择配置时）
+
+---
+
+#### 3.A 通用纪律澄清（语言无关，总是执行）
+
+本子阶段处理与编程语言无关的通用工程纪律事项，无论仓库是否为空、是否探测到语言清单，均需执行。
 
 - **默认零提问**：能从仓库探测推导的事实不得提问。
-- **必要未知场景**：
-  - 当代码仓完全缺失某项检查命令时，根据固定层 §6.2 推荐默认工具：
+
+##### 访谈记录与碎片想法留存偏好澄清
+
+- 当探测判定留存策略未决、失效或存在冲突时，向用户呈现单次澄清问题；
+- 阐明：需求研讨（如 `/grill-with-docs`）中产生的碎片想法对长期演进具有参考价值，但直接代码化存在偏离基准风险。直接收集启用的维度集合（支持 8 种任意正交组合，或明确跳过）：
+  - `ideas`：想法池（在 docs/ideas/inbox.md 或用户选定路径留存未立项想法，标为 exploration）；
+  - `minutes`：结构化纪要（在 docs/interviews/ 留存经脱敏的研讨背景、决议摘要与参与者记录，作为 reference）；
+  - `raw_qa`：原始问答片段（独立敏感维度，默认不启用；仅在用户显式要求并提供经授权的安全私有存储别名时开启，遵循 `session-authorized` 机制；公开产物仅存安全别名，绝对私有路径不入代码仓亦不建持久绑定表；当前会话未获明确授权映射则保持 unbound 待绑定，不写材料，下一会话重新按需授权）；
+  - 或选择极简 `decisions-only`（全关：仅保留 CONTEXT.md 与 ADR，过程材料用完即弃）；
+- **交互与确权契约**：
+  - 支持直接勾选/指定启用的维度集合，亦兼容原有自然语言描述，不以互斥编号限制组合；
+  - **未答/超时（pending）**：用户无应答、超时或未回答时，保持问题待答，状态为 `pending`，**严禁静默假定默认选项，严禁在 `roles.md` 中写入任何 §3 留存策略或假定配置，严禁生成带未展开占位符的假 header，严禁写入留存文件**；
+  - **明确暂不配置（unconfigured）**：用户明确回复"暂不配置"或显式放弃时，记录为 `unconfigured`，在 `roles.md` §3 写入 unconfigured 权威段落，继续其他独立 setup 事项；不作为 Matt 前置阻断项，不影响质量门禁；
+  - 策略变更绝不追溯删除磁盘上已有历史材料。
+
+##### 同主题冲突与文档归属澄清 (Document Homes & Conflict Clarification)
+
+- **同主题冲突聚合与替代确认**:
+  - 遵循 [references/document-routing.md](references/document-routing.md) §4.2 执行；
+- **受控物理迁移规划 (Phase 2)**:
+  - **默认首选**: 坚持 `preserve-existing`（原位保留与登记）为默认路径，绝不把"整理文档"等同于"必须迁移"；
+  - **正当性准入**: 仅当用户显式要求重组目录，或存量文档位置严重违背工程规范时，Agent 方可生成迁移计划规范 `plan_spec.json`；
+  - **确定性计划计算**: 调用 `node skills/lazypack-setup/scripts/doc_helper.mjs plan --cwd <targetRepo> --input <plan_spec.json>` 计算出站/入站相对链接重写、`docs/ARTIFACTS.md` Section 3 登记行追加、预期哈希以及双指纹（`input_fp` 与 `plan_fp`）；
+- **三种在途流程状态与写前零写入拦截**: 当探测到同一业务主题存在多份竞争基准（如 `specs/pay-v1.md` 与 `specs/pay-v2.md`）时，向用户呈现单次合并澄清；用户选定项标为 `current`；**仅当用户明确确认存在替代/废弃关系时**，被取代项才标记为 `superseded` 并互指新项；**若用户仅选定 current 但未确认其他旧项状态或关系未知，其他旧项严格保持待裁（`待裁 / unconfirmed`），严禁擅自自动降级为 `superseded` 或 `reference`**；原件物理位置保持不变，**首期绝不自动执行 git mv 归档**；已有登记行依首期保护不予覆盖；
+- **用户请求迁移处理**: 若用户在交互中要求将文件物理搬迁至标准推荐目录，Agent 明确告知 Phase 1 仅支持保留既有原位登记（`preserve-existing`），物理迁移与链接重构属于 Phase 2 治理规划；询问用户是否接受原位保留登记；若用户不接受，保持**零写入并安全退出**；
+- **三种在途流程状态与写前零写入拦截**: 未答/超时记为 `pending`，明确拒绝记为 `declined`，迁移未果记为 `migration-unsupported-declined`；三者均严禁写入登记册，对应零写入门禁必须在写盘前判定拦截，原件不降级，保持目标文件严格零相关写入；
+- 策略变更绝不追溯删除磁盘已有历史文档。
+
+---
+
+#### 3.B 语言与质量门禁配置（语言相关，按探测结果条件触发）
+
+本子阶段处理编程语言相关的质量门禁配置，按第 2 步探测结果条件触发。
+
+##### 触发条件判定
+
+- **已探测到语言清单**（优先级 1-5 分支）：
+  - 若探测到有效的 `package.json`、`pyproject.toml`、`Cargo.toml`、`go.mod` 等语言清单文件，直接进入对应语言的配方推荐逻辑；
+  - 根据第 2 步 §3 探测到的支持矩阵优先级，推荐对应配方或给出受限分支说明。
+
+- **空仓或无语言清单场景**（优先级 6 新仓分支或完全空仓）：
+  - 若目标目录为空目录或未探测到任何语言清单文件，**不自动假设用户需要配置质量门禁**；
+  - 向用户明确询问：**"本仓库未探测到语言清单。是否需要配置质量门禁？"**
+    * **选项 A：暂不配置**：跳过 3.B 全部内容，仅装配通用纪律（3.A 已完成），继续第 4 步；
+    * **选项 B：现在配置**：进入语言选择与配方推荐流程（见下文"语言选择与配方推荐"）。
+  - 若用户选择"暂不配置"，记录为 `gate-unconfigured`，继续装配通用纪律产物（常驻入口、`CODING_STANDARDS.md`、`RELEASE.md`、`docs/ARTIFACTS.md`、`docs/agents/roles.md`），不创建 Hook 文件，不配置 `core.hooksPath`。
+
+##### 语言选择与配方推荐
+
+当用户选择"现在配置"或已探测到语言清单时，根据固定层 §6.2 推荐默认工具：
     * Python 项目（满足优先级 3 条件）：推荐 `uv` + `ruff` + `ty` + `pytest` 配方（按项补缺提问：用户可按门禁槽位独立选择采纳或拒绝）；
     * TS/JS 项目（满足优先级 3 或优先级 6 新仓 TS 分支）：推荐 `ts-biome-vitest` 配方（包含 Biome、tsc 与 Vitest；按项补缺提问：用户可按 format, lint, type, test 槽位独立选择采纳或拒绝；CLI 产物询问是否需要 bin/parseArgs，询问是否启用 MCP 服务；配置所有权遵循 `tool-or-user` 原则，setup 实行零工具私有配置写入；单包 `pnpm-workspace.yaml` 仅用于自安装保护，不等同授权 monorepo）；
     * **Recipe 4: 变异测试配方**（多语言优先级 0，可与基础配方并存的补充质检层）：
@@ -181,8 +239,15 @@ description: >-
 
 ### 第 4 步：生成拟写入草案与整体确认 (Overall Confirmation)
 
+**条件渲染说明**：本步骤根据第 3 步的执行结果，条件渲染草案内容：
+- 若 3.B 已执行（配置了质量门禁）：展示完整草案（通用纪律产物 + 质量门禁产物）
+- 若 3.B 被跳过（用户选择"暂不配置"或空仓未配置门禁）：仅展示通用纪律产物，不展示 Hook 文件、依赖安装计划、门禁接线清单等质量门禁相关内容
+
 在对话中一次性展示完整变更草案，供用户统览与决策：
-1. **拟新建文件清单**：目标路径与完整拟写内容（使用 [templates/](templates/) 渲染，填入当前 `src`, `gen`, `input`, `fp`；其中 `docs/agents/roles.md` 依据探测到的环境可用证据如实填写状态说明，并在 §3 按 [references/retention-sections.md](references/retention-sections.md) 单一事实源与明确替换表渲染已确认的留存策略指引；若启用了想法池且目标文件不存在，列出新建非受管种子文件，其路径动态读取自 `retention.paths.ideas`，默认 `docs/ideas/inbox.md`；若启用了结构化纪要且入口目录不存在，列出新建空入口目录；若启用了原始问答且提供安全别名，列出私有存储安全引用，公开产物绝不出现本机绝对私有路径或凭据；若为新仓初始化分支或清单字段缺失，列出经整体确认的最小清单文件与补缺字段，包含新仓 `package.json`、scripts 动态路径、`packageManager` 声明、双 tsconfig 即 `tsconfig.json` 与 `tsconfig.build.json`、以及单包自安装保护 `pnpm-workspace.yaml`）。
+
+#### 通用纪律产物（总是展示）
+
+1. **拟新建文件清单**：目标路径与完整拟写内容（使用 [templates/](templates/) 渲染，填入当前 `src`, `gen`, `input`, `fp`；其中 `docs/agents/roles.md` 依据探测到的环境可用证据如实填写状态说明，并在 §3 按 [references/retention-sections.md](references/retention-sections.md) 单一事实源与明确替换表渲染已确认的留存策略指引；若启用了想法池且目标文件不存在，列出新建非受管种子文件，其路径动态读取自 `retention.paths.ideas`，默认 `docs/ideas/inbox.md`；若启用了结构化纪要且入口目录不存在，列出新建空入口目录；若启用了原始问答且提供安全别名，列出私有存储安全引用，公开产物绝不出现本机绝对私有路径或凭据）。
 2. **拟修改既有文件 diff 与拟新建产物**：
    - 常驻入口（`CLAUDE.md` 或 `AGENTS.md`）：
      * **条件渲染指针 (F05, P7 稳定性规范)**：根据各类产物的实际托管状态渲染指针行。若 `roles.md`、`ARTIFACTS.md`、`CODING_STANDARDS.md`、`RELEASE.md` 处于正常受管状态（NEW / MANAGED / UPGRADE / DRIFT / NO-OP），渲染对应指针行。为避免留存策略调整导致常驻入口误报 `[DRIFT]`，`__ROLES_POINTER__` 采用稳定文本：`- **角色与职责**：查阅 [docs/agents/roles.md](docs/agents/roles.md)，遵循各角色防撞车边界与项目指引。`；若处于 `PAUSE`、`BROKEN` 或未托管状态，**彻底省略对应指针行**，并在完成报告中记录为未托管；其余已就绪指针仍保留，不阻断常驻入口自身生成，绝不产生死链接，亦不绕过保护去强改人工文件。所有指针条件替换必须在计算正文指纹 (`fp`) 前完成，严禁遗留任何未展开占位符。
@@ -204,7 +269,11 @@ description: >-
        - 展示 `docs/ARTIFACTS.md` Section 3 拟追加/更新登记行；
        - 展示计划指纹 `plan_fp` 与输入指纹 `input_fp`，明确声明：**用户的批准将与本次计划指纹刚性绑定；若后续文件发生漂移，旧批准将自动失效并重新展示实际差异**。按 5 列推荐格式（相对路径/锚点 `path#anchor`、归属区域、状态、维护者/更新触发、来源/替代关系/依据说明）展示拟向 Section 3 追加的业务文档登记行；提案必须包含明确的维护职责与更新时机；若存在同主题多文件，展示裁决后的 current 归属、明确确认的 superseded 关系或未确认旧项的待裁状态；同时对目标 `docs/ARTIFACTS.md` 进行写前基线采样，记录当前 SHA256 哈希值 $H_{\text{baseline}}$（全新文件记录不存在）作为并发防御基线。
 3. **暂停项说明**：若检测到第 2 至第 5 类产物已有人工文件且无 lazypack 标记，标记为暂停，说明保留原因。
-4. **副作用确认与安装分支 (F01, F06)**：
+
+#### 质量门禁产物（仅当 3.B 已执行时展示）
+
+4. **新仓初始化配置（仅当为新仓初始化分支或清单字段缺失时展示）**：列出经整体确认的最小清单文件与补缺字段，包含新仓 `package.json`、scripts 动态路径、`packageManager` 声明、双 tsconfig 即 `tsconfig.json` 与 `tsconfig.build.json`、以及单包自安装保护 `pnpm-workspace.yaml`。
+5. **副作用确认与安装分支 (F01, F06)**：
    - **依赖安装计划、自安装保护与统一失败归因**：
      * 列出已批准的单次批量安装命令（Python: `uv add --dev ruff ty pytest`，已按工具去重；TS/JS: 从配方卡单一候选基线生成精确批准命令 `pnpm add -D @biomejs/biome@2.5.12 typescript@6.0.3 vitest@5.0.0 vite@8.2.2 @types/node@^24.0.0`，已按工具去重，安装结果记录精确 resolved 版本；坚决不以无版本裸命令示例覆盖候选选择，部分采纳仅安装确认缺失项；新仓 `package.json` 的 `packageManager` 必须显式声明为 `pnpm@12.3.4`）及预计变更的文件（manifest / lockfile）；
      * 列出 TS 单包自安装保护文件 `pnpm-workspace.yaml`（包含 `verifyDepsBeforeRun: error`）计划，定义既有文件/父级 workspace/冲突/重跑保护（声明单包配置仅为锁定自安装门禁，绝不等同授权 monorepo）；
@@ -223,7 +292,7 @@ description: >-
      * 若无管理器且无冲突（且非全拒绝分支），列出将执行 `git config core.hooksPath .githooks`；
      * 若处于全拒绝分支且无已有门禁，明确不创建 Hook、不执行 `git config core.hooksPath`。
    - **执行权限变更**：POSIX 下设置脚本权限位（`chmod +x .githooks/pre-commit`）。
-5. **门禁接线清单与出处预览**：列出 `format`、`lint`、`type`、`test` 的拟接线命令、出处行与 input 字段；若全拒绝或全量已有工具且未采用配方，说明省略出处行与配方 input。
+6. **门禁接线清单与出处预览**：列出 `format`、`lint`、`type`、`test` 的拟接线命令、出处行与 input 字段；若全拒绝或全量已有工具且未采用配方，说明省略出处行与配方 input。
    - **退出配方预检与保护说明**：若本次操作涉及退出配方，向用户展示预检结果：
      * 若出处版本不匹配或命令不匹配当前推荐串且映射未知，**停止自动退出**，保留命令、出处与 input 并报告未解决项；
      * 若安全退出，重置配方槽位为 missing，移除 `# lazypack:preset` 出处行，重算 Hook `fp` 与 `input`；
