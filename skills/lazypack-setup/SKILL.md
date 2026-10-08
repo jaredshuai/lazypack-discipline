@@ -1,7 +1,7 @@
 ---
 name: lazypack-setup
 description: >-
-  Compiles project-layer engineering discipline from lazypack-discipline fixed layer (0.6.0)
+  Compiles project-layer engineering discipline from lazypack-discipline fixed layer (0.7.0)
   after Matt Pocock skills setup. Probes repository, asks only necessary unknowns, confirms
   changes once, and generates six managed artifacts with fingerprint protection.
 ---

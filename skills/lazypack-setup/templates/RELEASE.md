@@ -1,7 +1,7 @@
-<!-- lazypack:start block=release-discipline src=DECISIONS.md@0.6.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
+<!-- lazypack:start block=release-discipline src=DECISIONS.md@0.7.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
 # 发版与提交纪律 (RELEASE)
 
-> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.6.0（依据 lazypack-setup 内置快照编译，来源内容标识: 483c12666b0b819ef4f68d8a329e77523c85da36；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§5。
+> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.7.0（依据 lazypack-setup 内置快照编译，来源内容标识: 6f537b1ef390cbbfa9cea245fc615cb5f727fe2b；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§5。
 
 ## 1. 提交与版本规则（固定段）
 
