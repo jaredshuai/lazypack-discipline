@@ -1,5 +1,8 @@
 # §9 多 AI 讨论执行规程
 
+**最后更新**：2026-01-08  
+**修订**：Issue #29 实战后加入 3 个流程改进（提示词路径格式、工作区检查、平台错误处理）
+
 ## 文档说明
 
 本文件规范 §9 多 AI 讨论的具体执行流程，是 `DECISIONS.md` 第 9 节原则的操作细则。
@@ -123,6 +126,18 @@
      - Windows 示例：`C:\Users\<user>\AppData\Local\Temp\lazypack-discussion\2026-10-06-<议题>\participant-N\`
      - Unix 示例：`/tmp/lazypack-discussion/2026-10-06-<议题>/participant-N/`
 
+   **提示词路径格式**：
+   - 向维护者提供提示词路径时，使用**单独的代码块**，每个路径一个代码块
+   - 避免使用树状结构（维护者无法直接复制）
+   - 示例：
+     ```
+     E:\codespace\lazypack-discipline\docs\reviews\YYYY-MM-DD-<topic>\round-N\prompts\participant-1\prompt.md
+     ```
+     ```
+     E:\codespace\lazypack-discipline\docs\reviews\YYYY-MM-DD-<topic>\round-N\prompts\participant-2\prompt.md
+     ```
+   - 便于维护者逐个点击复制按钮，快速打开文件并发送给外部 AI
+
 3. **提交准备阶段成果**
    - 让维护者检查目录结构和提示词
    - 等待维护者确认开始执行
@@ -243,6 +258,37 @@
 - **主持人行为**：从临时目录读取输出并汇总
 - `round-3/ROUND-3-SUMMARY.md`（项目目录）
 - 包含最终投票分布和关键理由
+
+---
+
+### 每轮结束后的工作区检查（强制）
+
+主持人在汇总完成、提交到 git 之后，**必须**执行以下检查：
+
+1. **运行 `git status`**
+   - 检查是否有 untracked files（可能是遗留产物、临时文件、上一个任务的残留）
+   - 检查是否有未推送的 commits
+
+2. **清理遗留产物**
+   - 如果发现不应该存在的文件（如 Mission 验证报告、临时调试文件等），判断是否应该删除
+   - 删除确认为遗留产物的文件
+   - 单独提交清理操作：`git commit -m "chore: clean up stray artifacts after round-N"`
+
+3. **推送所有 commits**
+   - 确保所有本地 commits 都推送到远程
+   - 运行 `git push origin main`
+
+4. **最终验证**
+   - 再次运行 `git status`
+   - 确认显示：`nothing to commit, working tree clean`
+
+**为什么这个环节重要**：
+- 讨论过程可能产生临时文件或遗留产物
+- 未推送的 commits 会在下次操作时造成混乱
+- 保持工作区干净是流程卫生的基础
+
+**示例**：
+Issue #29 讨论中发现的遗留产物：`mutation-testing-validation-report.md`（来自上一个 Mission 的验证报告）
 
 ---
 
@@ -558,6 +604,7 @@ docs/reviews/YYYY-MM-DD-<议题>/
 | 版本 | 日期 | 变更内容 | 触发原因 |
 |-----|------|---------|---------|
 | v1.0 | 2026-10-07 | 初版，基于 issue #36 经验 | 固化 §9 讨论最佳实践 |
+| v1.1 | 2026-01-08 | 加入 3 个流程改进：提示词路径格式、工作区检查、平台错误处理 | Issue #29 实战后的摩擦点修复 |
 
 ---
 
@@ -589,3 +636,12 @@ docs/reviews/YYYY-MM-DD-<议题>/
    - 问题：参与者直接输出到项目目录，污染 git diff，与其他 AI 编程会话产生干扰
    - 解决：参与者输出到系统临时目录（`%TEMP%/lazypack-discussion/<session-id>/`），主持人裁决后统一搬运到存档目录
    - 附加收益：提示词隔离（独立子目录），参与者 AI 用 ls 不会看到其他提示词
+
+7. **平台错误（如 GitHub push 失败）的处理**
+   - 问题：讨论过程中遇到 GitHub 500 Internal Server Error，导致 push 失败
+   - 解决：
+     * 第一次失败：等待 1-2 分钟后重试
+     * 连续 3 次失败：告知维护者，暂时跳过 push，继续流程
+     * 所有本地 commits 保持完整，可稍后手动推送
+     * 不因平台临时性故障中断讨论流程
+   - 经验：平台错误是外部因素，不应阻塞讨论进度；本地 commits 完整即可，推送可异步完成
