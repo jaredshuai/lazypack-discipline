@@ -1,7 +1,7 @@
-<!-- lazypack:start block=coding-standards src=DECISIONS.md@0.5.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
+<!-- lazypack:start block=coding-standards src=DECISIONS.md@0.6.0 gen=__GEN__ input=__INPUT__ fp=__FP__ -->
 # 编码标准与质量门禁 (CODING_STANDARDS)
 
-> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.5.0（依据 lazypack-setup 内置快照编译，来源内容标识: 5f0e31b4b4965f2affc198bf8c76ef1e33f14b5a；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§6。
+> 派生自 lazypack-discipline 固定层 DECISIONS.md@0.6.0（依据 lazypack-setup 内置快照编译，来源内容标识: 483c12666b0b819ef4f68d8a329e77523c85da36；离线事实源查阅 lazypack-setup/references/DECISIONS.md）§6。
 
 ## 1. 原则与职责
 

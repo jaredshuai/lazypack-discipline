@@ -1,5 +1,5 @@
 #!/bin/sh
-# lazypack:start block=pre-commit-hook src=DECISIONS.md@0.5.0 gen=__GEN__ input=__INPUT__ fp=__FP__
+# lazypack:start block=pre-commit-hook src=DECISIONS.md@0.6.0 gen=__GEN__ input=__INPUT__ fp=__FP__
 # __PRESET_PROVENANCE_LINE__
 # -----------------------------------------------------------------------------
 # lazypack-discipline 提交前质量门禁 (DECISIONS §6)
