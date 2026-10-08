@@ -120,23 +120,32 @@
 
 2. **生成第一轮提示词**
    - 路径：`round-1/prompts/participant-{1-5}/prompt.md`（每个参与者独立子目录）
-   - 内容包含：议题背景、输出要求、路径指引
+   - **每个提示词必须完整自包含**：直接包含所有需要的内容（背景材料、现有条文、该参与者的视角、输出要求），不得引用其他文件（如 common.md）
    - **必须包含讨论独立性约束**（见下文"提示词必须包含的约束项"）
    - 明确输出路径（临时目录的绝对路径）：
      - Windows 示例：`C:\Users\<user>\AppData\Local\Temp\lazypack-discussion\2026-10-06-<议题>\participant-N\`
      - Unix 示例：`/tmp/lazypack-discussion/2026-10-06-<议题>/participant-N/`
 
-   **提示词路径格式**：
-   - 向维护者提供提示词路径时，使用**单独的代码块**，每个路径一个代码块
-   - 避免使用树状结构（维护者无法直接复制）
-   - 示例：
+   **提示词路径交付格式**：
+   - 向维护者提供提示词路径时，使用**5 个独立的代码块**，每个路径一个代码块
+   - 不使用树状结构、不使用列表、不增加额外说明
+   - 示例（正确）：
      ```
      E:\codespace\lazypack-discipline\docs\reviews\YYYY-MM-DD-<topic>\round-N\prompts\participant-1\prompt.md
      ```
      ```
      E:\codespace\lazypack-discipline\docs\reviews\YYYY-MM-DD-<topic>\round-N\prompts\participant-2\prompt.md
      ```
-   - 便于维护者逐个点击复制按钮，快速打开文件并发送给外部 AI
+     ```
+     E:\codespace\lazypack-discipline\docs\reviews\YYYY-MM-DD-<topic>\round-N\prompts\participant-3\prompt.md
+     ```
+     ```
+     E:\codespace\lazypack-discipline\docs\reviews\YYYY-MM-DD-<topic>\round-N\prompts\participant-4\prompt.md
+     ```
+     ```
+     E:\codespace\lazypack-discipline\docs\reviews\YYYY-MM-DD-<topic>\round-N\prompts\participant-5\prompt.md
+     ```
+   - 便于维护者逐个点击复制按钮，在 5 个不同 IDE 中打开并直接发送给外部 AI
 
 3. **提交准备阶段成果**
    - 让维护者检查目录结构和提示词
