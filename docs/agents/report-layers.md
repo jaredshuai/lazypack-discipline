@@ -98,21 +98,22 @@
 
 ## 4. 校验器行为、状态词与全部失败码
 
-- `check`：`format-pass`（0）/ `format-fail`（1）/ `not-run`（2，文件缺失）/ `exec-failed`（3，非法 UTF-8、参数错误等）。
-- `init`：`created`（0）/ `exists-kept`（1，段落已存在，字节不重复追加）/ `not-run`（2，文件缺失；init 不代写报告正文）/ `exec-failed`（3）。
+- `check`：`format-pass`（0）/ `format-fail`（1）/ `not-run`（2，文件缺失，或路径不是普通文件）/ `exec-failed`（3）——参数错误（缺 `--file`、未知选项）、路径 `stat` 失败（如符号链接环 `ELOOP`、权限错误）、读取失败（含文件超过 Node 读取上限约 2 GiB 的 `ERR_FS_FILE_TOO_LARGE`、I/O 错误）、非法 UTF-8。
+- `init`：`created`（0）/ `exists-kept`（1，段落已存在，字节不重复追加）/ `not-run`（2，文件缺失，或路径不是普通文件；init 不代写报告正文）/ `exec-failed`（3）——与 `check` 同一组失败类（参数错误、路径 `stat` 失败、读取失败含文件过大、非法 UTF-8），外加写盘失败（写临时文件、写后读回核验或 `rename` 失败；失败时清理自己创建的临时文件，不抛未捕获异常、不留半成品）。
 - 无分层段落时：报告（剥离代码块、引用行、行内代码与成对引号后的文本）含用户体验类声称词判 `format-fail`（`missing-layer-section-with-ux-claims`）；否则判 `format-pass`（校验器不判断报告是否需要该段落，这由 §1 规定并由人/流程执行）。
+- 既有报告的 UTF-8 BOM 按原样保持：`init` 从原始字节判定 BOM 有无，追加段落写回时补回原 BOM，并在 info 记 `bom: 已保留原有 UTF-8 BOM`；原本无 BOM 的报告不会被加上 BOM。`init` 追加前后的行尾风格（CRLF/LF）同样按原样保持，仅在新追加的骨架里用该文件既有的行尾。
 - 状态词不混淆：`format-fail` 不是 `未运行`；`unverified` 不是 `已对齐`；`exists-kept` 不是 `created`。
 
-`format-fail` 的 `reason` 由下列确定性失败码组成（分号分隔；`=` 后为违规实参）：
+`format-fail` 的 `reason` 由下列确定性失败码组成（分号分隔）。失败码有两类形态，下列条目按实现的实际产出书写：**单参码**写作 `码名=<实参>`（如 `bad-layer-tag=xxx`）；**多参码**写作 `码名 key1=<值1> key2=<值2>`，码名后以空格追加一个或多个 `key=value` 对（如 `one-sided-branch-not-recorded path=normal side=project`）；不跟任何实参的**无参码**单独出现（如 `duplicate-layer-section`、`partial-without-two-sided-comparison`）。因此条目以 `=` 结尾的是单参码，写全 `path=`、`declared=` 等键的是多参码，两者都不是的是无参码。
 
 - 段落与小节：`duplicate-layer-section`、`missing-steps-subsection`、`missing-steps-table`、`missing-compare-subsection`、`missing-compare-table`、`missing-diffs-subsection`、`missing-diffs-table`、`legacy-steps-table-format`。
 - 字段：`missing-or-unfilled-fields=`、`bad-control_logic_status=`、`bad-user_experience_status=`、`bad-layer_review_status=`、`bad-product_user_step_count=`、`duplicate-field=`（同值重复）、`conflicting-field=`（异值重复）。
 - 步骤行：`bad-step-row=`、`bad-layer-tag=`、`bad-step-path=`、`non-product-row-has-path=`、`suspicious-product-row=`。
 - 来源与路径类：`missing-source=`、`source-not-relative=`、`source-path-missing=`、`bad-path-class-entry=`、`path-class-entry-missing=`、`harness-row-source-outside-harness-paths=`、`maintainer-row-source-outside-maintainer-paths=`、`product-row-source-in-harness-paths=`、`product-row-source-in-maintainer-paths=`。
-- 计数：`product-step-count-mismatch`。
-- 对照表：`bad-compare-row=`、`bad-compare-path=`、`bad-compare-side=`、`bad-compare-count=`、`duplicate-compare-row=`、`reference-row-without-source=`、`project-count-mismatch`、`reference-none-but-reference-rows`、`one-sided-branch-not-recorded`。
+- 计数：`product-step-count-mismatch declared= actual=`。
+- 对照表：`bad-compare-row=`、`bad-compare-path=`、`bad-compare-side=`、`bad-compare-count=`、`duplicate-compare-row=`、`reference-row-without-source=`、`project-count-mismatch path= declared= actual=`、`reference-none-but-reference-rows`（无参）、`one-sided-branch-not-recorded path= side=`。
 - 差异行：`bad-diff-row=`、`bad-diff-scope=`、`bad-diff-state=`、`bad-diff-violation=`。
-- 状态与证据：`control-verified-without-control-evidence`、`control-partial-without-control-evidence`、`control-verified-with-static-only-evidence`、`aligned-without-ux-evidence`、`partial-without-ux-evidence`、`different-without-ux-evidence`、`evidence-not-distinguished`、`aligned-without-reference-product`、`aligned-with-static-only-evidence`、`aligned-with-unresolved-requirement-violations=`、`aligned-without-layer-review`、`aligned-without-two-sided-comparison`、`interaction-count-differs-without-difference-record`、`partial-without-two-sided-comparison`、`different-without-two-sided-comparison`、`reference-none-but-ux-<状态>`、`reference-present-but-ux-not-applicable`、`layer-review-without-basis`。
+- 状态与证据：`control-verified-without-control-evidence`、`control-partial-without-control-evidence`、`control-verified-with-static-only-evidence`、`aligned-without-ux-evidence`、`partial-without-ux-evidence`、`different-without-ux-evidence`、`evidence-not-distinguished`、`aligned-without-reference-product`、`aligned-with-static-only-evidence`、`aligned-with-unresolved-requirement-violations=`（实参为违规条数）、`aligned-without-layer-review`、`aligned-without-two-sided-comparison path=normal`、`interaction-count-differs-without-difference-record path=`、`partial-without-two-sided-comparison`（无参）、`different-without-two-sided-comparison`（无参）、`reference-none-but-ux-<状态>`、`reference-present-but-ux-not-applicable`、`layer-review-without-basis`。
 - 声称扫描：否定句、条件句与引用不再产生失败码。自然语言声称**不再作为硬失败**：`user_experience_status` 非 `aligned` 时正文出现体验级对齐词，或 `unverified`/`not-applicable` 时出现体验级事实词，均以 `review-hint: …` 形式写入 `info.lines` 交人工审查，不改变 `format-pass`。只有 `missing-layer-section-with-ux-claims` 仍是硬失败——报告出现体验类声称词却没有分层段落属于结构缺失。
 
 ## 5. 示例

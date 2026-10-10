@@ -365,7 +365,28 @@ function readChangelog(absPath) {
   return { ok: true, lines: stripped.replace(/\r\n/g, '\n').split('\n'), eol, hasBom };
 }
 
-/** 解析 --cwd 与 --path 为目标文件绝对路径；--cwd 必须是存在的目录。 */
+/**
+ * 目标路径的普通文件前置判定（三个子命令共用，跟随符号链接）。
+ * 返回 { kind, code }：
+ *   'file'     —— 普通文件（符号链接指向普通文件也按普通文件处理）
+ *   'missing'  —— ENOENT/ENOTDIR，路径不存在
+ *   'not-file' —— stat 成功但不是普通文件（如目录）
+ *   'error'    —— 其余 stat 失败（如无权限），code 为原始错误码
+ * 该判定必须发生在读取之前：否则目录会在读取时以 EISDIR 抛出，落进 exec-failed，
+ * 使「不是普通文件」这一 not-run 状态永不可达。
+ */
+function classifyTarget(abs) {
+  let stat;
+  try {
+    stat = fs.statSync(abs);
+  } catch (error) {
+    const code = error && error.code ? error.code : 'unknown';
+    return { kind: code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'error', code };
+  }
+  return stat.isFile() ? { kind: 'file' } : { kind: 'not-file' };
+}
+
+/** 解析 --cwd 与 --path 为目标文件绝对路径；--cwd 必须是存在的目录，并随带目标普通文件判定。 */
 function resolveTarget(flags) {
   const cwd = flags['--cwd'] ? path.resolve(flags['--cwd']) : process.cwd();
   let stat;
@@ -378,7 +399,9 @@ function resolveTarget(flags) {
     return { ok: false, reason: `--cwd 不是目录：${flags['--cwd']}` };
   }
   const rel = flags['--path'] || 'CHANGELOG.md';
-  return { ok: true, cwd, abs: path.resolve(cwd, rel), rel };
+  const abs = path.resolve(cwd, rel);
+  const status = classifyTarget(abs);
+  return { ok: true, cwd, abs, rel, kind: status.kind, code: status.code };
 }
 
 function git(args, cwd) {
@@ -414,8 +437,17 @@ function cmdInit(flags) {
   if (!target.ok) {
     finish('init', 'not-run', { reason: target.reason });
   }
-  const stat = fs.existsSync(target.abs) ? fs.statSync(target.abs) : null;
-  if (stat) {
+  // 普通文件判定先于一切读写：目录等非普通文件落 not-run，不落 exec-failed。
+  if (target.kind === 'error') {
+    finish('init', 'exec-failed', { reason: `无法读取 ${target.rel}: ${target.code}` });
+  }
+  if (target.kind === 'not-file') {
+    finish('init', 'not-run', {
+      reason: `${target.rel} 不存在或不是普通文件（不自动创建）`,
+      info: { lines: [`path: ${target.rel}`] }
+    });
+  }
+  if (target.kind === 'file') {
     finish('init', 'exists-kept', {
       reason: `${target.rel} 已存在，未改动（既有文件受保护，不覆盖）`,
       info: { lines: [`path: ${target.rel}`] }
@@ -449,16 +481,19 @@ function cmdCheck(flags) {
   if (!target.ok) {
     finish('check', 'not-run', { reason: target.reason });
   }
+  // 普通文件判定先于读取：目录等非普通文件落 not-run，避免 readChangelog 抛 EISDIR 落入 exec-failed。
+  if (target.kind === 'error') {
+    finish('check', 'exec-failed', { reason: `无法读取 ${target.rel}: ${target.code}` });
+  }
+  if (target.kind === 'not-file') {
+    finish('check', 'not-run', { reason: `${target.rel} 不存在或不是普通文件（不自动创建）` });
+  }
   const read = readChangelog(target.abs);
   if (!read.ok) {
     if (read.code === 'ENOENT' || read.code === 'ENOTDIR') {
       finish('check', 'not-run', { reason: `${target.rel} 不存在或不是普通文件（不自动创建）` });
     }
     finish('check', 'exec-failed', { reason: `无法读取 ${target.rel}: ${read.code}` });
-  }
-  const stat = fs.statSync(target.abs);
-  if (!stat.isFile()) {
-    finish('check', 'not-run', { reason: `${target.rel} 不存在或不是普通文件（不自动创建）` });
   }
   const lines = stripFences(read.lines);
   const model = analyzeChangelog(lines);
@@ -699,6 +734,13 @@ function cmdRelease(flags) {
   const target = resolveTarget(flags);
   if (!target.ok) {
     finish('release', 'not-run', { reason: target.reason });
+  }
+  // 普通文件判定先于读取：目录等非普通文件落 not-run，不因 EISDIR 落入 exec-failed。
+  if (target.kind === 'error') {
+    finish('release', 'exec-failed', { reason: `无法读取 ${target.rel}: ${target.code}` });
+  }
+  if (target.kind === 'not-file') {
+    finish('release', 'not-run', { reason: `${target.rel} 不存在或不是普通文件（不自动创建）` });
   }
   const read = readChangelog(target.abs);
   if (!read.ok) {

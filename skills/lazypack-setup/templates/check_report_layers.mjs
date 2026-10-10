@@ -7,9 +7,11 @@
  *   node check_report_layers.mjs check --file <report.md> [--cwd <dir>]
  *
  * init：报告文件存在且尚无分层段落时，在文件末尾追加规范骨架（created）；
- *       已有段落返回 exists-kept 不写盘；文件缺失返回 not-run，不代写报告正文。
+ *       已有段落返回 exists-kept 不写盘；文件缺失或不是普通文件返回 not-run，
+ *       不代写报告正文。
  * check：对段落做机器可判定的结构校验（format-pass / format-fail）；
- *        文件缺失 not-run；非法 UTF-8 或解析异常 exec-failed。
+ *        文件缺失或不是普通文件 not-run；参数错误、stat 失败、读取失败
+ *        （含文件过大）、非法 UTF-8 或写盘失败 exec-failed。
  *        报告没有分层段落但含用户体验类声称词时为 format-fail；
  *        无段落也无声称词时为 format-pass（本工具不判断报告是否需要该段落）。
  *
@@ -186,6 +188,69 @@ function decodeUtf8(buf) {
 /** 原始字节是否以 UTF-8 BOM 开头。 */
 function hasUtf8Bom(buf) {
   return buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
+}
+
+/**
+ * 报告路径的普通文件前置判定（init / check 共用，跟随符号链接）。
+ * 返回 { kind, code }：
+ *   'file'     —— 普通文件（符号链接指向普通文件也按普通文件处理）
+ *   'missing'  —— ENOENT/ENOTDIR，路径不存在
+ *   'not-file' —— stat 成功但不是普通文件（如目录）
+ *   'error'    —— 其余 stat 失败（如无权限），code 为原始错误码
+ * 该判定必须发生在 readFileSync 之前：目录会在读取时抛 EISDIR 未捕获异常，
+ * 既不是本工具头部注释承诺的四态，也没有可读的状态摘要。
+ */
+function classifyReportFile(abs) {
+  let stat;
+  try {
+    stat = fs.statSync(abs);
+  } catch (error) {
+    const code = error && error.code ? error.code : 'unknown';
+    return { kind: code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'error', code };
+  }
+  return stat.isFile() ? { kind: 'file' } : { kind: 'not-file' };
+}
+
+/**
+ * 读取报告文件为文本：读取与解码的失败一律转成可读错误码，不抛未捕获异常。
+ * 与 changelog.mjs 的 readChangelog 同口径——读取阶段（含文件超过 Node
+ * readFileSync 上限约 2 GiB、I/O 错误、权限错误）必须先落成状态，不能冒泡成
+ * RangeError/EACCES 之类的未捕获异常，否则进程以退出码 1 和 Node 栈收场，
+ * 落在本工具承诺的四态之外。
+ * 返回 { ok: true, buf, text } 或 { ok: false, code }：
+ *   code 为 Node 的 fs 错误码（如 ERR_FS_FILE_TOO_LARGE、EACCES、EIO…），
+ *   解码失败时为 'invalid-utf8'。
+ */
+function readReportFile(abs) {
+  let buf;
+  try {
+    buf = fs.readFileSync(abs);
+  } catch (error) {
+    return { ok: false, code: error && error.code ? error.code : 'unknown' };
+  }
+  const text = decodeUtf8(buf);
+  if (text === null) {
+    return { ok: false, code: 'invalid-utf8' };
+  }
+  return { ok: true, buf, text };
+}
+
+/**
+ * 读取阶段失败的统一文案。读取并不存在的路径不是这里的分支（那是 not-run），
+ * 所以文案只覆盖「路径在、但读不出来」：非法 UTF-8 单列，其余按 fs 错误码如实报出。
+ */
+function readFailureReason(fileRel, code) {
+  return code === 'invalid-utf8'
+    ? `report file is not valid UTF-8: ${fileRel}`
+    : `report file cannot be read: ${fileRel} (${code})`;
+}
+
+/**
+ * stat 失败（非 ENOENT/ENOTDIR）时的统一文案：init 与 check 都不该声称「读取」——
+ * init 这一步还没读该路径，失败的是对路径的 stat 本身（如权限、符号链接环 ELOOP）。
+ */
+function inspectFailureReason(fileRel, code) {
+  return `report path cannot be inspected: ${fileRel} (${code})`;
 }
 
 /** 解析命令行参数；未知 flag 或缺值记为错误。 */
@@ -751,14 +816,21 @@ function cmdInit(flags) {
   }
   const cwd = path.resolve(flags['--cwd'] || '.');
   const abs = path.resolve(cwd, fileRel);
-  if (!fs.existsSync(abs)) {
+  const status = classifyReportFile(abs);
+  if (status.kind === 'error') {
+    finish('init', 'exec-failed', { reason: inspectFailureReason(fileRel, status.code) });
+  }
+  if (status.kind === 'missing') {
     finish('init', 'not-run', { reason: `report file does not exist: ${fileRel}`, info: { lines: ['init 不代写报告正文，先由交付方写出报告再补分层段落'] } });
   }
-  const buf = fs.readFileSync(abs);
-  const text = decodeUtf8(buf);
-  if (text === null) {
-    finish('init', 'exec-failed', { reason: 'report file is not valid UTF-8' });
+  if (status.kind === 'not-file') {
+    finish('init', 'not-run', { reason: `report path is not a regular file: ${fileRel}`, info: { lines: ['init 不代写报告正文（不是普通文件，不追加分层段落）'] } });
   }
+  const read = readReportFile(abs);
+  if (!read.ok) {
+    finish('init', 'exec-failed', { reason: readFailureReason(fileRel, read.code) });
+  }
+  const { buf, text } = read;
   const lines = text.split(/\r?\n/);
   const mask = fenceMask(lines);
   if (lines.some((l, i) => !mask[i] && SECTION_HEADING.test(l))) {
@@ -779,14 +851,32 @@ function cmdInit(flags) {
   }
   out += SECTION_SKELETON.join(eol);
   const outText = hasBom ? `\uFEFF${out}` : out;
+  // 写入、写后读回核验与 rename 三步都可能失败（目标只读、磁盘满、路径被占用等）。
+  // 与 changelog.mjs 的 init 同口径：失败一律落 exec-failed(3)，清理自己创建的 tmp，
+  // 既不抛未捕获异常，也不在目标目录留下半成品。
   const tmp = `${abs}.report-layers-tmp-${process.pid}`;
-  fs.writeFileSync(tmp, outText);
-  const reread = decodeUtf8(fs.readFileSync(tmp));
-  if (reread !== outText) {
-    fs.rmSync(tmp, { force: true });
-    finish('init', 'exec-failed', { reason: 'write-back verification failed' });
+  try {
+    fs.writeFileSync(tmp, outText);
+    const reread = decodeUtf8(fs.readFileSync(tmp));
+    if (reread !== outText) {
+      try {
+        fs.rmSync(tmp, { force: true });
+      } catch {
+        // 清理尽力而为，不覆盖上面已定的失败原因
+      }
+      finish('init', 'exec-failed', { reason: `write-back verification failed for ${fileRel}` });
+    }
+    fs.renameSync(tmp, abs);
+  } catch (error) {
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      // 清理尽力而为，不覆盖下面如实报出的写盘错误
+    }
+    const detail = error && error.code ? error.code : (error && error.message) || 'unknown error';
+    const errno = error && typeof error.errno === 'number' ? ` errno=${error.errno}` : '';
+    finish('init', 'exec-failed', { reason: `write failed for ${fileRel}: ${detail}${errno}` });
   }
-  fs.renameSync(tmp, abs);
   finish('init', 'created', {
     info: { lines: [`path: ${fileRel}`, 'layer section appended at end of file', ...(hasBom ? ['bom: 已保留原有 UTF-8 BOM'] : [])] }
   });
@@ -799,14 +889,21 @@ function cmdCheck(flags) {
   }
   const cwd = path.resolve(flags['--cwd'] || '.');
   const abs = path.resolve(cwd, fileRel);
-  if (!fs.existsSync(abs)) {
+  const status = classifyReportFile(abs);
+  if (status.kind === 'error') {
+    finish('check', 'exec-failed', { reason: inspectFailureReason(fileRel, status.code) });
+  }
+  if (status.kind === 'missing') {
     finish('check', 'not-run', { reason: `report file does not exist: ${fileRel}` });
   }
-  const buf = fs.readFileSync(abs);
-  const text = decodeUtf8(buf);
-  if (text === null) {
-    finish('check', 'exec-failed', { reason: 'report file is not valid UTF-8' });
+  if (status.kind === 'not-file') {
+    finish('check', 'not-run', { reason: `report path is not a regular file: ${fileRel}`, info: { lines: ['不是普通文件（不代写报告正文）：check 只校验既有报告正文，不代写正文'] } });
   }
+  const read = readReportFile(abs);
+  if (!read.ok) {
+    finish('check', 'exec-failed', { reason: readFailureReason(fileRel, read.code) });
+  }
+  const text = read.text;
   const claimText = stripClaimText(text);
   const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
   const parsed = parseSection(lines);

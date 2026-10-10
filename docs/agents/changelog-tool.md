@@ -10,6 +10,7 @@
 - `release` 只**追加**一个新版本区段并维护文件末尾的链接引用块；除严格形态的 `[Unreleased]` 链接行外，不删改任何既有行。
 - `check` 只判定 §3 列出的**机器可判定结构子集**。结构合规**不等于**条目由提交真实生成——手写文件可以伪造同样结构，本工具无法分辨来源真伪。
 - 未接 hook/CI。不是门禁。存在本脚本不等于任何检查已生效。
+- 本工具按 Node/宿主 `fs.stat` 语义判定目标是否为普通文件（见 §2 的 `not-run` 口径）；Windows 保留设备名（如 `NUL`、`CON`）不在其可判定范围，同一写法的判定与写入结果随宿主而定。
 
 ## 2. 子命令、状态与退出码
 
@@ -25,15 +26,15 @@ node changelog.mjs release --version <x.y.z> [--cwd <dir>] [--path <file>]
 
 | 命令 | 0 | 1 | 2 | 3 |
 |---|---|---|---|---|
-| init | `created` 已写入骨架 | `exists-kept` 文件已存在，未改动 | `not-run` 前置不满足（如 `--cwd` 非目录） | `exec-failed` 执行失败（如写盘错误） |
-| check | `format-pass` | `format-fail` 结构违规 | `not-run`（文件缺失/不是普通文件） | `exec-failed`（如非 UTF-8） |
-| release | `released` | `refused` 语义拒绝（见 §4） | `not-run`（文件缺失或不在 git 工作树） | `exec-failed`（参数、git 或写盘错误） |
+| init | `created` 已写入骨架 | `exists-kept` 文件已存在，未改动 | `not-run`（`--cwd` 非目录或不存在，或目标路径已存在但不是普通文件） | `exec-failed`（目标 `stat` 失败；参数、写盘错误） |
+| check | `format-pass` | `format-fail` 结构违规 | `not-run`（`--cwd` 非目录或不存在，或文件缺失/不是普通文件） | `exec-failed`（目标 `stat` 或读取失败；非 UTF-8） |
+| release | `released` | `refused` 语义拒绝（见 §4） | `not-run`（`--cwd` 非目录或不存在；文件缺失/不是普通文件；不在 git 工作树） | `exec-failed`（目标 `stat` 或读取失败；参数、git 或写盘错误） |
 
 三档失败的区分口径：
 
-- `not-run`：检查/生成本身没有执行的条件（前置不满足），不是「不通过」也不是「报错」。
+- `not-run`：检查/生成本身没有执行的条件（前置不满足），不是「不通过」也不是「报错」。`check`/`release` 遇目标缺失（`ENOENT`/`ENOTDIR`）或不是普通文件（如目录）落这一档；`init` 对缺失目标走创建（退出码 0），仅「不是普通文件」落这一档；`--cwd` 不存在或非目录三者同落。
 - `refused`：读取成功、可以判断，但语义上拒绝执行（不会留下半成品）。
-- `exec-failed`：执行中出错；写盘经临时文件 + rename + 写后读回，失败时不留半成品。
+- `exec-failed`：执行中出错；写盘经临时文件 + rename + 写后读回，失败时不留半成品。目标路径的 `stat` 或读取本身失败（除 `ENOENT`/`ENOTDIR` 外，如符号链接环 `ELOOP`、无权限 `EACCES`、超出 `fs.readFileSync` 上限的文件过大）也落这一档，读不到内容即属执行出错，不是前置不满足。
 
 所有输出末尾附 JSON 摘要与同一声明：`未接 hook/CI。不是门禁。结构合规不等于条目由提交真实生成。`
 
