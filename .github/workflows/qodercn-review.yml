@@ -35,7 +35,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          git diff --no-color "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/pr.diff"
+          git diff --no-color "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/pr.diff"
           if [ "$(wc -c < "$RUNNER_TEMP/pr.diff")" -gt 150000 ]; then
             head -c 150000 "$RUNNER_TEMP/pr.diff" > "$RUNNER_TEMP/pr.diff.truncated"
             mv "$RUNNER_TEMP/pr.diff.truncated" "$RUNNER_TEMP/pr.diff"
@@ -87,9 +87,13 @@ jobs:
         run: |
           set -euo pipefail
           short_sha="${HEAD_SHA:0:7}"
+          if [ "$(wc -c < "$RUNNER_TEMP/review.md")" -gt 60000 ]; then
+            head -c 60000 "$RUNNER_TEMP/review.md" | iconv -f UTF-8 -t UTF-8 -c > "$RUNNER_TEMP/review.trunc.md" || true
+            mv "$RUNNER_TEMP/review.trunc.md" "$RUNNER_TEMP/review.md"
+            printf '\n> 审查输出超过 60000 字节，已截断。\n' >> "$RUNNER_TEMP/review.md"
+          fi
           review="$(cat "$RUNNER_TEMP/review.md")"
           body=$(printf '<!-- qodercn-review -->\n### Qoder CN 审查（模型自动生成，仅供参考）\n\n%s\n\n---\ncommit `%s`' "$review" "$short_sha")
-          body="${body:0:60000}"
           jq -n --arg body "$body" '{body: $body}' > "$RUNNER_TEMP/comment.json"
           existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- qodercn-review -->"))) | .id' | head -n 1)
           if [ -n "$existing" ]; then
