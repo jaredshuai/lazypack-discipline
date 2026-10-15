@@ -10,7 +10,8 @@ jobs:
   qoder-assistant:
     if: |
       contains(github.event.comment.body, '@qoder') &&
-      !endsWith(github.event.comment.user.login, '[bot]')
+      !endsWith(github.event.comment.user.login, '[bot]') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -23,36 +24,48 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Build Arguments
         id: build_args
+        env:
+          EV_REPO: ${{ github.repository }}
+          EV_EVENT: ${{ github.event_name }}
+          EV_NODE_ID: ${{ github.event.comment.node_id }}
+          EV_COMMENT_ID: ${{ github.event.comment.id }}
+          EV_AUTHOR: ${{ github.event.comment.user.login }}
+          EV_BODY: ${{ github.event.comment.body }}
+          EV_URL: ${{ github.event.comment.html_url }}
+          EV_IS_PR: ${{ github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment' }}
+          EV_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          EV_REVIEW_ID: ${{ github.event.comment.pull_request_review_id }}
+          EV_REPLY_TO: ${{ github.event.comment.in_reply_to_id }}
         run: |
-          ARGS="REPO: ${{ github.repository }}
-          REQUEST_SOURCE: ${{ github.event_name }}
-          THREAD_ID: ${{ github.event.comment.node_id }}
-          COMMENT_ID: ${{ github.event.comment.id }}
-          AUTHOR: ${{ github.event.comment.user.login }}
-          BODY: ${{ github.event.comment.body }}
-          URL: ${{ github.event.comment.html_url }}
-          IS_PR: ${{ github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment' }}
-          ISSUE_OR_PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}"
+          ARGS="REPO: $EV_REPO
+          REQUEST_SOURCE: $EV_EVENT
+          THREAD_ID: $EV_NODE_ID
+          COMMENT_ID: $EV_COMMENT_ID
+          AUTHOR: $EV_AUTHOR
+          BODY: $EV_BODY
+          URL: $EV_URL
+          IS_PR: $EV_IS_PR
+          ISSUE_OR_PR_NUMBER: $EV_NUMBER"
 
-          if [ -n "${{ github.event.comment.pull_request_review_id }}" ]; then
+          if [ -n "$EV_REVIEW_ID" ]; then
             ARGS="$ARGS
-          REVIEW_ID: ${{ github.event.comment.pull_request_review_id }}"
+          REVIEW_ID: $EV_REVIEW_ID"
           fi
 
-          if [ -n "${{ github.event.comment.in_reply_to_id }}" ]; then
+          if [ -n "$EV_REPLY_TO" ]; then
             ARGS="$ARGS
-          REPLY_TO_COMMENT_ID: ${{ github.event.comment.in_reply_to_id }}"
+          REPLY_TO_COMMENT_ID: $EV_REPLY_TO"
           fi
 
-          echo "args<<EOF" >> $GITHUB_OUTPUT
-          echo "$ARGS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          delim="ARGS_$(openssl rand -hex 16)"
+          { echo "args<<$delim"; printf '%s\n' "$ARGS"; echo "$delim"; } >> "$GITHUB_OUTPUT"
 
       - name: Run Qoder Assistant
-        uses: QoderAI/qoder-action@v0
+        uses: QoderAI/qoder-action@0881d27d15a7a93778ebc5c942d11da313ee8b7e # v0 (v0.1.0-beta.3)
         with:
           qoder_personal_access_token: ${{ secrets.QODERCN_PERSONAL_ACCESS_TOKEN }}
           prompt: |
