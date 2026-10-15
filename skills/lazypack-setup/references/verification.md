@@ -161,6 +161,21 @@
 3. **幂等重跑保障**：
    - 策略数据写入 `docs/agents/roles.md` §3，属于 Layer 0 受管区；协作内容留在文件本体，属于非受管区；
    - 用户向想法池追加新条目后，受管文件的 `fp` 与 `input` 保持不变，重新运行 setup 严格保证判定为 `[NO-OP]`。
+4. **留存维度选择交互核验**：
+   - 宿主支持多选却以单选或互斥套餐（如 `decisions-only / ideas / ideas+minutes / 暂不配置`）呈现，判为不合格，即使最终记录的维度正确；
+   - 以下样例的输入相同，多选控件与自由文本两种交互须得出相同结果：
+
+     | 用户输入 | 维度集合 | 模式 |
+     |---|---|---|
+     | `ideas + minutes` | `[ideas, minutes]` | `hybrid` |
+     | `minutes,raw_qa,ideas` 或 `都要` | `[ideas, minutes, raw_qa]` | `hybrid`（raw_qa 未绑定时为 `unbound` 并告知用户） |
+     | `minutes` | `[minutes]` | `minutes-only` |
+     | `decisions-only` | `[]` | `decisions-only` |
+     | `暂不配置` | `[]` | `unconfigured` |
+     | `ideas + 暂不配置`、`ideas + decisions-only` | — | `pending`，仅就冲突澄清 |
+     | 跳过、无应答、超时 | — | `pending`，零写入 |
+
+   - 以上样例是人工或 Agent 演练的判定口径，不是自动化测试；未在真实宿主演练前，完成报告不得宣称交互已验证。
 
 
 ---
