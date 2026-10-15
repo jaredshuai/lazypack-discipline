@@ -86,3 +86,10 @@
 - **目标范围**：四处表述与一处实现——`skills/lazypack-setup/templates/RELEASE.md` 中的变更记录行、`skills/lazypack-setup/templates/roles.md` 中书记员行、`skills/lazypack-setup/SKILL.md` 中的播种与生成表述、`docs/agents/changelog-tool.md` 判定口径正文，以及 `templates/changelog.mjs` 本身。不判断条目内容质量，也不检查任一目标仓的实际装配结果
 - **检查方式**：1) `templates/changelog.mjs` 存在且含 `init`、`check`、`release` 三个子命令分支；2) `templates/RELEASE.md` 含 `changelog.mjs release` 与 `changelog.mjs check`，且不含 `自动编译生成` 或 `自动生成 CHANGELOG` 字样；3) `SKILL.md` 含 `changelog.mjs init` 表述；4) `docs/agents/changelog-tool.md` 存在且含 `created`、`exists-kept`、`format-pass`、`refused`、`not-run`、`exec-failed` 六个状态词；5) `templates/roles.md` 书记员行同时含 `CHANGELOG.md` 与 `changelog.mjs`。任一不满足即失败
 - **处理权限**：只读报告。任一不满足记失败。本条不授权修改任何文件；机制或表述变化时先改声明再改实现
+
+### P11 §9 讨论规程与 setup 分发模板字节同源
+
+- **来源**：`docs/agents/section9-discussion-protocol.md` 的原始字节
+- **目标范围**：`skills/lazypack-setup/templates/section9-discussion-protocol.md` 这一份分发模板。不含其他副本，也不判断规程条文本身是否正确
+- **检查方式**：两文件原始字节 SHA-256 必须相等。只用哈希，不做语义比较
+- **处理权限**：只读报告。字节不一致时记失败。要同步须先改本仓规程正文，再复制到模板

@@ -112,9 +112,9 @@
 ```
 
 - **字段规范**：
-  * `dimensions`：启用维度的升序排序字符串数组（可包含 `"ideas"`, `"minutes"`, `"raw_qa"`；若仅留决议或未配置则为 `[]`）；
+  * `dimensions`：启用维度的升序排序字符串数组（可包含 `"ideas"`, `"minutes"`, `"raw_qa"`；若仅留决议或未配置则为 `[]`；勾选 `raw_qa` 但未给出经授权的私有存储位置时同轮只追问一次（提供位置或确认不留存），确认不留存按其余维度照常记录、raw_qa 为唯一勾选时回到集合选择、追问无应答则整体保持 `pending` 不落盘；位置齐备时 `dimensions` 中加入 `raw_qa`，位置写入 `paths.raw_qa`，`visibility.raw_qa` 取非 `none` 值（`private-storage` 或 `private-repo`）——仓外别名在会话未获授权映射时记 `unbound`，仓内私有相对路径无需会话映射）；
   * `mode`：`"decisions-only" | "ideas-pool" | "minutes-only" | "raw-qa" | "hybrid" | "unconfigured"`（严格从 `dimensions` 派生：`[]` 派生为 `decisions-only` 或 `unconfigured`，单一维度派生为相应模式，多维度派生为 `hybrid`，不得相互矛盾）；
-  * `paths`：规范化相对路径或安全引用别名词典（键固定为 `ideas`, `minutes`, `raw_qa`，未启用项统一为空字符串 `""`；仓内材料使用 POSIX 规范相对路径，仓外私有原文使用可解析的安全引用别名如 `vault:raw-qa`，严禁将宿主本机绝对物理路径或密钥凭据写入公开产物；实际物理绑定遵循 `session-authorized` 会话授权契约：写前在当前可见会话检查别名到真实物理路径的授权映射，若未提供安全绑定则该维度保持待绑定 `unbound` 且不写材料，亦不跨会话在仓库内持久化私有物理路径）；
+  * `paths`：规范化相对路径或安全引用别名词典（键固定为 `ideas`, `minutes`, `raw_qa`，未启用项统一为空字符串 `""`；仓内材料使用 POSIX 规范相对路径，仓外私有原文使用可解析的安全引用别名如 `vault:raw-qa`，严禁将宿主本机绝对物理路径或密钥凭据写入公开产物；实际物理绑定遵循 `session-authorized` 会话授权契约：写前在当前可见会话检查别名到真实物理路径的授权映射，若仓外别名在当前会话未获授权映射，则该维度保持待绑定 `unbound` 且不写材料，仓内私有相对路径无需会话映射，亦不跨会话在仓库内持久化私有物理路径）；
   * `retentionSrc`：正文权威源 `references/retention-sections.md` 经剔除 UTF-8 BOM、CRLF→LF 规范化后的 SHA-256 摘要前 16 位小写十六进制字符串。当且仅当权威正文库发生变动时驱动 `roles.md` 平滑触发 `[UPGRADE]`，避免改动策略文本时因 input 未变而漏升级。无论 8 种启用组合还是 `unconfigured` 分支均包含该字段；`pending` 待答状态不记录；
   * `visibility`：按维度划分的可见性字典（键固定为 `ideas`, `minutes`, `raw_qa`，取值为 `"public-repo" | "private-repo" | "private-storage" | "none"`，未启用项为 `"none"`；外部私有存储取值为 `"private-storage"`）；
   * 严禁纳入临时时间戳、材料正文或运行日志，杜绝跨会话伪漂移。
@@ -353,7 +353,7 @@
      - **本地文件与有效章节锚点 (Local Files & Sections)**: 物理文件在磁盘真实存在且非空，有效章节锚点必须在文件内存在对应标题；
      - **目录索引入口 (Directory Index Entries)**: 项目声明或实际存在的权威目录（如 `docs/interviews/`, `docs/adr/`），磁盘上该目录真实存在；
      - **声明的外部 URL (Declared External URLs)**: 仅依据配置文件（如 `package.json` 中的 `bugs` / `repository` URL）中显式声明的合法 HTTP/HTTPS URL 登记元数据；**绝不发起外部网络请求抓取，亦不宣称远端存在已验证**；
-     - **留存协作种子与私有存储绑定 (Retention Seeds & Vault Bindings)**: 严格维持现有非空与 `session-authorized` 契约（ideas 种子必须非空；raw_qa 必须经当前会话显式绑定且不向公开产物暴露绝对私有路径，未绑定严格保持 `unbound` 零写入零预登记，**绝不为普通文档放宽私有存储安全防线**）。
+     - **留存协作种子与私有存储绑定 (Retention Seeds & Vault Bindings)**: 严格维持现有非空与 `session-authorized` 契约（ideas 种子必须非空；raw_qa 仓外别名必须经当前会话显式绑定且不向公开产物暴露绝对私有路径，未绑定严格保持 `unbound` 零写入零预登记；仓内私有相对路径以仓库本身为私有为前提、无需会话绑定，无法核实为私有不写盘，**绝不为普通文档放宽私有存储安全防线**）。
   3. **不重复添加（幂等追加）**：若 Section 3 表格已存在该去重键，不重复写入行，保持原样；保留已有普通文件键，升级定位规则时严禁重复追加旧条目。
   4. **旧表头、手工注释与人工行绝对保护**：
      - Section 3 原有的非标准表头、手工注释、前置说明及人工登记行，setup 重跑时绝对不删除、不覆写、不重排，原有字节完全保护；

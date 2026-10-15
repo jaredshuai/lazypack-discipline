@@ -139,18 +139,18 @@ description: >-
 ##### 访谈记录与碎片想法留存偏好澄清
 
 - 当探测判定留存策略未决、失效或存在冲突时，向用户呈现单次澄清问题；
-- 阐明：需求研讨（如 `/grill-with-docs`）中产生的碎片想法对长期演进具有参考价值，但直接代码化存在偏离基准风险。直接收集启用的维度集合（支持 8 种任意正交组合，或明确跳过）：
+- 阐明：需求研讨（如 `/grill-with-docs`）中产生的碎片想法对长期演进具有参考价值，但直接代码化存在偏离基准风险。直接收集启用的维度集合（支持 8 种任意正交组合，或明确回答「暂不配置」）：
   - `ideas`：想法池（在 docs/ideas/inbox.md 或用户选定路径留存未立项想法，标为 exploration）；
   - `minutes`：结构化纪要（在 docs/interviews/ 留存经脱敏的研讨背景、决议摘要与参与者记录，作为 reference）；
-  - `raw_qa`：原始问答片段（独立敏感维度，默认不启用；仅在用户显式要求并提供经授权的安全私有存储别名时开启，遵循 `session-authorized` 机制；公开产物仅存安全别名，绝对私有路径不入代码仓亦不建持久绑定表；当前会话未获明确授权映射则保持 unbound 待绑定，不写材料，下一会话重新按需授权）；
+  - `raw_qa`：原始问答片段（独立敏感维度，默认不启用；仅在用户显式要求并提供经授权的私有存储位置时开启——仓外安全引用别名，或仓库本身为私有时的仓内规范相对路径；仓外别名遵循 `session-authorized` 机制，公开产物仅存安全别名，宿主绝对私有路径不入代码仓亦不建持久绑定表；仓外别名在当前会话未获明确授权映射则保持 unbound 待绑定，不写材料，下一会话重新按需授权，仓内私有相对路径无需会话授权映射）；
   - 或选择极简 `decisions-only`（全关：仅保留 CONTEXT.md 与 ADR，过程材料用完即弃）；
 - **交互与确权契约**：
-  - **交互类型必须为集合选择**：宿主提问工具提供多选能力（如多选/multi-select 开关）时，必须开启多选，`ideas`、`minutes`、`raw_qa` 各为一个独立可勾选项，`decisions-only`（仅决议，不留过程材料）也作为选项列出；宿主允许的选项数足够时，`暂不配置` 作为第五个选项，否则在题干写明「暂不配置请在自由填写栏写『暂不配置』」。禁止以单选提问，禁止把 `ideas+minutes` 等组合列为互斥套餐来代替多选；宿主侧跳过或拒答按下文 `pending` 处理，不等于 `暂不配置`；
+  - **交互类型必须为集合选择**：宿主提问工具提供多选能力（如多选/multi-select 开关）时，必须开启多选，`ideas`、`minutes`、`raw_qa` 各为一个独立可勾选项，`decisions-only`（仅决议，不留过程材料）也作为选项列出；仅当宿主多选能把 `ideas`、`minutes`、`raw_qa`、`decisions-only` 四项全部列为独立可选项时才使用多选；`暂不配置` 在容量允许时列为第五个选项，放不下时在题干写明「暂不配置请在自由填写栏写『暂不配置』」；四项列不全、或第五项放不下且控件无自由填写栏时，视同不支持多选控件，按下条自由文本降级处理。禁止以单选提问，禁止把 `ideas+minutes` 等组合列为互斥套餐来代替多选；宿主侧跳过或拒答按下文 `pending` 处理，不等于 `暂不配置`；
   - **宿主不支持多选控件时的降级**：只问一次自由文本问题：`要留存哪些材料？可写 ideas + minutes + raw_qa（可选一项或多项）、都要、decisions-only（仅决议，不留过程材料），或暂不配置。` 允许中文分隔符、空格及加号，不要求用户按编号单选，也不逐项追问已明确的维度；
   - **集合解析与歧义保护**：三维度去重后作为无序集合；`都要` 等明确表达为三项全开；`decisions-only` 是已确认的空集合，`暂不配置` 是 `unconfigured`，两者不能混同。维度与 `decisions-only`/`暂不配置` 混选、或表达不清时，仅就冲突澄清并保持 `pending`，不猜测用户选择。核验样例见 [references/verification.md](references/verification.md) §5；
-  - **raw_qa 勾选不放宽约束**：勾选 `raw_qa` 或回答 `都要` 视为用户显式要求 raw_qa，但只确认留存意愿，不代替上文的安全私有存储别名与 `session-authorized` 授权。当前会话未完成绑定时，raw_qa 记为 `unbound`、不写材料，并在本轮回复中明确告知用户「raw_qa 尚未生效，需提供授权存储后才会留存」；
+  - **raw_qa 勾选不放宽约束**：勾选 `raw_qa` 或回答 `都要` 视为用户显式要求 raw_qa，但只确认留存意愿，不代替经授权的私有存储位置——仓外安全引用别名（`visibility.raw_qa` = `private-storage`），或仓库本身为私有时的仓内规范相对路径（`private-repo`）。勾选 raw_qa 但未给出私有存储位置时，同轮只追问一次「提供存储位置，或确认不留存 raw_qa」：给出位置按本条规定记录；确认不留存则按其余已选维度照常记录并告知用户 raw_qa 未生效（raw_qa 为唯一勾选时回到集合选择问题，不记录，不得记为 `decisions-only`）；追问无应答则整个留存问题保持 `pending`、零写入。位置齐备时 `dimensions` 中加入 `raw_qa`，位置写入 `paths.raw_qa`，`visibility.raw_qa` 取非 `none` 值（`private-storage` 或 `private-repo`）；仓外别名在当前会话未完成授权映射时记为 `unbound`、不写材料、不登记 ARTIFACTS，并明确告知用户「raw_qa 尚未生效，需提供授权存储后才会留存」，仓内私有相对路径无需会话授权映射；
   - **未答/超时（pending）**：用户无应答、超时或未回答时，保持问题待答，状态为 `pending`，**严禁静默假定默认选项，严禁在 `roles.md` 中写入任何 §3 留存策略或假定配置，严禁生成带未展开占位符的假 header，严禁写入留存文件**；
-  - **明确暂不配置（unconfigured）**：用户明确回复"暂不配置"或显式放弃时，记录为 `unconfigured`，在 `roles.md` §3 写入 unconfigured 权威段落，继续其他独立 setup 事项；不作为 Matt 前置阻断项，不影响质量门禁；
+  - **明确暂不配置（unconfigured）**：用户明确回复「暂不配置」时，记录为 `unconfigured`，在 `roles.md` §3 写入 unconfigured 权威段落，继续其他独立 setup 事项；不作为 Matt 前置阻断项，不影响质量门禁；拒答或放弃作答但未说出「暂不配置」按上条 `pending` 处理，不写入；
   - 策略变更绝不追溯删除磁盘上已有历史材料。
 
 ##### 同主题冲突与文档归属澄清 (Document Homes & Conflict Clarification)
@@ -347,7 +347,7 @@ description: >-
    - **留存协作文件与入口安全写盘 (P3, P4, P6, P8)**：
      * **ideas 种子 (P4)**：若确认启用了想法池，目标路径读取自 `retention.paths.ideas`（默认 `docs/ideas/inbox.md`）。写盘前严格遵循“先审查再落盘 (Pre-write Inspection & Sanitization)”，剔除密钥与敏感数据。若磁盘上该文件已存在，触发既有文件保护，绝对不覆盖已有正文；若不存在，写入非受管种子文件并校验非空；
      * **minutes 入口 (P8)**：若确认启用了纪要归档，目标目录读取自 `retention.paths.minutes`（默认 `docs/interviews`）。若磁盘上该目录不存在，经整体确认后在目标路径建立空目录或入口索引，**严禁虚构伪造任何虚假访谈纪要会议记录**；若已存在则保护引用；
-     * **raw_qa 绑定与核验 (P3, P8, R2)**：若确认启用了原始问答片段，必须在写前通过当前可见会话检查别名到宿主私有物理路径的显式授权映射（`session-authorized`）。若已在当前会话安全绑定，仅在授权私有位置写入初始引导/片段，公开产物仅存安全别名（如 `vault:raw-qa`），严禁落绝对私有路径或凭据；若当前会话未提供安全绑定映射，状态严格保持为 `unbound`（待绑定），不向任何地方写入文件，不虚报已可用，不预登记；
+     * **raw_qa 绑定与核验 (P3, P8, R2)**：若确认启用了原始问答片段，按 `paths.raw_qa` 的形态分支：仓外安全引用别名（`private-storage`）必须在写前通过当前可见会话检查别名到宿主私有物理路径的显式授权映射（`session-authorized`）。若已在当前会话安全绑定，仅在授权私有位置写入初始引导/片段，公开产物仅存安全别名（如 `vault:raw-qa`），严禁落绝对私有路径或凭据；若当前会话未提供安全绑定映射，状态严格保持为 `unbound`（待绑定），不向任何地方写入文件，不虚报已可用，不预登记。仓内规范相对路径（`private-repo`）无需会话授权映射，但写前必须核实仓库本身为私有——无法核实为私有则不写盘、如实报告并按未给出私有存储位置处理；核实通过则按与 ideas 相同的先审查再落盘、脱敏与既有文件保护写入该相对路径。两种形态均严禁写入宿主绝对路径；
    - `docs/agents/roles.md`（若未暂停）：若留存策略已明确（非 pending 待确认），从 [references/retention-sections.md](references/retention-sections.md) 单一事实源获取对应正文，严格按替换表展开占位符（其中 `__RAW_QA_VISIBILITY__` 统一替换为 schema枚举值 `private-storage` 或 `private-repo`）后渲染 §3 规划者指引，并计算包含规范 `retention` 字段与 `retentionSrc` 权威正文源摘要的 input 摘要写盘；若留存策略处于 pending 状态，则不渲染 §3 亦不写入留存 input，杜绝生成假 header。
    - `docs/agents/section9-discussion-protocol.md`（§9 多 AI 讨论执行规程）：
      * **条件**：总是生成（与 AGENTS.md 同级）
@@ -405,7 +405,7 @@ description: >-
   * 若发生冲突或失败，明确报告是补偿回滚成功（恢复初态）还是因 `pre_rollback_collision` 暂停挂起；
   * 明确死链核验范围仅限于有界扫描范围内的 Markdown 标准相对链接。
   *如实列出识别到的业务文档、物理路径（保留原位）、归属的 8 个知识区、分配的角色与状态（`current` / `superseded`）、同主题裁决结果；若因并发冲突或用户拒绝而暂停/未写入，如实记录为 `pending` / `declined` / `migration-unsupported-declined` 并说明零写入事实；明确报告“所有既有文档保留原位，未执行物理移动或迁移”。
-- **留存策略与协作材料事实**：如实报告访谈留存模式与启用维度（`decisions-only` / `ideas-pool` / `minutes-only` / `raw-qa` / `hybrid` / `unconfigured` / `pending`）、目标路径、纪要入口建立情况与可见性；未答或超时如实报告为“待确认 pending（未配置，零写入）”；显式跳过报告为“用户明确暂不配置 unconfigured”；私有原文报告安全别名与绑定状态（未绑定标 `unbound`，不虚报已交付）；既有人工文件报告为“人工产物受保护引用（未覆盖写盘）”。
+- **留存策略与协作材料事实**：如实报告访谈留存模式与启用维度（`decisions-only` / `ideas-pool` / `minutes-only` / `raw-qa` / `hybrid` / `unconfigured` / `pending`）、目标路径、纪要入口建立情况与可见性；未答或超时如实报告为“待确认 pending（未配置，零写入）”；用户明确回答「暂不配置」报告为“用户明确暂不配置 unconfigured”；私有原文报告存储形态与状态（仓外别名未绑定标 `unbound`，仓内私有相对路径标 `private-repo`，不虚报已交付）；既有人工文件报告为“人工产物受保护引用（未覆盖写盘）”。
 - **门禁状态**：逐项列出 `format`、`lint`、`type`、`test` 的接线状态（`wired` / `missing` / `install-failed` / `n/a`）；若存在 `install-failed`，重点告警阻断风险。
 - **门禁实跑与出处事实**：记录各命令实跑退出码（若 pytest 因无用例退出 5 明确说明为无用例收集而非错误）；记录配方标识、版本与四槽出处记录（全已有未采用时明确记录省略出处行）。
 - **Git Hook 激活证据 (F06)**：
