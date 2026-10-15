@@ -139,7 +139,7 @@
 5. **检查通过状态**：只有当所有 wired 项实际运行且退出码均为 0 时，才可声称检查通过；任何含 missing/n/a 的情况不得宣称“门禁全面生效”。
 6. **门禁配方出处记录**：若采用了门禁配方（全量或混合），报告配方标识、版本及四槽三段式出处记录；若全量已有工具且未采用配方，明确记录为“全部已有工具，省略配方出处”。
 7. **三态恢复指导**：若操作中断或依赖安装失败，依据会话内 $S_{\text{pre}}$ 快照提供新建文件的精确删除清单、修改文件的行级恢复指引与依赖文件的直接写回说明；严禁提供全局 reset/clean 命令。
-8. **留存策略与协作材料事实**：如实报告访谈留存模式与启用维度（`decisions-only` / `ideas-pool` / `minutes-only` / `raw-qa` / `hybrid` / `unconfigured`）；报告权威正文源摘要 `retentionSrc`；若用户未答或超时，显式报告为“待确认 pending（保持未配置，零写入）”，严禁虚构采纳；私有原文报告安全别名与 `session-authorized` 绑定状态（当前会话未绑定标 `unbound`，不虚报已交付）；若检测到既有人工 ideas 文件，显式标明“人工产物受保护引用（未覆盖）”；若写入中断，严禁提前声称产物已登记。
+8. **留存策略与协作材料事实**：如实报告访谈留存模式与启用维度（`decisions-only` / `ideas-pool` / `minutes-only` / `raw-qa` / `hybrid` / `unconfigured`）；报告权威正文源摘要 `retentionSrc`；若用户未答或超时，显式报告为“待确认 pending（保持未配置，零写入）”，严禁虚构采纳；私有原文报告存储形态与 `session-authorized` 绑定状态（仓外别名当前会话未绑定标 `unbound`，仓内私有相对路径标 `private-repo`，不虚报已交付）；若检测到既有人工 ideas 文件，显式标明“人工产物受保护引用（未覆盖）”；若写入中断，严禁提前声称产物已登记。
 9. **证据层级诚实区分 (Evidence Levels Distinction)**：完成报告中对所有验证结果必须严格区分证据层级，严禁笼统合称“产品生命周期已全验证”：
    - **模板渲染证据 (Template Rendering)**：仅证明模板占位符展开、指纹与标记格式符合语法规范；不证明 Hook 在操作系统中已真实执行；
    - **Stub 执行证据 (Stub Execution)**：仅证明 POSIX Shell 语法分支、退出码传播与子 Shell 隔离等控制流逻辑按预期生效；不证明真实候选工具已安装或可用；
@@ -169,11 +169,12 @@
      |---|---|---|
      | `ideas + minutes` | `[ideas, minutes]` | `hybrid` |
      | `minutes,raw_qa,ideas` 或 `都要`（已给出仓外安全引用别名） | `[ideas, minutes, raw_qa]` | `hybrid`（当前会话未完成授权映射时 raw_qa 记 `unbound`、不写材料并告知用户） |
-     | `minutes,raw_qa,ideas` 或 `都要`（已给出仓内私有相对路径） | `[ideas, minutes, raw_qa]` | `hybrid`（`private-repo`，无需会话映射） |
+     | `minutes,raw_qa,ideas` 或 `都要`（已给出仓内私有相对路径、仓库本身为私有） | `[ideas, minutes, raw_qa]` | `hybrid`（`private-repo`，无需会话映射） |
      | `minutes,raw_qa,ideas` 或 `都要`（未给出私有存储位置） | — | 同轮追问一次：给出位置按上两行记录；确认不留存 raw_qa 则 `[ideas, minutes]` `hybrid` 并告知；追问无应答 `pending` |
      | `raw_qa`（未给出私有存储位置，追问后确认不留存） | — | 回到集合选择问题，不记录 |
      | `raw_qa`（已给出仓外安全引用别名、会话未完成授权映射） | `[raw_qa]` | `raw-qa`（`unbound`、不写材料并告知用户） |
-     | `raw_qa`（已给出仓内私有相对路径） | `[raw_qa]` | `raw-qa`（`private-repo`，无需会话映射） |
+     | `raw_qa`（已给出仓内私有相对路径、仓库本身为私有） | `[raw_qa]` | `raw-qa`（`private-repo`，无需会话映射） |
+     | `raw_qa`（已给出仓内相对路径但仓库为公开或无法核实为私有） | — | 非经授权的私有存储位置，视同未给出位置，同轮追问一次 |
      | `minutes` | `[minutes]` | `minutes-only` |
      | `decisions-only` | `[]` | `decisions-only` |
      | `暂不配置` | `[]` | `unconfigured` |

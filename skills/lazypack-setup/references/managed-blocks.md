@@ -353,7 +353,7 @@
      - **本地文件与有效章节锚点 (Local Files & Sections)**: 物理文件在磁盘真实存在且非空，有效章节锚点必须在文件内存在对应标题；
      - **目录索引入口 (Directory Index Entries)**: 项目声明或实际存在的权威目录（如 `docs/interviews/`, `docs/adr/`），磁盘上该目录真实存在；
      - **声明的外部 URL (Declared External URLs)**: 仅依据配置文件（如 `package.json` 中的 `bugs` / `repository` URL）中显式声明的合法 HTTP/HTTPS URL 登记元数据；**绝不发起外部网络请求抓取，亦不宣称远端存在已验证**；
-     - **留存协作种子与私有存储绑定 (Retention Seeds & Vault Bindings)**: 严格维持现有非空与 `session-authorized` 契约（ideas 种子必须非空；raw_qa 必须经当前会话显式绑定且不向公开产物暴露绝对私有路径，未绑定严格保持 `unbound` 零写入零预登记，**绝不为普通文档放宽私有存储安全防线**）。
+     - **留存协作种子与私有存储绑定 (Retention Seeds & Vault Bindings)**: 严格维持现有非空与 `session-authorized` 契约（ideas 种子必须非空；raw_qa 仓外别名必须经当前会话显式绑定且不向公开产物暴露绝对私有路径，未绑定严格保持 `unbound` 零写入零预登记；仓内私有相对路径以仓库本身为私有为前提、无需会话绑定，无法核实为私有不写盘，**绝不为普通文档放宽私有存储安全防线**）。
   3. **不重复添加（幂等追加）**：若 Section 3 表格已存在该去重键，不重复写入行，保持原样；保留已有普通文件键，升级定位规则时严禁重复追加旧条目。
   4. **旧表头、手工注释与人工行绝对保护**：
      - Section 3 原有的非标准表头、手工注释、前置说明及人工登记行，setup 重跑时绝对不删除、不覆写、不重排，原有字节完全保护；

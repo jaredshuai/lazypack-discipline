@@ -347,7 +347,7 @@ description: >-
    - **留存协作文件与入口安全写盘 (P3, P4, P6, P8)**：
      * **ideas 种子 (P4)**：若确认启用了想法池，目标路径读取自 `retention.paths.ideas`（默认 `docs/ideas/inbox.md`）。写盘前严格遵循“先审查再落盘 (Pre-write Inspection & Sanitization)”，剔除密钥与敏感数据。若磁盘上该文件已存在，触发既有文件保护，绝对不覆盖已有正文；若不存在，写入非受管种子文件并校验非空；
      * **minutes 入口 (P8)**：若确认启用了纪要归档，目标目录读取自 `retention.paths.minutes`（默认 `docs/interviews`）。若磁盘上该目录不存在，经整体确认后在目标路径建立空目录或入口索引，**严禁虚构伪造任何虚假访谈纪要会议记录**；若已存在则保护引用；
-     * **raw_qa 绑定与核验 (P3, P8, R2)**：若确认启用了原始问答片段，必须在写前通过当前可见会话检查别名到宿主私有物理路径的显式授权映射（`session-authorized`）。若已在当前会话安全绑定，仅在授权私有位置写入初始引导/片段，公开产物仅存安全别名（如 `vault:raw-qa`），严禁落绝对私有路径或凭据；若当前会话未提供安全绑定映射，状态严格保持为 `unbound`（待绑定），不向任何地方写入文件，不虚报已可用，不预登记；
+     * **raw_qa 绑定与核验 (P3, P8, R2)**：若确认启用了原始问答片段，按 `paths.raw_qa` 的形态分支：仓外安全引用别名（`private-storage`）必须在写前通过当前可见会话检查别名到宿主私有物理路径的显式授权映射（`session-authorized`）。若已在当前会话安全绑定，仅在授权私有位置写入初始引导/片段，公开产物仅存安全别名（如 `vault:raw-qa`），严禁落绝对私有路径或凭据；若当前会话未提供安全绑定映射，状态严格保持为 `unbound`（待绑定），不向任何地方写入文件，不虚报已可用，不预登记。仓内规范相对路径（`private-repo`）无需会话授权映射，但写前必须核实仓库本身为私有——无法核实为私有则不写盘、如实报告并按未给出私有存储位置处理；核实通过则按与 ideas 相同的先审查再落盘、脱敏与既有文件保护写入该相对路径。两种形态均严禁写入宿主绝对路径；
    - `docs/agents/roles.md`（若未暂停）：若留存策略已明确（非 pending 待确认），从 [references/retention-sections.md](references/retention-sections.md) 单一事实源获取对应正文，严格按替换表展开占位符（其中 `__RAW_QA_VISIBILITY__` 统一替换为 schema枚举值 `private-storage` 或 `private-repo`）后渲染 §3 规划者指引，并计算包含规范 `retention` 字段与 `retentionSrc` 权威正文源摘要的 input 摘要写盘；若留存策略处于 pending 状态，则不渲染 §3 亦不写入留存 input，杜绝生成假 header。
    - `docs/agents/section9-discussion-protocol.md`（§9 多 AI 讨论执行规程）：
      * **条件**：总是生成（与 AGENTS.md 同级）
@@ -405,7 +405,7 @@ description: >-
   * 若发生冲突或失败，明确报告是补偿回滚成功（恢复初态）还是因 `pre_rollback_collision` 暂停挂起；
   * 明确死链核验范围仅限于有界扫描范围内的 Markdown 标准相对链接。
   *如实列出识别到的业务文档、物理路径（保留原位）、归属的 8 个知识区、分配的角色与状态（`current` / `superseded`）、同主题裁决结果；若因并发冲突或用户拒绝而暂停/未写入，如实记录为 `pending` / `declined` / `migration-unsupported-declined` 并说明零写入事实；明确报告“所有既有文档保留原位，未执行物理移动或迁移”。
-- **留存策略与协作材料事实**：如实报告访谈留存模式与启用维度（`decisions-only` / `ideas-pool` / `minutes-only` / `raw-qa` / `hybrid` / `unconfigured` / `pending`）、目标路径、纪要入口建立情况与可见性；未答或超时如实报告为“待确认 pending（未配置，零写入）”；用户明确回答「暂不配置」报告为“用户明确暂不配置 unconfigured”；私有原文报告安全别名与绑定状态（未绑定标 `unbound`，不虚报已交付）；既有人工文件报告为“人工产物受保护引用（未覆盖写盘）”。
+- **留存策略与协作材料事实**：如实报告访谈留存模式与启用维度（`decisions-only` / `ideas-pool` / `minutes-only` / `raw-qa` / `hybrid` / `unconfigured` / `pending`）、目标路径、纪要入口建立情况与可见性；未答或超时如实报告为“待确认 pending（未配置，零写入）”；用户明确回答「暂不配置」报告为“用户明确暂不配置 unconfigured”；私有原文报告存储形态与状态（仓外别名未绑定标 `unbound`，仓内私有相对路径标 `private-repo`，不虚报已交付）；既有人工文件报告为“人工产物受保护引用（未覆盖写盘）”。
 - **门禁状态**：逐项列出 `format`、`lint`、`type`、`test` 的接线状态（`wired` / `missing` / `install-failed` / `n/a`）；若存在 `install-failed`，重点告警阻断风险。
 - **门禁实跑与出处事实**：记录各命令实跑退出码（若 pytest 因无用例退出 5 明确说明为无用例收集而非错误）；记录配方标识、版本与四槽出处记录（全已有未采用时明确记录省略出处行）。
 - **Git Hook 激活证据 (F06)**：
