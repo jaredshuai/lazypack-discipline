@@ -19,7 +19,7 @@
 4. **权限隔离、安全别名与会话授权解析 (session-authorized)**：
    - 仓内位置为规范相对路径；
    - 仓外私有原文使用可解析的安全引用/别名（如 `vault:raw-qa`、`private-storage:interview-records`），公开 `roles.md` 与 `ARTIFACTS.md` 仅存安全标识，严禁将宿主本机绝对路径或密钥凭据泄露进公开代码仓；
-   - 实际物理绑定遵循 `session-authorized` 契约：写前在当前可见会话检查别名到真实物理路径的授权映射，只在显式授权的私有位置写入；若未建立安全绑定条件，该维度保持待绑定（`unbound`），不写材料，不预登记，不虚报已可用；不自动创建全局配置或仓内持久化绑定表。勾选 raw_qa 但用户未提供经授权的安全私有存储别名时，该维度不记入 `dimensions`，其余已选维度照常记录并告知用户 raw_qa 未生效（raw_qa 为唯一勾选时整个留存问题保持 `pending`，不得记为 `decisions-only`）；已提供经授权的安全私有存储别名、但当前会话未获授权映射时，`dimensions` 中加入 `raw_qa`，别名写入 `paths.raw_qa`，`visibility.raw_qa` 取非 `none` 值（`private-storage` 或 `private-repo`）并保持 `unbound`，不写材料、不登记；
+   - 实际物理绑定遵循 `session-authorized` 契约：写前在当前可见会话检查别名到真实物理路径的授权映射，只在显式授权的私有位置写入；若未建立安全绑定条件，该维度保持待绑定（`unbound`），不写材料，不预登记，不虚报已可用；不自动创建全局配置或仓内持久化绑定表。经授权的私有存储位置指仓外安全引用别名（`visibility.raw_qa` = `private-storage`），或仓库本身为私有时的仓内规范相对路径（`private-repo`）；`unbound` 与 `session-authorized` 授权映射只适用于仓外别名，仓内私有相对路径无需会话映射。勾选 raw_qa 但用户未给出私有存储位置时，同轮只追问一次「提供存储位置，或确认不留存 raw_qa」：给出位置按结构记录；确认不留存则按其余已选维度照常记录并告知用户 raw_qa 未生效（raw_qa 为唯一勾选时回到集合选择问题，不记录，不得记为 `decisions-only`）；追问无应答则整个留存问题保持 `pending`、零写入。位置齐备时 `dimensions` 中加入 `raw_qa`，位置写入 `paths.raw_qa`，`visibility.raw_qa` 取非 `none` 值（`private-storage` 或 `private-repo`）；仓外别名在当前会话未获授权映射时保持 `unbound`，不写材料、不登记；
 5. **正交组合与派生规则**：
    - `ideas`、`minutes`、`raw_qa` 三个维度完全正交，支持全部 8 种开关组合（含全关 `decisions-only`），另支持用户明确回答「暂不配置」（`unconfigured`）；
    - `mode` 字段严格从 `dimensions` 派生，二者不能相互矛盾：

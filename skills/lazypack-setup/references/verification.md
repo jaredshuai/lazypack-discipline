@@ -168,10 +168,12 @@
      | 用户输入 | 维度集合 | 模式 |
      |---|---|---|
      | `ideas + minutes` | `[ideas, minutes]` | `hybrid` |
-     | `minutes,raw_qa,ideas` 或 `都要`（已给出经授权的安全私有存储别名） | `[ideas, minutes, raw_qa]` | `hybrid`（当前会话未完成授权映射时 raw_qa 记 `unbound`、不写材料并告知用户） |
-     | `minutes,raw_qa,ideas` 或 `都要`（未给出经授权的安全私有存储别名） | `[ideas, minutes]` | `hybrid`，告知用户 raw_qa 未生效 |
-     | `raw_qa`（未给出经授权的安全私有存储别名） | — | `pending` |
-     | `raw_qa`（已给出经授权的安全私有存储别名、会话未完成授权映射） | `[raw_qa]` | `raw-qa`（`unbound`、不写材料并告知用户） |
+     | `minutes,raw_qa,ideas` 或 `都要`（已给出仓外安全引用别名） | `[ideas, minutes, raw_qa]` | `hybrid`（当前会话未完成授权映射时 raw_qa 记 `unbound`、不写材料并告知用户） |
+     | `minutes,raw_qa,ideas` 或 `都要`（已给出仓内私有相对路径） | `[ideas, minutes, raw_qa]` | `hybrid`（`private-repo`，无需会话映射） |
+     | `minutes,raw_qa,ideas` 或 `都要`（未给出私有存储位置） | — | 同轮追问一次：给出位置按上两行记录；确认不留存 raw_qa 则 `[ideas, minutes]` `hybrid` 并告知；追问无应答 `pending` |
+     | `raw_qa`（未给出私有存储位置，追问后确认不留存） | — | 回到集合选择问题，不记录 |
+     | `raw_qa`（已给出仓外安全引用别名、会话未完成授权映射） | `[raw_qa]` | `raw-qa`（`unbound`、不写材料并告知用户） |
+     | `raw_qa`（已给出仓内私有相对路径） | `[raw_qa]` | `raw-qa`（`private-repo`，无需会话映射） |
      | `minutes` | `[minutes]` | `minutes-only` |
      | `decisions-only` | `[]` | `decisions-only` |
      | `暂不配置` | `[]` | `unconfigured` |
