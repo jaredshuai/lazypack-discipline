@@ -87,22 +87,24 @@ function readUtf8(filePath) {
 }
 
 /**
- * 从 §5.1 正文行抽出 type 词表。结构不符时抛出错误，不返回内置清单。
+ * 从 §5.1 节正文行抽出 type 词表。候选行为 `5.1` 及其子条款（`5.1.x`…）开头行，
+ * 其中带「N 个（`…`）」计数词表的行必须恰好一行。结构不符时抛出错误，不返回内置清单。
  */
 function extractTypes(decisionsText) {
-  const lines = decisionsText.split(/\r?\n/).filter((line) => /^5\.1\s+\S/.test(line));
-  if (lines.length !== 1) {
-    throw new Error(`§5.1 正文行数量为 ${lines.length}，需要恰好 1 行`);
+  const candidates = decisionsText.split(/\r?\n/).filter((line) => /^5\.1(?:\.\d+)*\s+\S/.test(line));
+  const vocabLines = candidates.filter((line) => /(\d+)\s*个（`[^`]*`）/.test(line));
+  if (vocabLines.length !== 1) {
+    throw new Error(`§5.1 节中带「N 个（\`…\`）」词表的正文行数量为 ${vocabLines.length}，需要恰好 1 行`);
   }
-  const line = lines[0];
+  const line = vocabLines[0];
   const counted = [...line.matchAll(/(\d+)\s*个（`([^`]*)`）/g)];
   if (counted.length !== 1) {
-    throw new Error(`§5.1 带数量的反引号词表有 ${counted.length} 处，需要恰好 1 处`);
+    throw new Error(`§5.1 节词表行中带数量的反引号词表有 ${counted.length} 处，需要恰好 1 处`);
   }
   const expected = Number(counted[0][1]);
   const listed = counted[0][2].split(/\s+/).filter((token) => token !== '');
   if (listed.length !== expected || listed.some((token) => !TYPE_TOKEN.test(token))) {
-    throw new Error(`§5.1 括号词表无法按「${expected} 个」拆成 type 标记`);
+    throw new Error(`§5.1 节括号词表无法按「${expected} 个」拆成 type 标记`);
   }
   const types = [...listed];
   const spans = [...line.matchAll(/`([^`]*)`/g)].map((match) => match[1]);
@@ -117,10 +119,10 @@ function extractTypes(decisionsText) {
     if (ILLUSTRATION.test(span)) {
       continue;
     }
-    throw new Error('§5.1 存在无法归类的反引号片段');
+    throw new Error('§5.1 节词表行存在无法归类的反引号片段');
   }
   if (types.length === 0 || new Set(types).size !== types.length) {
-    throw new Error('§5.1 type 词表为空或有重复');
+    throw new Error('§5.1 节 type 词表为空或有重复');
   }
   return types;
 }
@@ -135,7 +137,7 @@ function judgeSubject(subject, types) {
   }
   const type = match[1];
   if (!types.includes(type)) {
-    return { ok: false, rule: `type「${type}」不在 §5.1 允许集合` };
+    return { ok: false, rule: `type「${type}」不在 §5.1 节允许集合` };
   }
   return { ok: true, rule: null };
 }
@@ -237,7 +239,7 @@ function loadTypes(filePath, explicitRules) {
 }
 
 /**
- * 读取消息文件与 §5.1 词表，只对标题做格式判定。
+ * 读取消息文件与 §5.1 节词表，只对标题做格式判定。
  * 不传 --rules 时规则文件仍是脚本所在仓的 docs/DECISIONS.md。
  */
 function main() {
