@@ -168,7 +168,10 @@
      | 用户输入 | 维度集合 | 模式 |
      |---|---|---|
      | `ideas + minutes` | `[ideas, minutes]` | `hybrid` |
-     | `minutes,raw_qa,ideas` 或 `都要` | `[ideas, minutes, raw_qa]` | `hybrid`（raw_qa 未绑定时为 `unbound` 并告知用户） |
+     | `minutes,raw_qa,ideas` 或 `都要`（已给出 raw_qa 安全存储别名） | `[ideas, minutes, raw_qa]` | `hybrid`（当前会话未完成授权映射时 raw_qa 记 `unbound`、不写材料并告知用户） |
+     | `minutes,raw_qa,ideas` 或 `都要`（未给出别名） | `[ideas, minutes]` | `hybrid`，告知用户 raw_qa 未生效 |
+     | `raw_qa`（未给出别名） | — | `pending` |
+     | `raw_qa`（已给出别名，会话未完成授权映射） | `[raw_qa]` | `raw-qa`（`unbound`、不写材料并告知用户） |
      | `minutes` | `[minutes]` | `minutes-only` |
      | `decisions-only` | `[]` | `decisions-only` |
      | `暂不配置` | `[]` | `unconfigured` |

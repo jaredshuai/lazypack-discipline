@@ -19,11 +19,11 @@
 4. **权限隔离、安全别名与会话授权解析 (session-authorized)**：
    - 仓内位置为规范相对路径；
    - 仓外私有原文使用可解析的安全引用/别名（如 `vault:raw-qa`、`private-storage:interview-records`），公开 `roles.md` 与 `ARTIFACTS.md` 仅存安全标识，严禁将宿主本机绝对路径或密钥凭据泄露进公开代码仓；
-   - 实际物理绑定遵循 `session-authorized` 契约：写前在当前可见会话检查别名到真实物理路径的授权映射，只在显式授权的私有位置写入；若未建立安全绑定条件，该维度保持待绑定（`unbound`），不写材料，不预登记，不虚报已可用；不自动创建全局配置或仓内持久化绑定表。
+   - 实际物理绑定遵循 `session-authorized` 契约：写前在当前可见会话检查别名到真实物理路径的授权映射，只在显式授权的私有位置写入；若未建立安全绑定条件，该维度保持待绑定（`unbound`），不写材料，不预登记，不虚报已可用；不自动创建全局配置或仓内持久化绑定表。勾选 raw_qa 但未给出安全私有存储别名时，该维度不记入 `dimensions`，其余已选维度照常记录并告知用户 raw_qa 未生效（raw_qa 为唯一勾选时整个留存问题保持 `pending`，不得记为 `decisions-only`）；已给出别名但当前会话未获授权映射时，raw_qa 连同别名路径与非 `none` 可见性记入 `dimensions` 并保持 `unbound`，不写材料、不登记；
 5. **正交组合与派生规则**：
    - `ideas`、`minutes`、`raw_qa` 三个维度完全正交，支持全部 8 种开关组合（含全关 `decisions-only`），另支持显式放弃配置（`unconfigured`）；
    - `mode` 字段严格从 `dimensions` 派生，二者不能相互矛盾：
-     * `[]` 派生为 `decisions-only`（若显式跳过则为 `unconfigured`）；
+     * `[]` 派生为 `decisions-only`（用户明确回答「暂不配置」时为 `unconfigured`；宿主侧跳过、拒答、未答或超时保持 `pending`，不写入）；
      * 单独 `["ideas"]` 派生为 `ideas-pool`；
      * 单独 `["minutes"]` 派生为 `minutes-only`；
      * 单独 `["raw_qa"]` 派生为 `raw-qa`；
@@ -56,7 +56,7 @@
 | 6 | `["ideas", "raw_qa"]` | `hybrid` | 混合模式：想法池 + 私有问答（无纪要） | §4.6 |
 | 7 | `["minutes", "raw_qa"]` | `hybrid` | 混合模式：结构化纪要 + 私有问答（无想法池） | §4.7 |
 | 8 | `["ideas", "minutes", "raw_qa"]` | `hybrid` | 混合模式：全开（想法池 + 纪要 + 私有问答） | §4.8 |
-| 9 | `[]` (用户明确跳过) | `unconfigured` | 用户明确暂不配置留存策略 | §4.9 |
+| 9 | `[]` (用户明确回答「暂不配置」) | `unconfigured` | 用户明确暂不配置留存策略；宿主跳过/拒答/未答/超时为 `pending`，不写入 | §4.9 |
 
 ---
 
@@ -250,7 +250,7 @@
 
 ### 4.9 组合 9：暂不配置 (unconfigured, dimensions=[])
 
-适用于用户在必要未知澄清中明确选择“暂不配置”或显式跳过的场景。
+适用于用户在必要未知澄清中明确回答「暂不配置」的场景；宿主侧跳过、拒答、未答或超时为 `pending`，不写入本条。
 
 ```markdown
 - **当前项目留存模式**：`unconfigured`（用户明确选择暂不配置留存策略）

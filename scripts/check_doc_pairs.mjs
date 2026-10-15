@@ -21,6 +21,8 @@ const REPO_ROOT = path.resolve(path.dirname(__filename), '..');
 
 const DECISIONS_REL = 'docs/DECISIONS.md';
 const DECISIONS_SNAPSHOT_REL = 'skills/lazypack-setup/references/DECISIONS.md';
+const SECTION9_PROTOCOL_REL = 'docs/agents/section9-discussion-protocol.md';
+const SECTION9_TEMPLATE_REL = 'skills/lazypack-setup/templates/section9-discussion-protocol.md';
 const SKILL_REL = 'skills/lazypack-setup/SKILL.md';
 const README_REL = 'README.md';
 const AGENTS_REL = 'AGENTS.md';
@@ -620,6 +622,32 @@ function checkP1() {
 }
 
 /**
+ * P11：§9 讨论规程正文与 setup 分发模板原始字节 SHA-256 必须相等。
+ */
+function checkP11() {
+  const left = readRaw(SECTION9_PROTOCOL_REL);
+  const right = readRaw(SECTION9_TEMPLATE_REL);
+  const leftHash = sha256Hex(left);
+  const rightHash = sha256Hex(right);
+  if (leftHash !== rightHash) {
+    return pairResult('P11', 'FAIL', {
+      left: SECTION9_PROTOCOL_REL,
+      right: SECTION9_TEMPLATE_REL,
+      leftSha256: leftHash,
+      rightSha256: rightHash,
+      leftBytes: left.length,
+      rightBytes: right.length
+    });
+  }
+  return pairResult('P11', 'PASS', {
+    left: SECTION9_PROTOCOL_REL,
+    right: SECTION9_TEMPLATE_REL,
+    sha256: leftHash,
+    bytes: left.length
+  });
+}
+
+/**
  * P2：固定层 git blob 与五份 Markdown 模板来源内容标识一致；hook 模板只要求版本戳。
  */
 function checkP2() {
@@ -859,7 +887,7 @@ function renderPairDetailBody(row) {
   if (ev.error) {
     return ` error=${ev.error}`;
   }
-  if (row.id === 'P1') {
+  if (row.id === 'P1' || row.id === 'P11') {
     const contentPassed = row.status === 'PASS' || ev.checkStatus === 'PASS';
     if (contentPassed) {
       return ` sha256=${ev.sha256}`;
@@ -951,7 +979,8 @@ const PAIR_CHECKS = [
   ['P5', checkP5],
   ['P8', checkP8],
   ['P9', checkP9],
-  ['P10', checkP10]
+  ['P10', checkP10],
+  ['P11', checkP11]
 ];
 
 /**
