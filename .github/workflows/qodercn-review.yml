@@ -37,7 +37,7 @@ jobs:
           set -euo pipefail
           git diff --no-color "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/pr.diff"
           if [ "$(wc -c < "$RUNNER_TEMP/pr.diff")" -gt 150000 ]; then
-            head -c 150000 "$RUNNER_TEMP/pr.diff" > "$RUNNER_TEMP/pr.diff.truncated"
+            head -c 150000 "$RUNNER_TEMP/pr.diff" | iconv -f UTF-8 -t UTF-8 -c > "$RUNNER_TEMP/pr.diff.truncated" || true
             mv "$RUNNER_TEMP/pr.diff.truncated" "$RUNNER_TEMP/pr.diff"
             touch "$RUNNER_TEMP/diff_truncated"
           fi
@@ -63,7 +63,7 @@ jobs:
           } > "$RUNNER_TEMP/prompt.md"
 
       - name: Install Qoder CN CLI
-        run: npm install --global @qodercn-ai/qoderclicn@1.1.65
+        run: npm install --global --ignore-scripts @qodercn-ai/qoderclicn@1.1.65
 
       - name: Run Qoder CN review
         env:
@@ -95,7 +95,8 @@ jobs:
           review="$(cat "$RUNNER_TEMP/review.md")"
           body=$(printf '<!-- qodercn-review -->\n### Qoder CN 审查（模型自动生成，仅供参考）\n\n%s\n\n---\ncommit `%s`' "$review" "$short_sha")
           jq -n --arg body "$body" '{body: $body}' > "$RUNNER_TEMP/comment.json"
-          existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- qodercn-review -->"))) | .id' | head -n 1)
+          ids=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- qodercn-review -->"))) | .id')
+          existing="${ids%%$'\n'*}"
           if [ -n "$existing" ]; then
             gh api -X PATCH "repos/$REPO/issues/comments/$existing" --input "$RUNNER_TEMP/comment.json"
           else
