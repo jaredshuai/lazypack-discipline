@@ -21,6 +21,8 @@ const REPO_ROOT = path.resolve(path.dirname(__filename), '..');
 
 const DECISIONS_REL = 'docs/DECISIONS.md';
 const DECISIONS_SNAPSHOT_REL = 'skills/lazypack-setup/references/DECISIONS.md';
+const SECTION9_PROTOCOL_REL = 'docs/agents/section9-discussion-protocol.md';
+const SECTION9_TEMPLATE_REL = 'skills/lazypack-setup/templates/section9-discussion-protocol.md';
 const SKILL_REL = 'skills/lazypack-setup/SKILL.md';
 const README_REL = 'README.md';
 const AGENTS_REL = 'AGENTS.md';
@@ -594,29 +596,43 @@ function applyDeclarationGate(checkRow, problems) {
 }
 
 /**
- * P1：固定层正文与 setup 快照原始字节 SHA-256 必须相等。
+ * 两文件原始字节 SHA-256 相等判定的共用实现（P1、P11 同形）。
  */
-function checkP1() {
-  const left = readRaw(DECISIONS_REL);
-  const right = readRaw(DECISIONS_SNAPSHOT_REL);
+function checkRawHashPair(id, leftRel, rightRel) {
+  const left = readRaw(leftRel);
+  const right = readRaw(rightRel);
   const leftHash = sha256Hex(left);
   const rightHash = sha256Hex(right);
   if (leftHash !== rightHash) {
-    return pairResult('P1', 'FAIL', {
-      left: DECISIONS_REL,
-      right: DECISIONS_SNAPSHOT_REL,
+    return pairResult(id, 'FAIL', {
+      left: leftRel,
+      right: rightRel,
       leftSha256: leftHash,
       rightSha256: rightHash,
       leftBytes: left.length,
       rightBytes: right.length
     });
   }
-  return pairResult('P1', 'PASS', {
-    left: DECISIONS_REL,
-    right: DECISIONS_SNAPSHOT_REL,
+  return pairResult(id, 'PASS', {
+    left: leftRel,
+    right: rightRel,
     sha256: leftHash,
     bytes: left.length
   });
+}
+
+/**
+ * P1：固定层正文与 setup 快照原始字节 SHA-256 必须相等。
+ */
+function checkP1() {
+  return checkRawHashPair('P1', DECISIONS_REL, DECISIONS_SNAPSHOT_REL);
+}
+
+/**
+ * P11：§9 讨论规程正文与 setup 分发模板原始字节 SHA-256 必须相等。
+ */
+function checkP11() {
+  return checkRawHashPair('P11', SECTION9_PROTOCOL_REL, SECTION9_TEMPLATE_REL);
 }
 
 /**
@@ -859,7 +875,7 @@ function renderPairDetailBody(row) {
   if (ev.error) {
     return ` error=${ev.error}`;
   }
-  if (row.id === 'P1') {
+  if (row.id === 'P1' || row.id === 'P11') {
     const contentPassed = row.status === 'PASS' || ev.checkStatus === 'PASS';
     if (contentPassed) {
       return ` sha256=${ev.sha256}`;
@@ -951,7 +967,8 @@ const PAIR_CHECKS = [
   ['P5', checkP5],
   ['P8', checkP8],
   ['P9', checkP9],
-  ['P10', checkP10]
+  ['P10', checkP10],
+  ['P11', checkP11]
 ];
 
 /**
