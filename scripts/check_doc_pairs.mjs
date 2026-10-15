@@ -596,55 +596,43 @@ function applyDeclarationGate(checkRow, problems) {
 }
 
 /**
- * P1：固定层正文与 setup 快照原始字节 SHA-256 必须相等。
+ * 两文件原始字节 SHA-256 相等判定的共用实现（P1、P11 同形）。
  */
-function checkP1() {
-  const left = readRaw(DECISIONS_REL);
-  const right = readRaw(DECISIONS_SNAPSHOT_REL);
+function checkRawHashPair(id, leftRel, rightRel) {
+  const left = readRaw(leftRel);
+  const right = readRaw(rightRel);
   const leftHash = sha256Hex(left);
   const rightHash = sha256Hex(right);
   if (leftHash !== rightHash) {
-    return pairResult('P1', 'FAIL', {
-      left: DECISIONS_REL,
-      right: DECISIONS_SNAPSHOT_REL,
+    return pairResult(id, 'FAIL', {
+      left: leftRel,
+      right: rightRel,
       leftSha256: leftHash,
       rightSha256: rightHash,
       leftBytes: left.length,
       rightBytes: right.length
     });
   }
-  return pairResult('P1', 'PASS', {
-    left: DECISIONS_REL,
-    right: DECISIONS_SNAPSHOT_REL,
+  return pairResult(id, 'PASS', {
+    left: leftRel,
+    right: rightRel,
     sha256: leftHash,
     bytes: left.length
   });
 }
 
 /**
+ * P1：固定层正文与 setup 快照原始字节 SHA-256 必须相等。
+ */
+function checkP1() {
+  return checkRawHashPair('P1', DECISIONS_REL, DECISIONS_SNAPSHOT_REL);
+}
+
+/**
  * P11：§9 讨论规程正文与 setup 分发模板原始字节 SHA-256 必须相等。
  */
 function checkP11() {
-  const left = readRaw(SECTION9_PROTOCOL_REL);
-  const right = readRaw(SECTION9_TEMPLATE_REL);
-  const leftHash = sha256Hex(left);
-  const rightHash = sha256Hex(right);
-  if (leftHash !== rightHash) {
-    return pairResult('P11', 'FAIL', {
-      left: SECTION9_PROTOCOL_REL,
-      right: SECTION9_TEMPLATE_REL,
-      leftSha256: leftHash,
-      rightSha256: rightHash,
-      leftBytes: left.length,
-      rightBytes: right.length
-    });
-  }
-  return pairResult('P11', 'PASS', {
-    left: SECTION9_PROTOCOL_REL,
-    right: SECTION9_TEMPLATE_REL,
-    sha256: leftHash,
-    bytes: left.length
-  });
+  return checkRawHashPair('P11', SECTION9_PROTOCOL_REL, SECTION9_TEMPLATE_REL);
 }
 
 /**

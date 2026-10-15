@@ -148,9 +148,9 @@ description: >-
   - **交互类型必须为集合选择**：宿主提问工具提供多选能力（如多选/multi-select 开关）时，必须开启多选，`ideas`、`minutes`、`raw_qa` 各为一个独立可勾选项，`decisions-only`（仅决议，不留过程材料）也作为选项列出；宿主允许的选项数足够时，`暂不配置` 作为第五个选项，否则在题干写明「暂不配置请在自由填写栏写『暂不配置』」。宿主多选控件不足以呈现全部五个选项且不提供自由填写栏时，视同不支持多选控件，按下条自由文本降级处理。禁止以单选提问，禁止把 `ideas+minutes` 等组合列为互斥套餐来代替多选；宿主侧跳过或拒答按下文 `pending` 处理，不等于 `暂不配置`；
   - **宿主不支持多选控件时的降级**：只问一次自由文本问题：`要留存哪些材料？可写 ideas + minutes + raw_qa（可选一项或多项）、都要、decisions-only（仅决议，不留过程材料），或暂不配置。` 允许中文分隔符、空格及加号，不要求用户按编号单选，也不逐项追问已明确的维度；
   - **集合解析与歧义保护**：三维度去重后作为无序集合；`都要` 等明确表达为三项全开；`decisions-only` 是已确认的空集合，`暂不配置` 是 `unconfigured`，两者不能混同。维度与 `decisions-only`/`暂不配置` 混选、或表达不清时，仅就冲突澄清并保持 `pending`，不猜测用户选择。核验样例见 [references/verification.md](references/verification.md) §5；
-  - **raw_qa 勾选不放宽约束**：勾选 `raw_qa` 或回答 `都要` 视为用户显式要求 raw_qa，但只确认留存意愿，不代替上文的安全私有存储别名与 `session-authorized` 授权。勾选 raw_qa 但未给出安全私有存储别名时，raw_qa 不记入 `dimensions`，其余已选维度照常记录，并在本轮回复中明确告知用户「raw_qa 尚未生效，需提供授权存储后才会留存」；raw_qa 为唯一勾选且未给出别名时，整个留存问题保持 `pending`，不得记为 `decisions-only`。已给出别名但当前会话未完成授权映射时，raw_qa 连同其别名路径与非 `none` 可见性记入 `dimensions`，记为 `unbound`、不写材料、不登记 ARTIFACTS，并同样告知用户尚未生效；
+  - **raw_qa 勾选不放宽约束**：勾选 `raw_qa` 或回答 `都要` 视为用户显式要求 raw_qa，但只确认留存意愿，不代替上文的安全私有存储别名与 `session-authorized` 授权。勾选 raw_qa 但用户未提供经授权的安全私有存储别名时，raw_qa 不记入 `dimensions`，其余已选维度照常记录，并在本轮回复中明确告知用户「raw_qa 尚未生效，需提供授权存储后才会留存」；raw_qa 为唯一勾选且未提供别名时，整个留存问题保持 `pending`，不得记为 `decisions-only`。用户已提供经授权的安全私有存储别名、但当前会话未完成授权映射时，`dimensions` 中加入 `raw_qa`，别名写入 `paths.raw_qa`，`visibility.raw_qa` 取非 `none` 值（`private-storage` 或 `private-repo`），记为 `unbound`、不写材料、不登记 ARTIFACTS，并同样告知用户尚未生效；
   - **未答/超时（pending）**：用户无应答、超时或未回答时，保持问题待答，状态为 `pending`，**严禁静默假定默认选项，严禁在 `roles.md` 中写入任何 §3 留存策略或假定配置，严禁生成带未展开占位符的假 header，严禁写入留存文件**；
-  - **明确暂不配置（unconfigured）**：用户明确回复"暂不配置"或显式放弃时，记录为 `unconfigured`，在 `roles.md` §3 写入 unconfigured 权威段落，继续其他独立 setup 事项；不作为 Matt 前置阻断项，不影响质量门禁；
+  - **明确暂不配置（unconfigured）**：用户明确回复「暂不配置」时，记录为 `unconfigured`，在 `roles.md` §3 写入 unconfigured 权威段落，继续其他独立 setup 事项；不作为 Matt 前置阻断项，不影响质量门禁；拒答或放弃作答但未说出「暂不配置」按上条 `pending` 处理，不写入；
   - 策略变更绝不追溯删除磁盘上已有历史材料。
 
 ##### 同主题冲突与文档归属澄清 (Document Homes & Conflict Clarification)
