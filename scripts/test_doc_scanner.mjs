@@ -69,9 +69,9 @@ function outboundTargets(scan, relPath) {
  * normalizeExcludePaths：分隔符归一、去尾斜杠、小写化、剔除空项。
  */
 function caseNormalizeExcludePaths() {
-  const got = normalizeExcludePaths(['docs/x/', 'a\\b', './y', 'Z/Q/', '   ', 'docs/./private-qas', 'docs/x/../private-qas']);
+  const got = normalizeExcludePaths(['docs/x/', 'a\\b', './y', 'Z/Q/', '   ', 'docs/./private-qas', 'docs/x/../private-qas', '.', './']);
   assertCase(
-    JSON.stringify(got) === JSON.stringify(['docs/x', 'a/b', 'y', 'z/q', 'docs/private-qas', 'docs/private-qas']),
+    JSON.stringify(got) === JSON.stringify(['docs/x', 'a/b', 'y', 'z/q', 'docs/private-qas', 'docs/private-qas', '.', '.']),
     `normalizeExcludePaths 输出不符：${JSON.stringify(got)}`
   );
   assertCase(
@@ -94,6 +94,12 @@ function caseBuildExclusionMatcher() {
   assertCase(isExcluded('docs/PRIVATE-QA/b.md'), '大小写不同应命中');
   assertCase(!isExcluded('docs/private-qa2/b.md'), '同前缀兄弟不应误伤');
   assertCase(!isExcluded('docs/adr/c.md'), '普通文档不应被排除');
+
+  // 仓根哨兵：排除 `.` 即排除仓内一切路径，不得静默失败开放
+  const isExcludedRoot = buildExclusionMatcher(['.']);
+  assertCase(isExcludedRoot('README.md'), '排除仓根应命中根级文件');
+  assertCase(isExcludedRoot('docs/adr/c.md'), '排除仓根应命中任意层级文件');
+  assertCase(buildExclusionMatcher([])('README.md') === false, '空排除列表不应命中任何路径');
 }
 
 /**

@@ -123,24 +123,32 @@ export function isExcludedOrSensitive(relPath) {
 /**
  * 规范化调用方传入的排除路径：分隔符归一、按 POSIX 折叠 `.` 与 `..` 段、去掉尾部斜杠，再小写化供前缀匹配。
  * 目录写法（如 `docs/raw-qa/`）与不带斜杠或含 `.` 段的写法（`docs/raw-qa`、`docs/./raw-qa`）等价。
+ * 仅剔除空白项；`. `（仓根本身）保留为「排除仓根」哨兵，不静默丢弃，避免失败开放。
  * @param {string[]} excludePaths 仓内相对路径
  * @returns {string[]} 规范化后的排除路径
  */
 export function normalizeExcludePaths(excludePaths = []) {
   return excludePaths
-    .map((p) => path.posix.normalize(normalizeRelPath(String(p).trim())).replace(/\/+$/, '').toLowerCase())
-    .filter((p) => p.length > 0 && p !== '.');
+    .map((p) => String(p).trim())
+    .filter((p) => p.length > 0)
+    .map((p) => {
+      const normalized = path.posix.normalize(normalizeRelPath(p)).replace(/\/+$/, '');
+      return (normalized || '.').toLowerCase();
+    });
 }
 
 /**
  * 构造排除判定函数：固定禁区/敏感集合，或调用方传入的排除路径（其自身及子孙）。
  * 供扫描与计划校验共用，避免两处各写一套匹配逻辑。
+ * 路径为 `. `（仓根本身）时排除仓内一切路径，按失败关闭处理，不静默放行。
  * @param {string[]} excludePaths 仓内相对路径
  * @returns {(relPath: string) => boolean}
  */
 export function buildExclusionMatcher(excludePaths = []) {
   const configured = normalizeExcludePaths(excludePaths);
+  const excludesRoot = configured.includes('.');
   return (relPath) => {
+    if (excludesRoot) return true;
     const lower = path.posix.normalize(normalizeRelPath(String(relPath))).toLowerCase();
     if (isExcludedOrSensitive(lower).excluded) return true;
     return configured.some((ex) => lower === ex || lower.startsWith(ex + '/'));
