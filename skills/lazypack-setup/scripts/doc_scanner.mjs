@@ -128,13 +128,42 @@ export function isExcludedOrSensitive(relPath) {
  * @returns {string[]} 规范化后的排除路径
  */
 export function normalizeExcludePaths(excludePaths = []) {
-  return excludePaths
+  const normalized = excludePaths
     .map((p) => String(p).trim())
     .filter((p) => p.length > 0)
     .map((p) => {
-      const normalized = path.posix.normalize(normalizeRelPath(p)).replace(/\/+$/, '');
-      return (normalized || '.').toLowerCase();
+      const n = path.posix.normalize(normalizeRelPath(p)).replace(/\/+$/, '');
+      return (n || '.').toLowerCase();
     });
+  // 去重并排序：等价写法（`docs/x` 与 `docs/x/`）或参数顺序不同必须产出同一规范集合，
+  // 否则会因无意义的差异触发重新审批（规范集合会写入计划指纹）。
+  return [...new Set(normalized)].sort();
+}
+
+/**
+ * 解析仓内相对路径的真实路径，用于拦截经仓内符号链接/Junction 别名指向被排除目录的绕过。
+ * 沿父级向上找到首个已存在的祖先并取其 realpath，再拼回未存在的尾段。
+ * @param {string} repoRoot 仓库根
+ * @param {string} relPath 仓内相对路径
+ * @returns {string|null} 仓内相对的真实路径；越界或不可解析时为 null
+ */
+export function realRepoRelPath(repoRoot, relPath) {
+  const absRepo = path.resolve(repoRoot);
+  const abs = path.resolve(absRepo, normalizeRelPath(String(relPath)));
+  let cur = abs;
+  while (!fs.existsSync(cur) && cur !== path.dirname(cur)) cur = path.dirname(cur);
+  if (!fs.existsSync(cur)) return null;
+  try {
+    const realRepo = fs.realpathSync(absRepo);
+    const realCur = fs.realpathSync(cur);
+    const relCur = path.relative(realRepo, realCur);
+    if (relCur.startsWith('..') || path.isAbsolute(relCur)) return null;
+    const suffix = path.relative(cur, abs);
+    const realRel = normalizeRelPath(suffix ? path.join(relCur, suffix) : relCur);
+    return realRel || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -238,6 +267,11 @@ export function scanProjectDocuments(repoRoot, options = {}) {
           if (relToRoot.startsWith('..') || path.isAbsolute(relToRoot)) {
             boundedExclusionsCount++;
             continue; // 阻断越界符号链接
+          }
+          // 仓内符号链接/Junction 别名指向被排除目录时同样阻断（按真实路径判定，防止词法路径绕过）
+          if (isExcluded(normalizeRelPath(relToRoot))) {
+            boundedExclusionsCount++;
+            continue;
           }
         } catch (e) {
           boundedExclusionsCount++;

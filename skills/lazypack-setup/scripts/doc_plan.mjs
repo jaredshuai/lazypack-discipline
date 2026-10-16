@@ -9,7 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { parseMarkdownUrl, computeSha256, normalizeRelPath, buildExclusionMatcher, normalizeExcludePaths } from './doc_scanner.mjs';
+import { parseMarkdownUrl, computeSha256, normalizeRelPath, buildExclusionMatcher, normalizeExcludePaths, realRepoRelPath } from './doc_scanner.mjs';
 
 /**
  * 严格路径边界核验 (B2 修复)
@@ -219,10 +219,12 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {})
   const normalizedExclusions = normalizeExcludePaths(options.excludePaths);
   const isExcluded = buildExclusionMatcher(options.excludePaths);
   const rejectExcluded = (p, fieldName) => {
-    if (isExcluded(p)) {
+    // 词法路径与真实路径（拦截仓内符号链接/Junction 别名指向被排除目录）都须通过
+    const real = realRepoRelPath(absRepo, p);
+    if (isExcluded(p) || (real && isExcluded(real))) {
       const err = new Error(`ERR_EXCLUDED_PATH: ${fieldName} (${p}) 落在排除路径内（固定禁区/敏感集合或调用方排除），拒绝读取或写入`);
       err.code = 'ERR_EXCLUDED_PATH';
-      err.details = { fieldName, path: p };
+      err.details = { fieldName, path: p, realPath: real };
       throw err;
     }
   };

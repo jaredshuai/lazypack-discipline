@@ -10,8 +10,9 @@
  *  2) 排除判定：固定集合按路径段、配置路径自身及子孙、同前缀兄弟不误伤、仓根哨兵 `.` 命中一切路径；
  *  3) 指向排除目录的链接（含百分号编码写法 `docs/raw%2Dqa/...`）不写入 outboundLinks/inboundReferences/deadlinks；
  *  4) buildMigrationPlan 对落在排除路径内的计划项（含登记册 `docs/ARTIFACTS.md`）抛 ERR_EXCLUDED_PATH；
- *  5) 排除集合随计划返回并计入 planFp（策略变化即改变指纹）；
- *  6) executePlan 按计划记录的排除集合复核动作，命中即阻断且不落盘。
+ *  5) 排除集合随计划返回并计入 planFp（策略变化即改变指纹；等价写法/顺序去重排序后不误触发）；
+ *  6) executePlan 重算指纹并把 plan.exclusions 与指纹记录比对，再按排除集合复核动作与 inputDigests 路径，
+ *     命中或指纹不一致即阻断且不落盘。
  * 用法: node scripts/test_doc_scanner.mjs
  * 全过退出码 0；任一断言失败退出码 1。未接 hook/CI。
  */
@@ -19,6 +20,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
   normalizeExcludePaths,
@@ -75,8 +77,13 @@ function outboundTargets(scan, relPath) {
 function caseNormalizeExcludePaths() {
   const got = normalizeExcludePaths(['docs/x/', 'a\\b', './y', 'Z/Q/', '   ', 'docs/./private-qas', 'docs/x/../private-qas', '.', './']);
   assertCase(
-    JSON.stringify(got) === JSON.stringify(['docs/x', 'a/b', 'y', 'z/q', 'docs/private-qas', 'docs/private-qas', '.', '.']),
+    JSON.stringify(got) === JSON.stringify(['.', 'a/b', 'docs/private-qas', 'docs/x', 'y', 'z/q']),
     `normalizeExcludePaths 输出不符：${JSON.stringify(got)}`
+  );
+  // 等价写法与参数顺序不得改变规范集合（否则会无谓地触发重新审批）
+  assertCase(
+    JSON.stringify(normalizeExcludePaths(['docs/x/', 'docs/x', 'docs/./x'])) === JSON.stringify(normalizeExcludePaths(['docs/x'])),
+    `等价写法应产出同一规范集合：${JSON.stringify(normalizeExcludePaths(['docs/x/', 'docs/x', 'docs/./x']))}`
   );
   assertCase(
     JSON.stringify(normalizeExcludePaths()) === JSON.stringify([]),
@@ -235,21 +242,51 @@ function casePlanRejectsExcludedItems(base) {
  */
 async function caseExecutorRevalidatesExclusions(base) {
   const dir = makeFixture(base, 'executor');
-  const forged = {
-    repoRoot: dir,
-    planFp: 'forged-fp',
-    exclusions: ['docs/private-qa'],
-    inputDigests: {},
-    fileActions: [
-      { action: 'MIGRATE_FILE', sourcePath: 'docs/private-qa/b.md', targetPath: 'docs/moved-b.md' }
-    ]
-  };
-  const result = await executePlan(forged, { approvedPlanFp: 'forged-fp' });
+  const scan = scanProjectDocuments(dir, {});
+  const freshPlan = () =>
+    buildMigrationPlan(dir, { preserve_items: [{ path: 'docs/adr/c.md' }] }, scan, { excludePaths: ['docs/private-qa/'] });
+
+  // 7.1 自洽但含被排除动作的计划（重算指纹后仍自洽）：完整性通过、排除复核阻断且不落盘
+  const forged = freshPlan();
+  forged.fileActions.push({ action: 'MIGRATE_FILE', sourcePath: 'docs/private-qa/b.md', targetPath: 'docs/moved-b.md' });
+  forged.planSummary.fileActions.push({ action: 'MIGRATE_FILE', sourcePath: 'docs/private-qa/b.md', targetPath: 'docs/moved-b.md', expectedSha256: null });
+  forged.planSummary.actionsCount = forged.fileActions.length;
+  forged.planFp = crypto.createHash('sha256').update(JSON.stringify(forged.planSummary)).digest('hex');
+  const r1 = await executePlan(forged, { approvedPlanFp: forged.planFp });
   assertCase(
-    result && result.status === 'APPROVAL_DRIFT_BLOCKED' && /EXCLUDED_PATH_BLOCKED/.test(result.reason || ''),
-    `命中排除路径应被阻断，实际 ${JSON.stringify(result && result.status)}: ${result && result.reason}`
+    r1 && r1.status === 'APPROVAL_DRIFT_BLOCKED' && /EXCLUDED_PATH_BLOCKED/.test(r1.reason || ''),
+    `命中排除路径应被阻断，实际 ${JSON.stringify(r1 && r1.status)}: ${r1 && r1.reason}`
   );
   assertCase(!fs.existsSync(path.join(dir, 'docs', 'moved-b.md')), '被阻断的计划不得落盘任何文件');
+
+  // 7.2 只删顶层排除数据、保留旧指纹：与指纹记录不一致即阻断
+  const tampered = freshPlan();
+  const approved = tampered.planFp;
+  tampered.exclusions = [];
+  const r2 = await executePlan(tampered, { approvedPlanFp: approved });
+  assertCase(
+    r2 && r2.status === 'APPROVAL_DRIFT_BLOCKED' && /PLAN_INTEGRITY_BLOCKED/.test(r2.reason || ''),
+    `剔除排除数据应触发完整性阻断，实际 ${JSON.stringify(r2 && r2.status)}: ${r2 && r2.reason}`
+  );
+
+  // 7.3 改写内容但保留旧指纹：重算不一致即阻断
+  const drifted = freshPlan();
+  const approved2 = drifted.planFp;
+  drifted.planSummary.actionsCount = 999;
+  const r3 = await executePlan(drifted, { approvedPlanFp: approved2 });
+  assertCase(
+    r3 && r3.status === 'APPROVAL_DRIFT_BLOCKED' && /PLAN_INTEGRITY_BLOCKED/.test(r3.reason || ''),
+    `内容与指纹不一致应阻断，实际 ${r3 && r3.reason}`
+  );
+
+  // 7.4 inputDigests 里只列了被排除文件：同样阻断
+  const digests = freshPlan();
+  digests.inputDigests['docs/private-qa/b.md'] = 'deadbeef';
+  const r4 = await executePlan(digests, { approvedPlanFp: digests.planFp });
+  assertCase(
+    r4 && r4.status === 'APPROVAL_DRIFT_BLOCKED' && /EXCLUDED_PATH_BLOCKED/.test(r4.reason || '') && /inputDigests/.test(r4.reason || ''),
+    `inputDigests 命中排除应阻断，实际 ${r4 && r4.reason}`
+  );
 }
 
 const CASES = [

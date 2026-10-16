@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
-import { computeSha256, normalizeRelPath, buildExclusionMatcher } from './doc_scanner.mjs';
+import { computeSha256, normalizeRelPath, buildExclusionMatcher, realRepoRelPath } from './doc_scanner.mjs';
 import { assertPathWithinRepo } from './doc_plan.mjs';
 
 /**
@@ -151,25 +151,68 @@ export async function executePlan(plan, options = {}) {
     assertPathWithinRepo(repoRoot, relPath, 'inputDigests');
   }
 
-  // 2b. 排除路径复核：按计划自身记录的排除集合（已计入 planFp，随审批绑定）复核每条动作，
-  // 手工改写或陈旧计划试图把已排除路径再搬动/写入时就地阻断，不依赖调用方另外传入策略。
-  const planExclusions = Array.isArray(plan.exclusions) ? plan.exclusions : [];
+  // 2b. 计划完整性复核：批准指纹须能由计划自身内容重算，不信任计划文件里自称的 planFp。
+  // 否则删除计划中的排除数据即可让后续复核形同虚设。
+  if (!plan.planSummary || typeof plan.planSummary !== 'object') {
+    return {
+      status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED,
+      reason: 'PLAN_INTEGRITY_BLOCKED: plan.planSummary 缺失，无法重算指纹',
+      txId
+    };
+  }
+  const recomputedFp = crypto.createHash('sha256').update(JSON.stringify(plan.planSummary)).digest('hex');
+  if (recomputedFp !== plan.planFp) {
+    return {
+      status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED,
+      reason: `PLAN_INTEGRITY_BLOCKED: 计划内容与记录的 planFp 不一致（重算 ${recomputedFp}，记录 ${plan.planFp}）`,
+      details: { recomputedFp, recordedFp: plan.planFp },
+      txId
+    };
+  }
+
+  // 2c. 排除路径复核：按计划自身记录的排除集合（已计入 planFp，随审批绑定）复核每条动作与输入摘要路径，
+  // 自定义或陈旧计划试图把已排除路径再搬动/读取时就地阻断，不依赖调用方另外传入策略。
+  // 词法路径与真实路径都须通过——拦截仓内符号链接/Junction 别名指向被排除目录的绕过。
+  const fpsExclusions = plan.planSummary.exclusions;
+  if (
+    !Array.isArray(plan.exclusions) || !Array.isArray(fpsExclusions) ||
+    JSON.stringify(plan.exclusions) !== JSON.stringify(fpsExclusions)
+  ) {
+    return {
+      status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED,
+      reason: 'PLAN_INTEGRITY_BLOCKED: plan.exclusions 缺失或与指纹中记录的排除集合不一致',
+      details: { planExclusions: plan.exclusions, fingerprintedExclusions: fpsExclusions },
+      txId
+    };
+  }
+  const planExclusions = plan.exclusions;
   const isPlanPathExcluded = buildExclusionMatcher(planExclusions);
+  const isExcludedHit = (value) => {
+    if (!value) return false;
+    if (isPlanPathExcluded(value)) return true;
+    const real = realRepoRelPath(repoRoot, value);
+    return Boolean(real && isPlanPathExcluded(real));
+  };
+  const exclusionHits = [];
   for (const action of plan.fileActions) {
     for (const [field, value] of [
       ['action.sourcePath', action.sourcePath],
       ['action.targetPath', action.targetPath],
       ['action.filePath', action.filePath]
     ]) {
-      if (value && isPlanPathExcluded(value)) {
-        return {
-          status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED,
-          reason: `EXCLUDED_PATH_BLOCKED: ${field} (${value}) 落在计划记录的排除路径内`,
-          details: { field, path: value, exclusions: planExclusions },
-          txId
-        };
-      }
+      if (isExcludedHit(value)) exclusionHits.push({ field, path: value });
     }
+  }
+  for (const relPath of Object.keys(plan.inputDigests)) {
+    if (isExcludedHit(relPath)) exclusionHits.push({ field: 'inputDigests', path: relPath });
+  }
+  if (exclusionHits.length > 0) {
+    return {
+      status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED,
+      reason: `EXCLUDED_PATH_BLOCKED: ${exclusionHits.map((h) => `${h.field} (${h.path})`).join(', ')} 落在计划记录的排除路径内`,
+      details: { hits: exclusionHits, exclusions: planExclusions },
+      txId
+    };
   }
 
   // 3. 写前重读与冲突校验
