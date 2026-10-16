@@ -128,7 +128,7 @@ export function isExcludedOrSensitive(relPath) {
  */
 export function normalizeExcludePaths(excludePaths = []) {
   return excludePaths
-    .map((p) => normalizeRelPath(String(p)).replace(/\/+$/, '').toLowerCase())
+    .map((p) => normalizeRelPath(String(p).trim()).replace(/\/+$/, '').toLowerCase())
     .filter((p) => p.length > 0);
 }
 
