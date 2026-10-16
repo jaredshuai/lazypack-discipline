@@ -6,8 +6,8 @@
  * 纯 Node.js 标准库 (ES Modules)
  * 
  * 命令列表:
- *   scan    --cwd <repoRoot> [--out <scan.json>]
- *   plan    --cwd <repoRoot> --input <plan_spec.json> [--out <plan.json>]
+ *   scan    --cwd <repoRoot> [--exclude <relpath>]... [--out <scan.json>]
+ *   plan    --cwd <repoRoot> --input <plan_spec.json> [--exclude <relpath>]... [--out <plan.json>]
  *   execute --cwd <repoRoot> --plan <plan.json> --approved-fp <plan_fp> [--backup-root <dir>]
  *   verify  --cwd <repoRoot> --plan <plan.json> [--backup-dir <dir>]
  */
@@ -26,6 +26,7 @@ const options = {
   'approved-fp': { type: 'string' },
   'backup-root': { type: 'string' },
   'backup-dir': { type: 'string' },
+  exclude: { type: 'string', multiple: true },
   out: { type: 'string' },
   help: { type: 'boolean', short: 'h' }
 };
@@ -43,6 +44,10 @@ Commands:
   plan     Validate spec, compute rewrites, expected hashes and plan_fp
   execute  Execute plan with WAL and compensating rollback
   verify   Verify disk state and WAL commit status against plan
+
+Options:
+  --exclude <relpath>  Repeatable. Also skip this repo-relative path and its
+                       descendants (e.g. a configured retention.paths.raw_qa).
     `);
     process.exit(0);
   }
@@ -50,7 +55,7 @@ Commands:
   const cwd = path.resolve(values.cwd);
 
   if (command === 'scan') {
-    const result = scanProjectDocuments(cwd);
+    const result = scanProjectDocuments(cwd, { excludePaths: values.exclude || [] });
     const json = JSON.stringify(result, null, 2);
     if (values.out) {
       fs.writeFileSync(path.resolve(values.out), json, 'utf8');
@@ -66,7 +71,7 @@ Commands:
     const specPath = path.resolve(values.input);
     const planSpec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
 
-    const scanResult = scanProjectDocuments(cwd);
+    const scanResult = scanProjectDocuments(cwd, { excludePaths: values.exclude || [] });
     const plan = buildMigrationPlan(cwd, planSpec, scanResult);
     const json = JSON.stringify(plan, null, 2);
 

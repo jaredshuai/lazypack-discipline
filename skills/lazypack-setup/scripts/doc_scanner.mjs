@@ -155,13 +155,23 @@ export function isIgnoredLinkTarget(rawurl) {
 /**
  * 扫描项目全量 Markdown 文档并建立双向引用图谱。
  * 链接提取会先剥离围栏与行内代码；标题抽取使用原始正文。
+ * 除固定的 `isExcludedOrSensitive` 集合外，`options.excludePaths` 可再传入仓内相对路径
+ * （如已配置的 `retention.paths.raw_qa`），其自身及子孙一并静默排除，不读取内容。
  * 声明: 扫描与引用解析严格限于有界 Markdown 文件的标准内联链接与参考定义
+ * @param {string} repoRoot 仓库根
+ * @param {{ excludePaths?: string[] }} [options] 额外排除的仓内相对路径
  */
-export function scanProjectDocuments(repoRoot) {
+export function scanProjectDocuments(repoRoot, options = {}) {
   const absRepo = path.resolve(repoRoot);
   if (!fs.existsSync(absRepo)) {
     throw new Error(`Repository root does not exist: ${absRepo}`);
   }
+
+  const excludePaths = (options.excludePaths || [])
+    .map((p) => normalizeRelPath(String(p)).toLowerCase())
+    .filter((p) => p.length > 0);
+  const isConfiguredExclusion = (lowerRel) =>
+    excludePaths.some((ex) => lowerRel === ex || lowerRel.startsWith(ex + '/'));
 
   const files = [];
   const inboundMap = new Map(); // targetRelPath -> [{ sourceRelPath, rawUrl, line }]
@@ -190,7 +200,7 @@ export function scanProjectDocuments(repoRoot) {
       }
 
       const check = isExcludedOrSensitive(relPath);
-      if (check.excluded) {
+      if (check.excluded || isConfiguredExclusion(relPath.toLowerCase())) {
         boundedExclusionsCount++;
         continue;
       }

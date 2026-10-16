@@ -112,7 +112,7 @@ description: >-
       * **声明在先优先于通用剪枝**: 项目已明确声明的合法仓内路径（例如 `docs/agents/issue-tracker.md` 明确声明的 `.scratch/tickets/` 或常驻入口指向的规格文件）优先于通用剪枝，正常追踪纳入候选；
       * **未声明的排除目录**（路径段精确匹配，与 [document-routing.md](references/document-routing.md) §2.2 及 `doc_scanner.mjs` 同一集合）：`node_modules`, `.git`, `vendor`, `dist`, `build`, `target`, `out`, `.cache`, `.pytest_cache`, `__pycache__`, `.venv`, `venv`, `.idea`, `.vscode`, `.lazypack-backup`, `.DS_Store`, `raw-qa`；
       * **敏感文件**（精确匹配，与上述两处同一集合，以免误杀设计文档）：`.env`（文件名恰好等于 `.env`）、`.env.*`（文件名以 `.env.` 开头）、`credentials.json`、`client_secret.json`、`*.pem`（文件名以 `.pem` 结尾）、`*.key`（文件名以 `.key` 结尾）、`id_rsa`、`id_ed25519`、`.ssh/`（路径以 `.ssh/` 开头，或路径中含有 `/.ssh/`）。一律静默排除且不读取。普通设计文档（如 `docs/credentials-architecture.md`）正常解析。在扫描报告中概括说明“部分敏感与系统目录已按安全边界排除，本次探测属于有界扫描”，不虚报无界全覆盖；
-      * **敏感留存目录**：规范 raw_qa 目录（路径段 `raw-qa`，与 `doc_scanner.mjs` 同一排除集合）连同已配置的 `retention.paths.raw_qa` 仓内路径一律静默排除、不读取内容，避免把敏感原始问答的路径/哈希/标题带入扫描结果，上报时并入「按安全边界排除」；
+      * **敏感留存目录**：规范 raw_qa 目录（路径段 `raw-qa`，与 `doc_scanner.mjs` 同一排除集合）连同已配置的 `retention.paths.raw_qa` 仓内路径一律静默排除、不读取内容，避免把敏感原始问答的路径/哈希/标题带入扫描结果，上报时并入「按安全边界排除」；调用 `doc_helper.mjs scan`/`plan` 时用可重复的 `--exclude <相对路径>` 把已配置的 raw_qa 仓内路径一并传入排除；
       * 符号链接指向工作区外时立即停止深入并报告，绝不自动穿透读取；外部网络资源与私有存储未获显式授权不读取；
       * 区分四类登记对象（本地文件/有效章节锚点、存在的目录索引入口、声明的外部 URL、留存种子/私有绑定），维持既有非空与授权契约；
     - **逻辑归属与权威范围**:

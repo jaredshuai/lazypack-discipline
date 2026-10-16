@@ -40,7 +40,7 @@
 1. **通用排除区与声明优先顺位 (Precedence & Fail-safe Exclusions)**:
    - **声明在先优先于通用剪枝**: 项目已明确声明的合法仓内原件（例如 `docs/agents/issue-tracker.md` 明确声明的实际工单路径位于 `.scratch/tickets/`、或常驻入口指针明确指向的规格路径）**优先于通用目录剪枝规则**；对于已被权威指针声明的仓内路径，Agent 必须正常追踪纳入候选范围，绝不因目录名包含 `.scratch` 等被粗暴过滤；
    - **未声明的通用排除区**（路径段精确匹配，比较前路径已小写化，与 `doc_scanner.mjs` 的 `excludedDirs` 同一集合）:
-     * `node_modules`, `.git`, `vendor`, `dist`, `build`, `target`, `out`, `.cache`, `.pytest_cache`, `__pycache__`, `.venv`, `venv`, `.idea`, `.vscode`, `.lazypack-backup`, `.DS_Store`, `raw-qa`（规范 raw_qa 目录名，防扫描读取敏感原始问答；已配置的 `retention.paths.raw_qa` 仓内路径同样排除）。
+     * `node_modules`, `.git`, `vendor`, `dist`, `build`, `target`, `out`, `.cache`, `.pytest_cache`, `__pycache__`, `.venv`, `venv`, `.idea`, `.vscode`, `.lazypack-backup`, `.DS_Store`, `raw-qa`（规范 raw_qa 目录名，防扫描读取敏感原始问答）。已配置的 `retention.paths.raw_qa` 仓内路径可能非规范路径，须调用 `doc_helper.mjs scan`/`plan` 时以可重复的 `--exclude <相对路径>` 显式传入，同样静默排除。
 2. **安全硬边界不可逾越 (Security Boundaries)**:
    - 敏感文件按下列显式集合精确匹配，**一律静默排除，绝对禁止读取其文件内容**，无论是否有指针指向。匹配的是完整文件名或明确的前后缀，用来避免误杀普通设计文档（如 `docs/credentials-architecture.md` 仍正常解析）：
      * `.env`（文件名恰好等于 `.env`）；
