@@ -323,8 +323,14 @@ export function scanProjectDocuments(repoRoot, options = {}) {
             // 指向排除目录的链接一并跳过：词法路径与真实路径（`realRepoRelPath`，拦截经仓内
             // 符号链接/Junction 别名指向被排除目录的情形）都须通过，不写出站边、不写入站引用、
             // 不报死链，避免在扫描产物里暴露敏感原始问答的路径与文件名。
-            const realTargetRel = realRepoRelPath(absRepo, targetRel);
-            if (isExcluded(targetRel) || (realTargetRel && isExcluded(realTargetRel))) {
+            // 失败关闭：词法在仓内但真实路径无法核验（经符号链接解析到仓外或不可解析）时同样跳过；
+            // 词法已在仓外的链接维持既有处理（继续入图），不因本检查新增丢弃。
+            const targetInRepoLexically = !targetRel.startsWith('..') && !path.isAbsolute(targetRel);
+            const realTargetRel = targetInRepoLexically ? realRepoRelPath(absRepo, targetRel) : null;
+            if (
+              isExcluded(targetRel) ||
+              (targetInRepoLexically && (!realTargetRel || isExcluded(realTargetRel)))
+            ) {
               continue;
             }
 

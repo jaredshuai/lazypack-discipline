@@ -5,7 +5,7 @@
  * 在系统临时目录生成 Markdown 夹具，直接调用
  * skills/lazypack-setup/scripts 下的 doc_scanner.mjs 与 doc_plan.mjs，
  * 校验排除判定、链接过滤与计划拒绝路径，不修改本仓库。
- * 覆盖 #70 审查跟进新增的行为（6 用例）：
+ * 覆盖 #70 审查跟进新增的行为（7 用例）：
  *  1) excludePaths 归一化（尾斜杠/分隔符/大小写/`.`/`..` 段）使 `docs/x/`、`docs/x`、`docs/./x` 等价；
  *  2) 排除判定：固定集合按路径段、配置路径自身及子孙、同前缀兄弟不误伤、仓根哨兵 `.` 命中一切路径；
  *  3) 指向排除目录的链接（含百分号编码写法 `docs/raw%2Dqa/...`）不写入 outboundLinks/inboundReferences/deadlinks；
@@ -13,6 +13,8 @@
  *  5) 排除集合随计划返回并计入 planFp（策略变化即改变指纹；等价写法/顺序去重排序后不误触发）；
  *  6) executePlan 重算指纹并把 plan.exclusions 与指纹记录比对，再按排除集合复核动作与 inputDigests 路径，
  *     命中或指纹不一致即阻断且不落盘。
+ *  7) 词法在仓外的链接维持既有处理仍入图（真实路径核验按 null 处理，不因失败关闭被丢弃）；
+ *     词法在仓内但真实路径无法核验的失败关闭分支需符号链接夹具，见 issue #83。
  * 用法: node scripts/test_doc_scanner.mjs
  * 全过退出码 0；任一断言失败退出码 1。未接 hook/CI。
  */
@@ -25,7 +27,8 @@ import { fileURLToPath } from 'node:url';
 import {
   normalizeExcludePaths,
   buildExclusionMatcher,
-  scanProjectDocuments
+  scanProjectDocuments,
+  realRepoRelPath
 } from '../skills/lazypack-setup/scripts/doc_scanner.mjs';
 import { buildMigrationPlan } from '../skills/lazypack-setup/scripts/doc_plan.mjs';
 import { executePlan } from '../skills/lazypack-setup/scripts/doc_executor.mjs';
@@ -164,6 +167,30 @@ function caseScanWithTrailingSlashExclude(base) {
 }
 
 /**
+ * scanProjectDocuments：词法在仓外的链接维持既有处理（仍入图，不因真实路径核验失败关闭被丢弃）；
+ * `realRepoRelPath` 对仓外路径返回 null。词法在仓内但真实路径无法核验（经符号链接解析到仓外）
+ * 的失败关闭分支需符号链接夹具，见 issue #83，本套件不覆盖。
+ */
+function caseScanOutOfRepoLexicalLink(base) {
+  const sibling = path.join(base, 'outside-docs');
+  fs.mkdirSync(sibling, { recursive: true });
+  fs.writeFileSync(path.join(sibling, 'keep.md'), '# outside\n', 'utf8');
+  const dir = makeFixture(base, 'scan-outside');
+  fs.writeFileSync(
+    path.join(dir, 'README.md'),
+    '# readme\n[keep](../outside-docs/keep.md)\n[adr](docs/adr/c.md)\n',
+    'utf8'
+  );
+  const scan = scanProjectDocuments(dir);
+  assertCase(
+    JSON.stringify(outboundTargets(scan, 'README.md')) === JSON.stringify(['../outside-docs/keep.md', 'docs/adr/c.md']),
+    `仓外词法链接应维持既有处理仍入图，实际 ${JSON.stringify(outboundTargets(scan, 'README.md'))}`
+  );
+  assertCase(realRepoRelPath(dir, '../outside-docs/keep.md') === null, '仓外路径 realRepoRelPath 应返回 null');
+  assertCase(!scan.deadlinks.some((d) => d.targetRel === '../outside-docs/keep.md'), '仓外已存在目标不应报死链');
+}
+
+/**
  * buildMigrationPlan：排除路径内的计划项一律拒绝，普通项放行。
  */
 function casePlanRejectsExcludedItems(base) {
@@ -294,6 +321,7 @@ const CASES = [
   ['buildExclusionMatcher 命中判定', caseBuildExclusionMatcher],
   ['scan 固定集合排除与链接过滤', caseScanWithoutConfiguredExclude],
   ['scan 尾斜杠 --exclude 排除与链接过滤', caseScanWithTrailingSlashExclude],
+  ['scan 仓外词法链接维持入图', caseScanOutOfRepoLexicalLink],
   ['buildMigrationPlan 拒绝排除项', casePlanRejectsExcludedItems],
   ['executePlan 排除路径复核', caseExecutorRevalidatesExclusions]
 ];
