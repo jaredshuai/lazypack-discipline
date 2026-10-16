@@ -121,15 +121,15 @@ export function isExcludedOrSensitive(relPath) {
 }
 
 /**
- * 规范化调用方传入的排除路径：分隔符归一并去掉尾部斜杠，再小写化供前缀匹配。
- * 目录写法（如 `docs/raw-qa/`）与不带斜杠的写法（`docs/raw-qa`）等价。
+ * 规范化调用方传入的排除路径：分隔符归一、按 POSIX 折叠 `.` 与 `..` 段、去掉尾部斜杠，再小写化供前缀匹配。
+ * 目录写法（如 `docs/raw-qa/`）与不带斜杠或含 `.` 段的写法（`docs/raw-qa`、`docs/./raw-qa`）等价。
  * @param {string[]} excludePaths 仓内相对路径
  * @returns {string[]} 规范化后的排除路径
  */
 export function normalizeExcludePaths(excludePaths = []) {
   return excludePaths
-    .map((p) => normalizeRelPath(String(p).trim()).replace(/\/+$/, '').toLowerCase())
-    .filter((p) => p.length > 0);
+    .map((p) => path.posix.normalize(normalizeRelPath(String(p).trim())).replace(/\/+$/, '').toLowerCase())
+    .filter((p) => p.length > 0 && p !== '.');
 }
 
 /**
@@ -141,7 +141,7 @@ export function normalizeExcludePaths(excludePaths = []) {
 export function buildExclusionMatcher(excludePaths = []) {
   const configured = normalizeExcludePaths(excludePaths);
   return (relPath) => {
-    const lower = normalizeRelPath(String(relPath)).toLowerCase();
+    const lower = path.posix.normalize(normalizeRelPath(String(relPath))).toLowerCase();
     if (isExcludedOrSensitive(lower).excluded) return true;
     return configured.some((ex) => lower === ex || lower.startsWith(ex + '/'));
   };

@@ -69,9 +69,9 @@ function outboundTargets(scan, relPath) {
  * normalizeExcludePaths：分隔符归一、去尾斜杠、小写化、剔除空项。
  */
 function caseNormalizeExcludePaths() {
-  const got = normalizeExcludePaths(['docs/x/', 'a\\b', './y', 'Z/Q/', '   ']);
+  const got = normalizeExcludePaths(['docs/x/', 'a\\b', './y', 'Z/Q/', '   ', 'docs/./private-qas', 'docs/x/../private-qas']);
   assertCase(
-    JSON.stringify(got) === JSON.stringify(['docs/x', 'a/b', 'y', 'z/q']),
+    JSON.stringify(got) === JSON.stringify(['docs/x', 'a/b', 'y', 'z/q', 'docs/private-qas', 'docs/private-qas']),
     `normalizeExcludePaths 输出不符：${JSON.stringify(got)}`
   );
   assertCase(
