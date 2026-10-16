@@ -351,6 +351,8 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {})
 
   // 5. 准备 docs/ARTIFACTS.md Section 3 登记项
   const artifactsRelPath = assertPathWithinRepo(absRepo, 'docs/ARTIFACTS.md', 'artifactsRelPath');
+  // 登记册本身也受同一排除判定约束：若被排除，则拒绝读取其内容、也不生成登记动作。
+  rejectExcluded(artifactsRelPath, 'artifactsRelPath');
   const absArtifacts = path.resolve(absRepo, artifactsRelPath);
   let existingArtifactsContent = '';
   if (fs.existsSync(absArtifacts)) {

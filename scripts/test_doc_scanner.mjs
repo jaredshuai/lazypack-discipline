@@ -186,6 +186,25 @@ function casePlanRejectsExcludedItems(base) {
     { excludePaths: ['docs/private-qa/'] }
   );
   assertCase(ok && ok.inputDigests && ok.inputDigests['docs/adr/c.md'], '普通项应正常生成计划与摘要');
+
+  // 6. 登记册 docs/ARTIFACTS.md 本身被排除：同样拒绝，不读取、不生成登记动作
+  const dir2 = makeFixture(base, 'plan-artifacts');
+  fs.writeFileSync(path.join(dir2, 'ROOT.md'), '# root doc\n', 'utf8');
+  let thrown = null;
+  try {
+    buildMigrationPlan(
+      dir2,
+      { preserve_items: [{ path: 'ROOT.md' }] },
+      scanProjectDocuments(dir2, { excludePaths: ['docs/ARTIFACTS.md'] }),
+      { excludePaths: ['docs/ARTIFACTS.md'] }
+    );
+  } catch (e) {
+    thrown = e;
+  }
+  assertCase(
+    thrown && thrown.code === 'ERR_EXCLUDED_PATH' && thrown.details && thrown.details.fieldName === 'artifactsRelPath',
+    `登记册被排除时应抛 ERR_EXCLUDED_PATH(artifactsRelPath)，实际 ${thrown ? thrown.code || thrown.message : '未抛错'}`
+  );
 }
 
 const CASES = [
