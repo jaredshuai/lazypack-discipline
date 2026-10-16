@@ -168,13 +168,22 @@
      | 用户输入 | 维度集合 | 模式 |
      |---|---|---|
      | `ideas + minutes` | `[ideas, minutes]` | `hybrid` |
-     | `minutes,raw_qa,ideas` 或 `都要`（已给出仓外安全引用别名） | `[ideas, minutes, raw_qa]` | `hybrid`（当前会话未完成授权映射时 raw_qa 记 `unbound`、不写材料并告知用户） |
-     | `minutes,raw_qa,ideas` 或 `都要`（已给出仓内私有相对路径、仓库本身为私有） | `[ideas, minutes, raw_qa]` | `hybrid`（`private-repo`，无需会话映射） |
-     | `minutes,raw_qa,ideas` 或 `都要`（未给出私有存储位置） | — | 同轮追问一次：给出位置按上两行记录；确认不留存 raw_qa 则 `[ideas, minutes]` `hybrid` 并告知；追问无应答 `pending` |
+     | `minutes,raw_qa,ideas` 或 `都要`（已给出仓外安全引用别名，或追问中选 A 并给出别名） | `[ideas, minutes, raw_qa]` | `hybrid`（当前会话未完成授权映射时 raw_qa 记 `unbound`、不写材料并告知用户） |
+     | `minutes,raw_qa,ideas` 或 `都要`（已给出仓内私有相对路径、或追问中选 B，且所有推送目标均核实为私有） | `[ideas, minutes, raw_qa]` | `hybrid`（`private-repo`，`paths.raw_qa`=`"docs/raw-qa"` 或用户明确指定的仓内路径，无需会话映射；记录前已告知原文将进入 git 历史） |
+     | `minutes,raw_qa,ideas` 或 `都要`（未给出私有存储位置） | — | 同轮三选追问一次：A 仓外别名（推荐）按上行记录，选 A 未给别名时再提示一次、仍无则 `pending`；B 当前仓库 `docs/raw-qa/`（仅已核实私有仓提供，提供时告知原文入 git 历史）按上行记录；C 不留存则 `[ideas, minutes]` `hybrid` 并告知；追问无应答 `pending` |
+     | `raw_qa`（任一推送目标为 `PUBLIC`/`INTERNAL`/无法核实，追问时） | — | 不提供 B，题干说明仓内选项不可用，其余同三选追问 |
+     | `raw_qa`（随选择答案直接给出仓内路径，含用户指定的非规范路径） | `[raw_qa]` | 不再追问位置；所有推送目标均核实为私有且路径检查通过则按 `private-repo` 行记录，仍须告知原文将进入 git 历史 |
+     | `raw_qa`（仓内路径为绝对路径、含 `..` 或经符号链接/Junction 逃逸仓库根） | — | 不写盘、告知用户并按未给出位置处理（同轮三选追问一次） |
+     | `raw_qa`（用户指定的仓内路径为 `.` 或仓根本身） | — | 非有效仓内子目录，不写盘、告知并视同未给出位置（同轮三选追问一次） |
+     | `raw_qa`（仓内路径的 Git 顶层不是本仓根，如落在 submodule/嵌套 worktree 内） | — | 不写盘、告知用户并按未给出位置处理（同轮三选追问一次） |
+     | `raw_qa`（仓内路径被 `.gitignore` 等忽略规则覆盖，`git check-ignore` 命中） | — | 不写盘、告知用户并按未给出位置处理（同轮三选追问一次） |
+     | `raw_qa`（仓内路径落在仓库已发布的站点源目录内，如托管平台报告 Pages 从 `/docs` 发布） | — | 不提供 B、视同未给出位置（同轮三选追问一次，并说明） |
+     | `raw_qa`（推送目标无法绑定到解析出的主机，如多主机混用或 Enterprise host 不可解析） | — | 按无法核实为私有处理，不提供 B、同轮追问一次（并说明） |
      | `raw_qa`（未给出私有存储位置，追问后确认不留存） | — | 回到集合选择问题，不记录 |
+     | `raw_qa`（追问中选 A 但未给别名，再提示一次后仍无别名） | — | `pending`，零写入 |
      | `raw_qa`（已给出仓外安全引用别名、会话未完成授权映射） | `[raw_qa]` | `raw-qa`（`unbound`、不写材料并告知用户） |
-     | `raw_qa`（已给出仓内私有相对路径、仓库本身为私有） | `[raw_qa]` | `raw-qa`（`private-repo`，无需会话映射） |
-     | `raw_qa`（已给出仓内相对路径但仓库为公开或无法核实为私有） | — | 非经授权的私有存储位置，视同未给出位置，同轮追问一次 |
+     | `raw_qa`（已给出仓内私有相对路径、所有推送目标均核实为私有且其主机可绑定、路径检查通过） | `[raw_qa]` | `raw-qa`（`private-repo`，`paths.raw_qa`=`"docs/raw-qa"` 或用户明确指定的仓内路径，无需会话映射；记录前已告知原文将进入 git 历史） |
+     | `raw_qa`（已给出仓内相对路径但任一推送目标为 `PUBLIC`/`INTERNAL`/无法核实） | — | 非经授权的私有存储位置，视同未给出位置，同轮追问一次（不提供 B 并说明） |
      | `minutes` | `[minutes]` | `minutes-only` |
      | `decisions-only` | `[]` | `decisions-only` |
      | `暂不配置` | `[]` | `unconfigured` |

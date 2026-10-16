@@ -40,7 +40,7 @@
 1. **通用排除区与声明优先顺位 (Precedence & Fail-safe Exclusions)**:
    - **声明在先优先于通用剪枝**: 项目已明确声明的合法仓内原件（例如 `docs/agents/issue-tracker.md` 明确声明的实际工单路径位于 `.scratch/tickets/`、或常驻入口指针明确指向的规格路径）**优先于通用目录剪枝规则**；对于已被权威指针声明的仓内路径，Agent 必须正常追踪纳入候选范围，绝不因目录名包含 `.scratch` 等被粗暴过滤；
    - **未声明的通用排除区**（路径段精确匹配，比较前路径已小写化，与 `doc_scanner.mjs` 的 `excludedDirs` 同一集合）:
-     * `node_modules`, `.git`, `vendor`, `dist`, `build`, `target`, `out`, `.cache`, `.pytest_cache`, `__pycache__`, `.venv`, `venv`, `.idea`, `.vscode`, `.lazypack-backup`, `.DS_Store`。
+     * `node_modules`, `.git`, `vendor`, `dist`, `build`, `target`, `out`, `.cache`, `.pytest_cache`, `__pycache__`, `.venv`, `venv`, `.idea`, `.vscode`, `.lazypack-backup`, `.DS_Store`, `raw-qa`（规范 raw_qa 目录名，防扫描读取敏感原始问答）。已配置的 `retention.paths.raw_qa` 仓内路径可能非规范路径，须调用 `doc_helper.mjs scan`/`plan` 时以可重复的 `--exclude <相对路径>` 显式传入，同样静默排除。
 2. **安全硬边界不可逾越 (Security Boundaries)**:
    - 敏感文件按下列显式集合精确匹配，**一律静默排除，绝对禁止读取其文件内容**，无论是否有指针指向。匹配的是完整文件名或明确的前后缀，用来避免误杀普通设计文档（如 `docs/credentials-architecture.md` 仍正常解析）：
      * `.env`（文件名恰好等于 `.env`）；
@@ -60,7 +60,7 @@
    - **本地文件与章节 (Local Files & Sections)**: 物理文件在磁盘真实存在且非空，有效章节锚点必须在文件内存在对应标题；
    - **目录索引入口 (Directory Index Entries)**: 项目声明或实际存在的权威目录（如 `docs/interviews/`, `docs/adr/`），磁盘上该目录真实存在；
    - **声明的外部 URL (Declared External URLs)**: 仅依据配置文件（如 `package.json` 中的 `bugs` / `repository` URL）中显式声明的合法 HTTP/HTTPS URL 登记元数据；**绝不发起外部网络请求抓取，亦不宣称远端存在已验证**；
-   - **留存协作种子与私有存储绑定 (Retention Seeds & Vault Bindings)**: 维持现有非空与 `session-authorized` 契约（ideas 种子必须非空；raw_qa 必须经当前会话显式绑定且不向公开产物暴露绝对私有路径，未绑定严格保持 `unbound` 零写入零预登记）。
+   - **留存协作种子与私有存储绑定 (Retention Seeds & Vault Bindings)**: 维持现有非空与 `session-authorized` 契约（ideas 种子必须非空；raw_qa 仓外别名必须经当前会话显式绑定且不向公开产物暴露绝对私有路径，未绑定严格保持 `unbound` 零写入零预登记；仓内路径限 `docs/raw-qa/` 或用户明确指定的相对路径（Agent 不自创），以仓库本身为私有为前提、无需会话绑定，写前重新核实，无法核实为私有不写盘，**绝不为普通文档放宽私有存储安全防线**；仓内核验细则（全部推送目标为 `PRIVATE` 且查询绑定解析出的主机、路径含 `..`/符号链接/Junction/真实路径越界、Git 顶层为本仓根、忽略规则与发布站点源的检查、git 历史告知）见 [retention-sections.md §1.4](retention-sections.md)）。
 
 ---
 

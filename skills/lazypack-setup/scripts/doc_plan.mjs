@@ -9,7 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { parseMarkdownUrl, computeSha256, normalizeRelPath } from './doc_scanner.mjs';
+import { parseMarkdownUrl, computeSha256, normalizeRelPath, buildExclusionMatcher, normalizeExcludePaths, realRepoRelPath } from './doc_scanner.mjs';
 
 /**
  * 严格路径边界核验 (B2 修复)
@@ -208,10 +208,26 @@ export function updateArtifactsSection3(existingContent, entries, artifactsRelPa
 /**
  * 计划生成主函数
  */
-export function buildMigrationPlan(repoRoot, planSpec, scanResult) {
+export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {}) {
   const absRepo = path.resolve(repoRoot);
   const preserveItems = planSpec.preserve_items || [];
   const migrateItems = planSpec.migrate_items || [];
+
+  // 与扫描共用同一排除判定：固定禁区/敏感集合，或调用方传入的排除路径。
+  // 计划项若落在排除路径内，则拒绝读取其内容或作为迁移目标写入。
+  // 归一化后的排除集合会随计划一并返回并计入 planFp，使审批绑定当时的排除策略。
+  const normalizedExclusions = normalizeExcludePaths(options.excludePaths);
+  const isExcluded = buildExclusionMatcher(options.excludePaths);
+  const rejectExcluded = (p, fieldName) => {
+    // 词法路径与真实路径（拦截仓内符号链接/Junction 别名指向被排除目录）都须通过
+    const real = realRepoRelPath(absRepo, p);
+    if (isExcluded(p) || (real && isExcluded(real))) {
+      const err = new Error(`ERR_EXCLUDED_PATH: ${fieldName} (${p}) 落在排除路径内（固定禁区/敏感集合或调用方排除），拒绝读取或写入`);
+      err.code = 'ERR_EXCLUDED_PATH';
+      err.details = { fieldName, path: p, realPath: real };
+      throw err;
+    }
+  };
 
   const moveMap = new Map();
   const targetCollisions = [];
@@ -222,6 +238,7 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult) {
   const inputDigests = {};
   for (const item of preserveItems) {
     const norm = assertPathWithinRepo(absRepo, item.path, 'preserve_items.path');
+    rejectExcluded(norm, 'preserve_items.path');
     const absPath = path.resolve(absRepo, norm);
     if (!fs.existsSync(absPath)) {
       sourceMissing.push(norm);
@@ -234,6 +251,8 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult) {
   for (const item of migrateItems) {
     const src = assertPathWithinRepo(absRepo, item.source_path, 'migrate_items.source_path');
     const tgt = assertPathWithinRepo(absRepo, item.target_path, 'migrate_items.target_path');
+    rejectExcluded(src, 'migrate_items.source_path');
+    rejectExcluded(tgt, 'migrate_items.target_path');
 
     if (src === tgt) {
       throw new Error(`ERR_INVALID_PLAN: Source path and target path are identical: ${src}`);
@@ -336,6 +355,8 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult) {
 
   // 5. 准备 docs/ARTIFACTS.md Section 3 登记项
   const artifactsRelPath = assertPathWithinRepo(absRepo, 'docs/ARTIFACTS.md', 'artifactsRelPath');
+  // 登记册本身也受同一排除判定约束：若被排除，则拒绝读取其内容、也不生成登记动作。
+  rejectExcluded(artifactsRelPath, 'artifactsRelPath');
   const absArtifacts = path.resolve(absRepo, artifactsRelPath);
   let existingArtifactsContent = '';
   if (fs.existsSync(absArtifacts)) {
@@ -402,6 +423,7 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult) {
     })).sort((a, b) => a.source_path.localeCompare(b.source_path)),
     actionsCount: fileActions.length,
     inputFp,
+    exclusions: normalizedExclusions,
     fileActions: fileActions.map((a) => ({
       action: a.action,
       sourcePath: a.sourcePath || a.filePath,
@@ -416,6 +438,7 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult) {
     repoRoot: absRepo,
     planFp,
     inputFp,
+    exclusions: normalizedExclusions,
     inputDigests,
     preserveItems,
     migrateItems,
