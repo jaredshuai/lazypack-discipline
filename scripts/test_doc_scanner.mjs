@@ -5,10 +5,13 @@
  * 在系统临时目录生成 Markdown 夹具，直接调用
  * skills/lazypack-setup/scripts 下的 doc_scanner.mjs 与 doc_plan.mjs，
  * 校验排除判定、链接过滤与计划拒绝路径，不修改本仓库。
- * 覆盖 #70 审查跟进新增的三处行为：
- *  1) excludePaths 归一化（尾斜杠/分隔符/大小写）使 `docs/x/` 与 `docs/x` 等价；
- *  2) 指向排除目录的链接不写入 outboundLinks/inboundReferences/deadlinks；
- *  3) buildMigrationPlan 对落在排除路径内的计划项抛 ERR_EXCLUDED_PATH。
+ * 覆盖 #70 审查跟进新增的行为（6 用例）：
+ *  1) excludePaths 归一化（尾斜杠/分隔符/大小写/`.`/`..` 段）使 `docs/x/`、`docs/x`、`docs/./x` 等价；
+ *  2) 排除判定：固定集合按路径段、配置路径自身及子孙、同前缀兄弟不误伤、仓根哨兵 `.` 命中一切路径；
+ *  3) 指向排除目录的链接（含百分号编码写法 `docs/raw%2Dqa/...`）不写入 outboundLinks/inboundReferences/deadlinks；
+ *  4) buildMigrationPlan 对落在排除路径内的计划项（含登记册 `docs/ARTIFACTS.md`）抛 ERR_EXCLUDED_PATH；
+ *  5) 排除集合随计划返回并计入 planFp（策略变化即改变指纹）；
+ *  6) executePlan 按计划记录的排除集合复核动作，命中即阻断且不落盘。
  * 用法: node scripts/test_doc_scanner.mjs
  * 全过退出码 0；任一断言失败退出码 1。未接 hook/CI。
  */
@@ -23,6 +26,7 @@ import {
   scanProjectDocuments
 } from '../skills/lazypack-setup/scripts/doc_scanner.mjs';
 import { buildMigrationPlan } from '../skills/lazypack-setup/scripts/doc_plan.mjs';
+import { executePlan } from '../skills/lazypack-setup/scripts/doc_executor.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -50,7 +54,7 @@ function makeFixture(base, name) {
   fs.writeFileSync(path.join(dir, 'node_modules', 'pkg', 'd.md'), '# dep\n', 'utf8');
   fs.writeFileSync(
     path.join(dir, 'README.md'),
-    '# readme\n[qa1](docs/raw-qa/a.md)\n[qa2](docs/private-qa/b.md)\n[adr](docs/adr/c.md)\n',
+    '# readme\n[qa1](docs/raw-qa/a.md)\n[qa2](docs/private-qa/b.md)\n[adr](docs/adr/c.md)\n[qa3](docs/raw%2Dqa/a.md)\n',
     'utf8'
   );
   return dir;
@@ -124,6 +128,11 @@ function caseScanWithoutConfiguredExclude(base) {
   assertCase(
     !scan.deadlinks.some((d) => `${d.targetRel}`.includes('raw-qa')),
     `死链不应包含 raw-qa 路径：${JSON.stringify(scan.deadlinks)}`
+  );
+  // 百分号编码写法 docs/raw%2Dqa/a.md 须先解码再判定排除，不得以字面量绕过
+  assertCase(
+    !JSON.stringify(scan).includes('raw%2Dqa'),
+    `百分号编码的排除路径不应进入扫描产物：${JSON.stringify(outboundTargets(scan, 'README.md'))}`
   );
 }
 
@@ -211,6 +220,36 @@ function casePlanRejectsExcludedItems(base) {
     thrown && thrown.code === 'ERR_EXCLUDED_PATH' && thrown.details && thrown.details.fieldName === 'artifactsRelPath',
     `登记册被排除时应抛 ERR_EXCLUDED_PATH(artifactsRelPath)，实际 ${thrown ? thrown.code || thrown.message : '未抛错'}`
   );
+
+  // 7. 排除集合随计划返回并计入 planFp：策略变化应改变指纹
+  const scanPlain = scanProjectDocuments(dir, {});
+  const planNoExclusion = buildMigrationPlan(dir, { preserve_items: [{ path: 'docs/adr/c.md' }] }, scanPlain, {});
+  const planWithExclusion = buildMigrationPlan(dir, { preserve_items: [{ path: 'docs/adr/c.md' }] }, scanPlain, { excludePaths: ['docs/private-qa/'] });
+  assertCase(Array.isArray(planNoExclusion.exclusions) && planNoExclusion.exclusions.length === 0, `无排除时 exclusions 应为空数组，实际 ${JSON.stringify(planNoExclusion.exclusions)}`);
+  assertCase(JSON.stringify(planWithExclusion.exclusions) === JSON.stringify(['docs/private-qa']), `exclusions 应为归一化集合，实际 ${JSON.stringify(planWithExclusion.exclusions)}`);
+  assertCase(planNoExclusion.planFp !== planWithExclusion.planFp, '排除集合不同时 planFp 必须不同（审批绑定当时的排除策略）');
+}
+
+/**
+ * executePlan：计划自身记录的排除集合须在执行前复核，陈旧/手工改写的计划不得搬动已排除路径。
+ */
+async function caseExecutorRevalidatesExclusions(base) {
+  const dir = makeFixture(base, 'executor');
+  const forged = {
+    repoRoot: dir,
+    planFp: 'forged-fp',
+    exclusions: ['docs/private-qa'],
+    inputDigests: {},
+    fileActions: [
+      { action: 'MIGRATE_FILE', sourcePath: 'docs/private-qa/b.md', targetPath: 'docs/moved-b.md' }
+    ]
+  };
+  const result = await executePlan(forged, { approvedPlanFp: 'forged-fp' });
+  assertCase(
+    result && result.status === 'APPROVAL_DRIFT_BLOCKED' && /EXCLUDED_PATH_BLOCKED/.test(result.reason || ''),
+    `命中排除路径应被阻断，实际 ${JSON.stringify(result && result.status)}: ${result && result.reason}`
+  );
+  assertCase(!fs.existsSync(path.join(dir, 'docs', 'moved-b.md')), '被阻断的计划不得落盘任何文件');
 }
 
 const CASES = [
@@ -218,16 +257,17 @@ const CASES = [
   ['buildExclusionMatcher 命中判定', caseBuildExclusionMatcher],
   ['scan 固定集合排除与链接过滤', caseScanWithoutConfiguredExclude],
   ['scan 尾斜杠 --exclude 排除与链接过滤', caseScanWithTrailingSlashExclude],
-  ['buildMigrationPlan 拒绝排除项', casePlanRejectsExcludedItems]
+  ['buildMigrationPlan 拒绝排除项', casePlanRejectsExcludedItems],
+  ['executePlan 排除路径复核', caseExecutorRevalidatesExclusions]
 ];
 
-function main() {
+async function main() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-scanner-test-'));
   let failed = 0;
   try {
     for (const [name, fn] of CASES) {
       try {
-        fn(base);
+        await fn(base);
         console.log(`PASS ${name}`);
       } catch (e) {
         failed++;
@@ -244,4 +284,7 @@ function main() {
   console.log(`test_doc_scanner: ${CASES.length}/${CASES.length} PASS`);
 }
 
-main();
+main().catch((e) => {
+  console.error(`test_doc_scanner: 运行异常 ${e && e.message}`);
+  process.exit(1);
+});

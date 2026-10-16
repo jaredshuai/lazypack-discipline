@@ -188,6 +188,21 @@ export function isIgnoredLinkTarget(rawurl) {
 }
 
 /**
+ * 解码 Markdown 链接目标里的百分号编码，使 `docs/raw%2Dqa/x.md` 与 `docs/raw-qa/x.md` 归一到同一路径，
+ * 排除判定才能命中（否则被排除目录的路径会以字面量绕过）。
+ * 非法编码（decodeURIComponent 抛错）时按原文返回，不中断扫描。
+ * @param {string} rawPathname 链接括号内的 pathname（已剥离 query 与 fragment）
+ * @returns {string}
+ */
+function decodeUrlPathname(rawPathname) {
+  try {
+    return decodeURIComponent(rawPathname);
+  } catch {
+    return rawPathname;
+  }
+}
+
+/**
  * 扫描项目全量 Markdown 文档并建立双向引用图谱。
  * 链接提取会先剥离围栏与行内代码；标题抽取使用原始正文。
  * 除固定的 `isExcludedOrSensitive` 集合外，`options.excludePaths` 可再传入仓内相对路径
@@ -267,7 +282,7 @@ export function scanProjectDocuments(repoRoot, options = {}) {
             let targetRel = relPath;
             if (pathname) {
               const fromDir = path.dirname(fullPath);
-              const absTarget = path.resolve(fromDir, pathname);
+              const absTarget = path.resolve(fromDir, decodeUrlPathname(pathname));
               targetRel = normalizeRelPath(path.relative(absRepo, absTarget));
             }
 

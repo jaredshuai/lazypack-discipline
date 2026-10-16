@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
-import { computeSha256, normalizeRelPath } from './doc_scanner.mjs';
+import { computeSha256, normalizeRelPath, buildExclusionMatcher } from './doc_scanner.mjs';
 import { assertPathWithinRepo } from './doc_plan.mjs';
 
 /**
@@ -149,6 +149,27 @@ export async function executePlan(plan, options = {}) {
   }
   for (const relPath of Object.keys(plan.inputDigests)) {
     assertPathWithinRepo(repoRoot, relPath, 'inputDigests');
+  }
+
+  // 2b. 排除路径复核：按计划自身记录的排除集合（已计入 planFp，随审批绑定）复核每条动作，
+  // 手工改写或陈旧计划试图把已排除路径再搬动/写入时就地阻断，不依赖调用方另外传入策略。
+  const planExclusions = Array.isArray(plan.exclusions) ? plan.exclusions : [];
+  const isPlanPathExcluded = buildExclusionMatcher(planExclusions);
+  for (const action of plan.fileActions) {
+    for (const [field, value] of [
+      ['action.sourcePath', action.sourcePath],
+      ['action.targetPath', action.targetPath],
+      ['action.filePath', action.filePath]
+    ]) {
+      if (value && isPlanPathExcluded(value)) {
+        return {
+          status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED,
+          reason: `EXCLUDED_PATH_BLOCKED: ${field} (${value}) 落在计划记录的排除路径内`,
+          details: { field, path: value, exclusions: planExclusions },
+          txId
+        };
+      }
+    }
   }
 
   // 3. 写前重读与冲突校验

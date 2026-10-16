@@ -9,7 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { parseMarkdownUrl, computeSha256, normalizeRelPath, buildExclusionMatcher } from './doc_scanner.mjs';
+import { parseMarkdownUrl, computeSha256, normalizeRelPath, buildExclusionMatcher, normalizeExcludePaths } from './doc_scanner.mjs';
 
 /**
  * 严格路径边界核验 (B2 修复)
@@ -215,6 +215,8 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {})
 
   // 与扫描共用同一排除判定：固定禁区/敏感集合，或调用方传入的排除路径。
   // 计划项若落在排除路径内，则拒绝读取其内容或作为迁移目标写入。
+  // 归一化后的排除集合会随计划一并返回并计入 planFp，使审批绑定当时的排除策略。
+  const normalizedExclusions = normalizeExcludePaths(options.excludePaths);
   const isExcluded = buildExclusionMatcher(options.excludePaths);
   const rejectExcluded = (p, fieldName) => {
     if (isExcluded(p)) {
@@ -419,6 +421,7 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {})
     })).sort((a, b) => a.source_path.localeCompare(b.source_path)),
     actionsCount: fileActions.length,
     inputFp,
+    exclusions: normalizedExclusions,
     fileActions: fileActions.map((a) => ({
       action: a.action,
       sourcePath: a.sourcePath || a.filePath,
@@ -433,6 +436,7 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {})
     repoRoot: absRepo,
     planFp,
     inputFp,
+    exclusions: normalizedExclusions,
     inputDigests,
     preserveItems,
     migrateItems,
