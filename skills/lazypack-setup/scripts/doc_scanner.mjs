@@ -94,10 +94,11 @@ export function isExcludedOrSensitive(relPath) {
   const segments = norm.split('/');
 
   // 排除目录。路径已小写化，`.DS_Store` 以 `.ds_store` 入集。
+  // `raw-qa` 为规范 raw_qa 留存目录名（docs/raw-qa/），纳入同一排除集合，防止扫描读取敏感原始问答。
   const excludedDirs = new Set([
     'node_modules', '.git', 'vendor', 'dist', 'build', 'target',
     'out', '.cache', '.pytest_cache', '__pycache__', '.venv', 'venv',
-    '.idea', '.vscode', '.lazypack-backup', '.ds_store'
+    '.idea', '.vscode', '.lazypack-backup', '.ds_store', 'raw-qa'
   ]);
 
   for (const seg of segments) {
