@@ -60,7 +60,7 @@
    - **本地文件与章节 (Local Files & Sections)**: 物理文件在磁盘真实存在且非空，有效章节锚点必须在文件内存在对应标题；
    - **目录索引入口 (Directory Index Entries)**: 项目声明或实际存在的权威目录（如 `docs/interviews/`, `docs/adr/`），磁盘上该目录真实存在；
    - **声明的外部 URL (Declared External URLs)**: 仅依据配置文件（如 `package.json` 中的 `bugs` / `repository` URL）中显式声明的合法 HTTP/HTTPS URL 登记元数据；**绝不发起外部网络请求抓取，亦不宣称远端存在已验证**；
-   - **留存协作种子与私有存储绑定 (Retention Seeds & Vault Bindings)**: 维持现有非空与 `session-authorized` 契约（ideas 种子必须非空；raw_qa 仓外别名必须经当前会话显式绑定且不向公开产物暴露绝对私有路径，未绑定严格保持 `unbound` 零写入零预登记；仓内私有相对路径以仓库本身为私有为前提、无需会话绑定，写前重新核实，无法核实为私有不写盘，**绝不为普通文档放宽私有存储安全防线**）。
+   - **留存协作种子与私有存储绑定 (Retention Seeds & Vault Bindings)**: 维持现有非空与 `session-authorized` 契约（ideas 种子必须非空；raw_qa 仓外别名必须经当前会话显式绑定且不向公开产物暴露绝对私有路径，未绑定严格保持 `unbound` 零写入零预登记；仓内路径限 `docs/raw-qa/` 或用户明确指定的相对路径（Agent 不自创），以仓库本身为私有为前提、无需会话绑定，写前重新核实，无法核实为私有不写盘，**绝不为普通文档放宽私有存储安全防线**）。
 
 ---
 
