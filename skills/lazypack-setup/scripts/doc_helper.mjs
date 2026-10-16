@@ -72,7 +72,7 @@ Options:
     const planSpec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
 
     const scanResult = scanProjectDocuments(cwd, { excludePaths: values.exclude || [] });
-    const plan = buildMigrationPlan(cwd, planSpec, scanResult);
+    const plan = buildMigrationPlan(cwd, planSpec, scanResult, { excludePaths: values.exclude || [] });
     const json = JSON.stringify(plan, null, 2);
 
     if (values.out) {

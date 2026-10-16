@@ -121,6 +121,33 @@ export function isExcludedOrSensitive(relPath) {
 }
 
 /**
+ * 规范化调用方传入的排除路径：分隔符归一并去掉尾部斜杠，再小写化供前缀匹配。
+ * 目录写法（如 `docs/raw-qa/`）与不带斜杠的写法（`docs/raw-qa`）等价。
+ * @param {string[]} excludePaths 仓内相对路径
+ * @returns {string[]} 规范化后的排除路径
+ */
+export function normalizeExcludePaths(excludePaths = []) {
+  return excludePaths
+    .map((p) => normalizeRelPath(String(p)).replace(/\/+$/, '').toLowerCase())
+    .filter((p) => p.length > 0);
+}
+
+/**
+ * 构造排除判定函数：固定禁区/敏感集合，或调用方传入的排除路径（其自身及子孙）。
+ * 供扫描与计划校验共用，避免两处各写一套匹配逻辑。
+ * @param {string[]} excludePaths 仓内相对路径
+ * @returns {(relPath: string) => boolean}
+ */
+export function buildExclusionMatcher(excludePaths = []) {
+  const configured = normalizeExcludePaths(excludePaths);
+  return (relPath) => {
+    const lower = normalizeRelPath(String(relPath)).toLowerCase();
+    if (isExcludedOrSensitive(lower).excluded) return true;
+    return configured.some((ex) => lower === ex || lower.startsWith(ex + '/'));
+  };
+}
+
+/**
  * 为链接提取准备一行 Markdown。
  * 围栏标记行与围栏内的行整行跳过；围栏外的行内反引号替换为等长空白，避免代码示例被当成链接。
  * 只用于链接提取。标题抽取仍读取原始正文，不调用本函数。
@@ -167,11 +194,7 @@ export function scanProjectDocuments(repoRoot, options = {}) {
     throw new Error(`Repository root does not exist: ${absRepo}`);
   }
 
-  const excludePaths = (options.excludePaths || [])
-    .map((p) => normalizeRelPath(String(p)).toLowerCase())
-    .filter((p) => p.length > 0);
-  const isConfiguredExclusion = (lowerRel) =>
-    excludePaths.some((ex) => lowerRel === ex || lowerRel.startsWith(ex + '/'));
+  const isExcluded = buildExclusionMatcher(options.excludePaths);
 
   const files = [];
   const inboundMap = new Map(); // targetRelPath -> [{ sourceRelPath, rawUrl, line }]
@@ -199,8 +222,7 @@ export function scanProjectDocuments(repoRoot, options = {}) {
         }
       }
 
-      const check = isExcludedOrSensitive(relPath);
-      if (check.excluded || isConfiguredExclusion(relPath.toLowerCase())) {
+      if (isExcluded(relPath)) {
         boundedExclusionsCount++;
         continue;
       }
@@ -239,6 +261,12 @@ export function scanProjectDocuments(repoRoot, options = {}) {
               const fromDir = path.dirname(fullPath);
               const absTarget = path.resolve(fromDir, pathname);
               targetRel = normalizeRelPath(path.relative(absRepo, absTarget));
+            }
+
+            // 指向排除目录的链接一并跳过：不写出站边、不写入站引用、不报死链，
+            // 避免在扫描产物里暴露敏感原始问答的路径与文件名。
+            if (isExcluded(targetRel)) {
+              continue;
             }
 
             outboundLinks.push({
