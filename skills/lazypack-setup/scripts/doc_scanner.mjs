@@ -320,9 +320,11 @@ export function scanProjectDocuments(repoRoot, options = {}) {
               targetRel = normalizeRelPath(path.relative(absRepo, absTarget));
             }
 
-            // 指向排除目录的链接一并跳过：不写出站边、不写入站引用、不报死链，
-            // 避免在扫描产物里暴露敏感原始问答的路径与文件名。
-            if (isExcluded(targetRel)) {
+            // 指向排除目录的链接一并跳过：词法路径与真实路径（`realRepoRelPath`，拦截经仓内
+            // 符号链接/Junction 别名指向被排除目录的情形）都须通过，不写出站边、不写入站引用、
+            // 不报死链，避免在扫描产物里暴露敏感原始问答的路径与文件名。
+            const realTargetRel = realRepoRelPath(absRepo, targetRel);
+            if (isExcluded(targetRel) || (realTargetRel && isExcluded(realTargetRel))) {
               continue;
             }
 
