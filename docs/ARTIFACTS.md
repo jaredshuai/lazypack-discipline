@@ -666,3 +666,19 @@
 - **处理结果**：上述机器文档对子检查标记为 **未运行**（当前工作环境无法取得完整 Git 仓，不能以单文件检查冒充全仓 PASS）。Node 脚本语法、真实模板 shell 语法、隔离 Git 回归为已运行的独立代码验证，不转写成文档对子 PASS。
 - **未覆盖范围**：全量 `git diff --check`、Windows / Git for Windows 真实环境、Claude Code/GLM 干净安装、未经授权的目标项目 Hook 运行。
 - **未决事项**：需完整仓本地 Agent 实跑文档对子检查，并在 Windows 隔离环境完成运行时证据验收；PR #88 不自动合并，#85 不提前关闭。
+
+2026-10-17（PR #88 最新基线 Windows 隔离补救）：基线 1a4cf892911658c0fd97dc197a32ea4280b8959e；只追加 pre-commit.sh 精确路径 text eol=lf 属性与测试 fixture 内真实空 Git 配置文件。最新验证器及 conditional exit 0; fi 正例、全部断言和平台分支原样保留。历史正文保留，本记录不回写旧冻结 PR 的 FAIL 结论；未提交副本的结果不等于远程 PR 已修复。
+
+- 检查范围：P1、P2、P3、P4、P5、P8、P9、P10、P11；人工核对差异仅为两项移植与本轮记录，固定层和最新验证器未改。
+- 依据版本：开工 1a4cf892911658c0fd97dc197a32ea4280b8959e；收尾为 latest-remediation 未提交工作区；声明 docs/agents/doc-pairs.md；命令 node scripts/check_doc_pairs.mjs。
+- 处理结果：两项 Windows 修复已同步；完整 Windows 回归实际 31 PASS、0 FAIL、0 显式 SKIP，另 5 项 POSIX 条件未运行；独立索引检出复跑相同。core.autocrlf=true 的基线检出 79 CRLF，补丁属性约束的新检出 79 LF、0 CR。P1、P2、P3、P4、P5、P8、P9、P10、P11 均未发现差异（实际 9/9 PASS）；两份 node --check 与 git diff --check 通过。
+- 未覆盖范围：真实目标项目安装及 Hook、完整 setup、POSIX 和 CI 未运行；未安装依赖，无提交、推送、合并或全局配置更改；旧 remediation、旧 patch 与 regression 原证据不动。
+- 未决事项：无；命令全输出、独立补丁和同源清单在同级 latest-remediation-evidence。
+
+PR #88 合入前复核：用户明确授权提交、推送已验证补丁并在最终检查通过后合并；关联 Issue 保留。本轮仍仅在隔离源副本操作，真实源工作区与目标项目不改。
+
+- 检查范围：P1–P5、P8–P11；核对两项 Windows 补救及已有断言/条件分支保护，固定层不变。
+- 依据版本：1a4cf892911658c0fd97dc197a32ea4280b8959e 加本轮隔离补丁；文档声明 docs/agents/doc-pairs.md；命令 node scripts/check_doc_pairs.mjs。
+- 处理结果：上述九项机器检查均未发现差异；Windows 适用 Hook 回归 31/31 PASS，5 项 POSIX 条件未运行；git diff --check 通过。首轮失败、独立检出证明和两个真实宿主安装/原生触发证据分层保存在本机验收记录，未上传用户目标源码或绝对路径。
+- 未覆盖范围：真正私有仓 raw_qa、原生交互控件和未裁剪宿主环境；继续留在关联补验工单，不把候选演练改写成完整宿主 PASS。
+- 未决事项：无新增产品或固定层决策；远程推送、检查与合并结果以随后实际 GitHub 回执为准，本段不预写合并完成。

@@ -2,3 +2,6 @@
 # Windows 检出时也不要转换
 templates/scripts/*.sh text eol=lf
 templates/config/* text eol=lf
+
+# setup native Hook template must remain executable by Git for Windows.
+skills/lazypack-setup/templates/pre-commit.sh text eol=lf

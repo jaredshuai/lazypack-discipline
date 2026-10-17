@@ -106,12 +106,15 @@ check('invalid mode rejected', () => assert.equal(inspectHookBytes(bytes, 'bad')
 // Explicitly ignore host global and system Git configs. Restore the host env afterward.
 const isolation = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_COUNT'];
 const previous = Object.fromEntries(isolation.map(k => [k, process.env[k]]));
-process.env.GIT_CONFIG_GLOBAL = os.devNull;
-process.env.GIT_CONFIG_SYSTEM = os.devNull;
-process.env.GIT_CONFIG_NOSYSTEM = '1';
-process.env.GIT_CONFIG_COUNT = '0';
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lazypack-hook-issue85-'));
 try {
+  // Git for Windows cannot read os.devNull as a config file.
+  const emptyConfig = path.join(dir, 'empty.gitconfig');
+  fs.writeFileSync(emptyConfig, '');
+  process.env.GIT_CONFIG_GLOBAL = emptyConfig;
+  process.env.GIT_CONFIG_SYSTEM = emptyConfig;
+  process.env.GIT_CONFIG_NOSYSTEM = '1';
+  process.env.GIT_CONFIG_COUNT = '0';
   const repo = path.join(dir, 'repo');
   fs.mkdirSync(repo);
   assert.equal(git(repo, 'init', '-q').status, 0);
