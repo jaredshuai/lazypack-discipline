@@ -71,6 +71,10 @@ check('existing managed block immediately after unconditional exit 0 is rejected
   const stopped = Buffer.from(good.replace(header, 'exit 0\n' + header));
   assert.equal(inspectHookBytes(stopped, 'existing').code, 'UNREACHABLE_MANAGED_BLOCK');
 });
+check('conditional one-liner "exit 0; fi" is not treated as an unconditional terminal', () => {
+  const guarded = Buffer.from(good.replace(header, 'exit 0; fi\n' + header));
+  assert.equal(inspectHookBytes(guarded, 'existing').code, 'STATIC_BYTES_OK');
+});
 check('Bash interpreter with CRLF rejected, repair must preserve Bash', () => {
   const bash = Buffer.from(good.replace(first, '#!/usr/bin/env bash\r\n'));
   assert.equal(inspectHookBytes(bash, 'existing').code, 'CRLF_SHEBANG');

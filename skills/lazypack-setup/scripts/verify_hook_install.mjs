@@ -70,10 +70,12 @@ export function inspectHookBytes(bytes, mode = 'new') {
   const start = lines[startIds[0]];
   const end = lines[endIds[0]];
   // Fail closed on a plainly terminal prelude; this does NOT parse arbitrary shell
-  // control flow. Actual managed-gate execution still needs runtime evidence.
+  // control flow. Only a bare `exit` line counts; shell metacharacters (`;`, `&`, `|`)
+  // mark a compound/conditional statement that may close a block and are skipped.
+  // Actual managed-gate execution still needs runtime evidence.
   const preceding = lines.slice(0, startIds[0]).map(entry => entry.line.trim())
     .filter(line => line && !line.startsWith('#'));
-  if (/^exit(?:[ \t]+[^#]+)?(?:[ \t]*#.*)?$/.test(preceding.at(-1) ?? '')) {
+  if (/^exit(?:[ \t]+[^#;&|]+)?(?:[ \t]*#.*)?$/.test(preceding.at(-1) ?? '')) {
     return result(false, 'UNREACHABLE_MANAGED_BLOCK', 'managed block follows an unconditional exit statement');
   }
   const header = HEADER_RE.exec(start.line);
