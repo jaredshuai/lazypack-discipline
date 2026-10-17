@@ -58,6 +58,7 @@
      - `core.hooksPath`（或管理器配置）已正确指向对应目录；
      - POSIX 系统下脚本具备执行权限（`test -x`）。
      - 这**仅代表本地静态配置就绪，绝不能宣称 Git 真实激活**！
+     - 原生 `.githooks/pre-commit` 在 Node 可用时，还需在写盘和 Git 路由配置完成后执行只读检查：`node <lazypack-setup目录>/scripts/verify_hook_install.mjs --cwd <目标仓根> --mode new`（新建）或 `--mode existing`（既有有效解释器）。退出码 0、`code=CONFIGURED_STATIC_ONLY` 仅表示字节、托管标记、POSIX 权限位与 Hook 路由静态检查通过；不得写成 Runtime Verified。非零应暂停并报告原因码；BOM、CRLF、错误 shebang 必须明确处理，不能将 BOM 移入第二行或未经确认覆盖既有合法解释器。Node 不可用或管理器入口不适用时，记录替代静态核验的实际证据或如实标未验证；
   2. **运行时已验证 (Runtime Verified)**：
      - 必须在本地由 Git 原生机制实际触发调用（例如在验证环境中执行 `git hook run <hook-name>`），且记录 Git 实际调用的命令、退出码与独立可观测证据。当前本技能仅管理 `pre-commit`，后续扩展到其他 hook 类型时按同一模板执行。
      - **验证方式限定**：运行时验证只认 Git 原生触发（`git hook run <hook-name>`），**严禁以真实 `git commit` 充当验证手段**（真实提交会留下提交记录并改动暂存区与分支历史）；以 `sh <file>` 等显式解释器直调不属于 Git 原生触发——解释器直调不要求 shebang，无法暴露首行缺失，其结果不得作为运行时验证证据。
