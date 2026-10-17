@@ -326,7 +326,7 @@ description: >-
    - `.githooks/pre-commit`（或对应管理器入口）：
      * **首行 shebang 固定（块外内容，仅限本技能新建的原生 Hook）**：新建 `.githooks/pre-commit` 文件时，文件第一行必须固定为 `#!/bin/sh`，位于 `# lazypack:start` 标记行之前的块外区域（模板 `templates/pre-commit.sh` 首行即该行），写盘时照抄不得省略；该行属块外内容，不纳入 `fp` 计算；既有合法解释器入口（如 `#!/bin/bash`）与管理器入口（如 `.husky/pre-commit`）不适用本条，按各自契约保留；
      * **写后首行读回校验（仅限新建与修复场景）**：新建 Hook 写盘后、或对既有 Hook 执行首行修复后，立即读回文件并断言第一行恰为 `#!/bin/sh`；不符即视为写盘失败，暂停并向用户报告；对既有合法解释器 Hook 的追加/升级不触发本断言；
-     * **既有 Hook 首行缺陷探测与修复**：探测阶段即检查本技能托管的原生 `.githooks/pre-commit` 首行——缺失或非 `#!/bin/sh` 时标记为需写盘修复状态（即使托管块指纹不变，也不判 NO-OP 跳过）；在整体确认中列出并按块外内容补齐或纠正首行；该修复不改变块内字节，`fp` 与幂等判定不受影响；
+     * **既有 Hook 首行缺陷探测与修复**：探测阶段即检查本技能托管的原生 `.githooks/pre-commit` 首行——缺少有效 shebang、首行含 CRLF、出现 UTF-8 BOM 或首行字节损坏时标记为需修复（即使托管块指纹不变，也不判 NO-OP 跳过）；既有合法解释器（如 `#!/bin/bash`、`#!/usr/bin/env bash`）必须原样保留，不得因为不是 `#!/bin/sh` 就视为缺陷。修复前按整体确认保护块外字节；如存在 BOM，必须先明确裁决安全的 BOM 移除方案，不得保留 BOM 在首行前、也不得简单移到 shebang 后充当 shell 正文。无法安全修复则 `PAUSE`；修复受管块外首行不改变块内 `fp`；
      * 若处于全拒绝分支且无任何已有门禁：**零创建 Hook 文件，绝对不执行 `git config core.hooksPath`**；
      * 若处于未变重跑（NO-OP）：**完全不写盘**（首行缺陷修复场景除外，见上条）；
      * 若采纳了配方（全量或部分）：渲染严格字典序的三段式出处注释行（`# lazypack:preset id=... version=...`），并在 Hook input 中包含 `preset`, `presetSrc` 与规范化 `provenance` 字典；
@@ -383,6 +383,7 @@ description: >-
 8. **生效副作用**：
    - 执行 `git config core.hooksPath .githooks`（若使用原生受控 Hook、无冲突且非全拒绝分支）；
    - POSIX 系统设置脚本权限位（`chmod +x`）并以 `test -x` 核验执行位已生效；
+   - **Hook 静态验收（确定性只读脚本）**：原生 `.githooks/pre-commit` 写盘、必要的 `core.hooksPath` 激活配置完成后，若可用 Node，使用实际 `lazypack-setup` 技能目录下的 `scripts/verify_hook_install.mjs` 执行 `node <lazypack-setup目录>/scripts/verify_hook_install.mjs --cwd <目标仓根> --mode new`（本轮新建）或 `--mode existing`（既有合法解释器）；非零即暂停，报告返回的原因码与精确恢复动作，不进入“静态配置就绪”或“运行时已验证”。脚本读取**原始字节**，检查 shebang（含 BOM / 首行换行）、托管标记、POSIX 执行位及实际生效的 Git Hook 路由；不会运行真实 Hook、运行项目测试、修改 Git 配置或写任何文件。对 Husky、Lefthook 等管理器入口不套用本原生 Hook 检查器。Node 不可用时不得声称脚本已运行；只可按同等字节与路由检查逐项给出真实证据，做不到则静态激活状态标 `未验证`。脚本成功仅能记 `CONFIGURED_STATIC_ONLY`，**不能**代替下条 Git 原生调用或证明质量检查已通过；
    - **Hook 运行时验证（确定性步骤，含安全门控）**：触发条件为本轮实际新建/更新了 Hook 文件、或变更了 `core.hooksPath` 等激活配置；满足触发条件时，必须执行 `git hook run <hook-name>`（当前仅管理 `pre-commit`，后续扩展按同一模板）由 Git 原生机制触发验证，记录实际调用的命令、退出码与可观测输出证据；严禁以 `sh <file>` 等显式解释器直调替代——解释器直调不要求 shebang，会掩盖首行缺失缺陷；**安全门控**：若 Hook 内含 `not-run` 或副作用未知的接线命令，不得直接执行整条 Hook——须先获用户显式安全授权，或在隔离验证环境中运行；无法安全执行时保留 `not-run` 并在完成报告中如实标注运行时验证不可用及原因；仅当环境客观无法执行（如无 git 可用）时才允许跳过，且必须在完成报告中标注 `未验证` 并写明具体原因。
 9. **会话内三态恢复保护**：
    - 若操作中断或失败，回退升级块时完整恢复旧块字节 $S_{\text{pre\_block}}$（含旧头与旧标记）；
