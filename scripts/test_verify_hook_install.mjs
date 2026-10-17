@@ -80,6 +80,11 @@ check('Bash interpreter with CRLF rejected, repair must preserve Bash', () => {
   assert.equal(inspectHookBytes(bash, 'existing').code, 'CRLF_SHEBANG');
   assert.equal(inspectHookBytes(Buffer.from(good.replace(first, '#!/usr/bin/env bash\n')), 'existing').code, 'STATIC_BYTES_OK');
 });
+check('existing hook with LF shebang but CRLF body is rejected instead of silently passing', () => {
+  const crlfBody = Buffer.from(good.replace(/\n/g, '\r\n').replace('#!/bin/sh\r\n', '#!/bin/sh\n'));
+  assert.equal(inspectHookBytes(crlfBody, 'existing').code, 'EXISTING_HOOK_NON_LF');
+  assert.equal(inspectHookBytes(crlfBody, 'new').code, 'NEW_HOOK_NON_LF');
+});
 check('truncated block lacking end marker rejected', () => {
   assert.equal(inspectHookBytes(Buffer.from(good.slice(0, good.indexOf(footer)))).code, 'INVALID_MANAGED_BOUNDARY');
 });
@@ -147,6 +152,11 @@ try {
   });
   check('trailing whitespace in Git hooksPath does not get trimmed into a false match', () => {
     assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks ').status, 0);
+    try { assert.equal(inspectHookInstallation({ cwd: repo }).code, 'HOOKS_PATH_MISMATCH'); }
+    finally { assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks').status, 0); }
+  });
+  check('core.hooksPath ending in a literal CR fails closed instead of matching .githooks', () => {
+    assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks\r').status, 0);
     try { assert.equal(inspectHookInstallation({ cwd: repo }).code, 'HOOKS_PATH_MISMATCH'); }
     finally { assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks').status, 0); }
   });

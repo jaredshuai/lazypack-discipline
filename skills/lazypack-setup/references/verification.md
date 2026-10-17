@@ -49,7 +49,7 @@
    - 在写盘前的一次性确认清单中明确提示用户将执行：`git config core.hooksPath .githooks`。
 
 ### 2.2 跨平台兼容性与激活证据划分
-- **POSIX**：本技能新建的原生 `.githooks/pre-commit` 第一行固定 `#!/bin/sh` + LF，且整份新文件统一 LF（检查器拒绝正文混入 CRLF）；既有合法解释器（如 `#!/bin/bash`、`#!/usr/bin/env bash`）原样保留，若仅首行 CRLF 需要修复，只能在确认后保留原解释器并转换行尾为 LF。BOM 不得被移到解释器之后；无法安全移除时暂停。赋予权限（`chmod +x`）后用当前用户的有效执行权限（等价 `test -x`）核验；管理器入口遵循自身契约。
+- **POSIX**：本技能新建的原生 `.githooks/pre-commit` 第一行固定 `#!/bin/sh` + LF，且整份新文件统一 LF；静态检查器对 `new` 与 `existing` 两种模式都拒绝 shebang 之后的任何 CR 字节（`NEW_HOOK_NON_LF` / `EXISTING_HOOK_NON_LF`），因为 CR 行尾会让 `sh` 报 `\r: not found` 并阻断每次提交。既有合法解释器（如 `#!/bin/bash`、`#!/usr/bin/env bash`）原样保留；文件含 CR 行尾（首行或正文）时，只能在确认后保留原解释器并把整份文件行尾转为 LF——受管块 `fp` 基于 LF 归一化正文计算，转换后仍匹配。BOM 不得被移到解释器之后；无法安全移除时暂停。赋予权限（`chmod +x`）后用当前用户的有效执行权限（等价 `test -x`）核验；管理器入口遵循自身契约。
 - **Windows**：Git for Windows 自带 MSYS2 `sh.exe`，在 `core.hooksPath` 配置后能够原生执行该脚本。
 - **严格区分配置就绪与运行时验证**：
   1. **静态配置就绪 (Configured)**：

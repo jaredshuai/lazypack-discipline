@@ -41,10 +41,16 @@ export function inspectHookBytes(bytes, mode = 'new') {
   } else if (!/^#!\/[\x21-\x7e]+(?:[ \t]+[\x21-\x7e]+)*\n$/.test(first.toString('utf8'))) {
     return result(false, 'INVALID_EXISTING_SHEBANG', 'existing native hook must preserve a valid absolute interpreter shebang');
   }
-  // New native files must be entirely LF; CRLF in the body can break POSIX sh.
-  // Existing-file CRLF is a separate protected-content/explicit-repair case.
-  if (mode === 'new' && bytes.includes(0x0d)) {
-    return result(false, 'NEW_HOOK_NON_LF', 'new native hook contains CR bytes after the shebang');
+  // The managed native hook is a POSIX shell script: any CR byte after the shebang
+  // makes sh report `\r: not found` and can block every commit. `new` files must be
+  // LF from the start; an `existing` file with CR line endings is an explicit-repair
+  // case that must be converted to LF (with confirmation) before it may pass. The
+  // managed fp is computed over the LF-normalized body, so a line-ending repair keeps
+  // the recorded fp valid.
+  if (bytes.includes(0x0d)) {
+    return mode === 'new'
+      ? result(false, 'NEW_HOOK_NON_LF', 'new native hook contains CR bytes after the shebang')
+      : result(false, 'EXISTING_HOOK_NON_LF', 'existing native hook contains CR bytes after the shebang; convert line endings to LF with confirmation, then re-verify');
   }
 
   // Match complete, unique, line-delimited markers, not a substring in shell code.
@@ -83,7 +89,8 @@ export function inspectHookBytes(bytes, mode = 'new') {
     return result(false, 'INVALID_MANAGED_MARKERS', 'managed block metadata or end marker is malformed');
   }
   const bodyOffset = start.offset + start.raw.length + 1;
-  const body = source.slice(bodyOffset, end.offset).replace(/\r\n/g, '\n');
+  // CR bytes were rejected above, so the managed body is LF-only.
+  const body = source.slice(bodyOffset, end.offset);
   if (!body.length) return result(false, 'EMPTY_MANAGED_BODY', 'managed block contains no commands');
   const observedFp = crypto.createHash('sha256').update(Buffer.from(body, 'utf8')).digest('hex').slice(0, 16);
   if (observedFp !== header[1]) {
@@ -92,16 +99,18 @@ export function inspectHookBytes(bytes, mode = 'new') {
   return result(true, 'STATIC_BYTES_OK', 'interpreter and complete managed block fingerprint are valid');
 }
 
-function readGit(repo, args) {
+function readGit(repo, args, { nulTerminated = false } = {}) {
   const p = spawnSync('git', ['-C', repo, ...args], {
     encoding: 'utf8', timeout: 8000, windowsHide: true
   });
   if (p.error?.code === 'ETIMEDOUT') return result(false, 'GIT_TIMEOUT', 'git query timed out');
   if (p.error) return result(false, 'GIT_UNAVAILABLE', 'git invocation failed');
   if (p.status !== 0) return result(false, 'GIT_QUERY_FAILED', 'git query returned nonzero exit code');
-  // Preserve quoted leading/trailing whitespace in Git config values.
-  // Only strip the record terminator emitted by Git itself.
-  return { ok: true, value: p.stdout.replace(/\r?\n$/, '') };
+  // Git terminates every record itself. NUL-terminated queries (`--null`) keep a
+  // literal trailing CR or space inside the value unambiguous; newline-terminated
+  // ones may still carry a Windows CRLF record terminator.
+  const value = nulTerminated ? p.stdout.replace(/\0$/, '') : p.stdout.replace(/\r?\n$/, '');
+  return { ok: true, value };
 }
 
 /** Only reads target files and Git metadata, never executes Git hooks. */
@@ -147,7 +156,7 @@ export function inspectHookInstallation({ cwd = process.cwd(), mode = 'new' } = 
       return result(false, 'HOOK_NOT_EXECUTABLE', 'setup user has no effective execute permission');
     }
   }
-  const conf = readGit(repo, ['config', '--get', 'core.hooksPath']);
+  const conf = readGit(repo, ['config', '--null', '--get', 'core.hooksPath'], { nulTerminated: true });
   if (!conf.ok) return result(false, 'HOOKS_PATH_NOT_CONFIGURED', 'effective core.hooksPath is missing or unreadable');
   if (path.resolve(repo, conf.value) !== hookDir) {
     return result(false, 'HOOKS_PATH_MISMATCH', 'effective core.hooksPath does not point to .githooks');
