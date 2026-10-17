@@ -12,7 +12,7 @@ import os from 'os';
 import crypto from 'crypto';
 import { computeSha256, normalizeRelPath, buildExclusionMatcher, realRepoRelPath } from './doc_scanner.mjs';
 import { assertPathWithinRepo } from './doc_plan.mjs';
-import { readRetentionPolicySnapshot, isRetentionPolicySnapshot } from './doc_retention_policy.mjs';
+import { readRetentionPolicySnapshot, isRetentionPolicySnapshot, assertNotPolicyCarrier } from './doc_retention_policy.mjs';
 
 /**
  * 冲突类型常量
@@ -210,6 +210,15 @@ export async function executePlan(plan, options = {}) {
     };
   }
   const planExclusions = plan.exclusions;
+  try {
+    for (const action of plan.fileActions) {
+      for (const value of [action.sourcePath, action.targetPath, action.filePath]) {
+        if (value) assertNotPolicyCarrier(repoRoot, value);
+      }
+    }
+  } catch (error) {
+    return { status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED, reason: error.message, txId };
+  }
   const isPlanPathExcluded = buildExclusionMatcher(planExclusions);
   const isExcludedHit = (value) => {
     if (!value) return false;

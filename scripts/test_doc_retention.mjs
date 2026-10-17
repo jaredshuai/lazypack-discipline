@@ -4,10 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { buildMigrationPlan } from '../skills/lazypack-setup/scripts/doc_plan.mjs';
 import { executePlan } from '../skills/lazypack-setup/scripts/doc_executor.mjs';
+import { scanProjectDocuments } from '../skills/lazypack-setup/scripts/doc_scanner.mjs';
 
 const helper = fileURLToPath(new URL('../skills/lazypack-setup/scripts/doc_helper.mjs', import.meta.url));
 function fixture(t, roles = '# Roles\nraw_qa: docs/old-private\n') {
@@ -142,3 +143,100 @@ test('CLI plan and execute round trip preserves an absent-policy baseline', t =>
   assert.equal(executed.status, 0, executed.stdout + executed.stderr);
   assert.equal(JSON.parse(executed.stdout).status, 'SUCCESS');
 });
+
+test('junction repository root is rejected', async t => {
+  const f = fixture(t);
+  const alias = path.join(f.root, 'alias');
+  fs.symlinkSync(f.repo, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  assert.throws(() => buildMigrationPlan(alias, {}, { inboundReferences: {} }), /RETENTION_POLICY_UNREADABLE/);
+});
+
+for (const [label, roles, source, target] of [
+  ['source', '# Roles\n', 'docs/agents/roles.md', 'docs/moved-roles.md'],
+  ['target', null, 'notes.md', 'docs/agents/roles.md']
+]) {
+  test('policy carrier cannot be a migration ' + label, t => {
+    const f = fixture(t, roles);
+    assert.throws(() => buildMigrationPlan(f.repo, {
+      migrate_items: [{ source_path: source, target_path: target }]
+    }, { inboundReferences: {} }), /POLICY_FILE_RESERVED/);
+  });
+}
+
+test('real scanner inbound policy reference is rejected before serializing its content', t => {
+  const f = fixture(t);
+  fs.writeFileSync(f.policy, '# Roles\nPRIVATE_ALIAS [notes](../../notes.md)\n');
+  const scan = scanProjectDocuments(f.repo);
+  assert.ok(scan.inboundReferences['notes.md'].some(ref => ref.sourceRelPath === 'docs/agents/roles.md'));
+  assert.throws(() => buildMigrationPlan(f.repo, {
+    migrate_items: [{ source_path: 'notes.md', target_path: 'docs/notes.md' }]
+  }, scan), /POLICY_FILE_RESERVED/);
+});
+
+test('executor rejects a self-consistent plan replacing the policy carrier', async t => {
+  const f = fixture(t);
+  f.plan.fileActions.push({ action: 'REWRITE_INBOUND_REFERENCE', filePath: 'docs/agents/roles.md', contentToWrite: 'replacement' });
+  f.plan.planSummary.fileActions.push({ action: 'REWRITE_INBOUND_REFERENCE', sourcePath: 'docs/agents/roles.md', targetPath: null });
+  f.plan.planSummary.actionsCount++;
+  f.plan.planFp = crypto.createHash('sha256').update(JSON.stringify(f.plan.planSummary)).digest('hex');
+  await blockedBeforeIO(t, f, /POLICY_FILE_RESERVED/);
+});
+
+for (const changeDuringScan of [false, true]) {
+  test(changeDuringScan ? 'CLI rejects a policy change during scanning' : 'CLI validates policy before reading any scanned input', t => {
+    const f = fixture(t);
+    if (!changeDuringScan) { fs.unlinkSync(f.policy); fs.mkdirSync(f.policy); }
+    const guard = path.join(f.root, 'guard.mjs');
+    const marker = path.join(f.root, 'input-was-read');
+    const spec = path.join(f.root, 'spec.json');
+    const out = path.join(f.root, 'cli-plan.json');
+    fs.writeFileSync(spec, JSON.stringify({ preserve_items: [{ path: 'notes.md' }] }));
+    fs.writeFileSync(guard, `import fs from 'node:fs'; import path from 'node:path';
+const original=fs.readFileSync;
+fs.readFileSync=function(p,...args){
+ if(typeof p==='string' && path.resolve(p)===${JSON.stringify(path.join(f.repo, 'notes.md'))}){
+  fs.writeFileSync(${JSON.stringify(marker)},'read');
+  ${changeDuringScan ? `fs.writeFileSync(${JSON.stringify(f.policy)},'changed during scan');` : ''}
+ }
+ return original.call(this,p,...args);
+};`);
+    const p = spawnSync(process.execPath, ['--import', pathToFileURL(guard).href, helper, 'plan', '--cwd', f.repo, '--input', spec, '--out', out],
+      { encoding: 'utf8', windowsHide: true });
+    assert.equal(p.status, 1, p.stdout + p.stderr);
+    assert.match(p.stderr, changeDuringScan ? /RETENTION_POLICY_DRIFT/ : /RETENTION_POLICY_UNREADABLE/);
+    assert.equal(fs.existsSync(marker), changeDuringScan);
+    assert.equal(fs.existsSync(out), false);
+  });
+}
+
+test('CLI explicit exclusion is persisted and prevents an excluded migration', t => {
+  const f = fixture(t);
+  fs.mkdirSync(path.join(f.repo, 'docs/old-private'));
+  fs.writeFileSync(path.join(f.repo, 'docs/old-private/secret.md'), 'SECRET_SENTINEL');
+  const spec = path.join(f.root, 'spec.json');
+  const out = path.join(f.root, 'cli-plan.json');
+  const args = [helper, 'plan', '--cwd', f.repo, '--input', spec, '--out', out, '--exclude', 'docs/old-private/'];
+  fs.writeFileSync(spec, JSON.stringify({ preserve_items: [{ path: 'notes.md' }] }));
+  const p = spawnSync(process.execPath, args, { encoding: 'utf8', windowsHide: true });
+  assert.equal(p.status, 0, p.stdout + p.stderr);
+  const plan = JSON.parse(fs.readFileSync(out, 'utf8'));
+  assert.deepEqual(plan.exclusions, ['docs/old-private']);
+  assert.deepEqual(plan.planSummary.exclusions, ['docs/old-private']);
+  assert.equal(JSON.stringify(plan).includes('SECRET_SENTINEL'), false);
+  fs.unlinkSync(out);
+  fs.writeFileSync(spec, JSON.stringify({ migrate_items: [{ source_path: 'docs/old-private/secret.md', target_path: 'docs/leak.md' }] }));
+  const rejected = spawnSync(process.execPath, args, { encoding: 'utf8', windowsHide: true });
+  assert.equal(rejected.status, 1);
+  assert.match(rejected.stderr, /ERR_EXCLUDED_PATH/);
+  assert.equal(fs.existsSync(out), false);
+});
+
+for (const oldRoles of [null, '# Existing roles\n']) {
+  test('setup ordering: execute approved migration before writing new roles: ' + (oldRoles ?? 'new'), async t => {
+    const f = fixture(t, oldRoles);
+    const result = await executePlan(f.plan, { approvedPlanFp: f.plan.planFp, backupRoot: f.backup });
+    assert.equal(result.status, 'SUCCESS');
+    fs.writeFileSync(f.policy, '# Approved final roles\n');
+    assert.equal(fs.readFileSync(path.join(f.repo, 'docs/notes.md'), 'utf8'), '# Notes\n');
+  });
+}
