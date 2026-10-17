@@ -18,6 +18,7 @@ import { parseArgs } from 'util';
 import { scanProjectDocuments, computeSha256 } from './doc_scanner.mjs';
 import { buildMigrationPlan } from './doc_plan.mjs';
 import { executePlan, ExecutionStatus } from './doc_executor.mjs';
+import { readRetentionPolicySnapshot, assertRetentionPolicyUnchanged } from './doc_retention_policy.mjs';
 
 const options = {
   cwd: { type: 'string', default: process.cwd() },
@@ -48,6 +49,10 @@ Commands:
 Options:
   --exclude <relpath>  Repeatable. Also skip this repo-relative path and its
                        descendants (e.g. a configured retention.paths.raw_qa).
+
+  Plans bind the exact docs/agents/roles.md bytes (or absence) to approval.
+  Execute revalidates this snapshot before migration reads or writes.
+  Changed/unreadable policy or an old plan without a snapshot requires replanning.
     `);
     process.exit(0);
   }
@@ -71,8 +76,11 @@ Options:
     const specPath = path.resolve(values.input);
     const planSpec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
 
+    const policyBeforeScan = readRetentionPolicySnapshot(cwd);
     const scanResult = scanProjectDocuments(cwd, { excludePaths: values.exclude || [] });
+    assertRetentionPolicyUnchanged(cwd, policyBeforeScan);
     const plan = buildMigrationPlan(cwd, planSpec, scanResult, { excludePaths: values.exclude || [] });
+    assertRetentionPolicyUnchanged(cwd, policyBeforeScan);
     const json = JSON.stringify(plan, null, 2);
 
     if (values.out) {

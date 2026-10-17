@@ -161,7 +161,7 @@ description: >-
 - **受控物理迁移规划 (Phase 2)**:
   - **默认首选**: 坚持 `preserve-existing`（原位保留与登记）为默认路径，绝不把"整理文档"等同于"必须迁移"；
   - **正当性准入**: 仅当用户显式要求重组目录，或存量文档位置严重违背工程规范时，Agent 方可生成迁移计划规范 `plan_spec.json`；
-  - **确定性计划计算**: 调用 `node skills/lazypack-setup/scripts/doc_helper.mjs plan --cwd <targetRepo> --input <plan_spec.json>` 计算出站/入站相对链接重写、`docs/ARTIFACTS.md` Section 3 登记行追加、预期哈希以及双指纹（`input_fp` 与 `plan_fp`）；
+  - **确定性计划计算**: 调用 `node skills/lazypack-setup/scripts/doc_helper.mjs plan --cwd <targetRepo> --input <plan_spec.json>` 计算出站/入站相对链接重写、`docs/ARTIFACTS.md` Section 3 登记行追加、预期哈希以及双指纹（`input_fp` 与 `plan_fp`）；在命令中以重复 `--exclude <相对路径>` 传入当前生效策略与本次已确认拟写策略的 raw_qa 仓内路径并集，保证迁移先执行时两种策略的敏感路径都受保护；角色文件由 setup 保持原位，迁移源、目标或入站重写涉及它时停止该迁移计划，采用保留原位方案或先完成独立的角色引用更新后重新规划。
 - **三种在途流程状态与写前零写入拦截**: 当探测到同一业务主题存在多份竞争基准（如 `specs/pay-v1.md` 与 `specs/pay-v2.md`）时，向用户呈现单次合并澄清；用户选定项标为 `current`；**仅当用户明确确认存在替代/废弃关系时**，被取代项才标记为 `superseded` 并互指新项；**若用户仅选定 current 但未确认其他旧项状态或关系未知，其他旧项严格保持待裁（`待裁 / unconfirmed`），严禁擅自自动降级为 `superseded` 或 `reference`**；原件物理位置保持不变，**首期绝不自动执行 git mv 归档**；已有登记行依首期保护不予覆盖；
 - **用户请求迁移处理**: 若用户在交互中要求将文件物理搬迁至标准推荐目录，Agent 明确告知 Phase 1 仅支持保留既有原位登记（`preserve-existing`），物理迁移与链接重构属于 Phase 2 治理规划；询问用户是否接受原位保留登记；若用户不接受，保持**零写入并安全退出**；
 - **三种在途流程状态与写前零写入拦截**: 未答/超时记为 `pending`，明确拒绝记为 `declined`，迁移未果记为 `migration-unsupported-declined`；三者均严禁写入登记册，对应零写入门禁必须在写盘前判定拦截，原件不降级，保持目标文件严格零相关写入；
@@ -225,7 +225,7 @@ description: >-
     * **受控物理迁移规划 (Phase 2)**:
       - **默认首选**: 坚持 `preserve-existing`（原位保留与登记）为默认路径，绝不把“整理文档”等同于“必须迁移”；
       - **正当性准入**: 仅当用户显式要求重组目录，或存量文档位置严重违背工程规范时，Agent 方可生成迁移计划规范 `plan_spec.json`；
-      - **确定性计划计算**: 调用 `node skills/lazypack-setup/scripts/doc_helper.mjs plan --cwd <targetRepo> --input <plan_spec.json>` 计算出站/入站相对链接重写、`docs/ARTIFACTS.md` Section 3 登记行追加、预期哈希以及双指纹（`input_fp` 与 `plan_fp`）；
+      - **确定性计划计算**: 沿用 3.A 的计划计算与排除参数契约（当前及拟写策略的 raw_qa 仓内路径并集）；已有计划不重复生成。新增真实变更须回到整体确认，不能沿用另一份计划的审批指纹；
     * **三种在途流程状态与写前零写入拦截**: 当探测到同一业务主题存在多份竞争基准（如 `specs/pay-v1.md` 与 `specs/pay-v2.md`）时，向用户呈现单次合并澄清；用户选定项标为 `current`；**仅当用户明确确认存在替代/废弃关系时**，被取代项才标记为 `superseded` 并互指新项；**若用户仅选定 current 但未确认其他旧项状态或关系未知，其他旧项严格保持待裁（`待裁 / unconfirmed`），严禁擅自自动降级为 `superseded` 或 `reference`**；原件物理位置保持不变，**首期绝不自动执行 git mv 归档**；已有登记行依首期保护不予覆盖；
     * **用户请求迁移处理**: 若用户在交互中要求将文件物理搬迁至标准推荐目录，Agent 明确告知 Phase 1 仅支持保留既有原位登记（`preserve-existing`），物理迁移与链接重构属于 Phase 2 治理规划；询问用户是否接受原位保留登记；若用户不接受，保持**零写入并安全退出**；
     * **三种在途流程状态与写前零写入拦截**: 未答/超时记为 `pending`，明确拒绝记为 `declined`，迁移未果记为 `migration-unsupported-declined`；三者均严禁写入登记册，对应零写入门禁必须在写盘前判定拦截，原件不降级，保持目标文件严格零相关写入；
@@ -302,6 +302,20 @@ description: >-
 ### 第 5 步：精准写入顺序 (PRECISE Execution)
 
 用户整体确认后，按以下严格顺序安全写盘（写入规则遵循 [references/managed-blocks.md](references/managed-blocks.md)）：
+0. **先执行受控迁移与文档登记单批次顺序执行与补偿保护 (Deterministic Execution with Single Atomic Write & Rollback Defense)**：
+   - 先完成下文第 6 项的前置保护及零写入门禁裁决；若登记册受保护或对应项仍待答/拒绝，本步及后续相关写入均暂停。以下第 6 项的保护规则在执行迁移前即适用。
+   - 若本次变更包含文档归属整理或物理迁移，Agent 调用确定性执行器：
+     `node skills/lazypack-setup/scripts/doc_helper.mjs execute --cwd <targetRepo> --plan <plan.json> --approved-fp <plan_fp>`
+   - **执行器刚性防御**：
+     * 复核 `approved_plan_fp === current_plan_fp` 且磁盘无输入漂移，否则返回 `APPROVAL_DRIFT_BLOCKED` 阻断写盘；
+     * 严格检查 `backupRoot` 物理隔离（默认在系统临时目录，严禁位于目标代码仓内部）；
+     * 执行入口统一执行路径边界防伪（防逃逸、防跨盘、防越界符号链接）；
+     * 检查 `pre_write_target_collision`（目标物理路径是否已被占用）；
+     * 顺序写盘目标文件（含出站链接重写）、重写全仓入站引用、写盘 `docs/ARTIFACTS.md` Section 3，并物理删除已迁移源文件；每步执行前记录 WAL 意向日志；
+     * **物证核验**：核验目标文件最终哈希与预期输出哈希一致，源文件删除核验，有界扫描范围内的 Markdown 标准相对链接零死链核验；
+     * **自愈与防覆写补偿**：若执行失败触发应用层逆序补偿回滚；回滚还原前逐一核对当前磁盘哈希；若遇 `pre_rollback_collision`（源路径被外部重建或引用文件/登记册被外部篡改），暂停并挂起当前状态 (`SUSPENDED_ON_CONFLICT`)，刚性禁止覆盖外部修改，保留现场与外部数据。
+   - 本步必须早于清单写入、依赖安装及角色文件更新。若返回任何阻断状态，停止后续 setup 写入，展示差异并重新生成/确认计划；不得把实际磁盘变化重算为原审批基线。
+   - 第 4 步同时展示本批次迁移结果与其后 setup 的最终草案。迁移成功后，后续步骤只对本批次实际改变的文件使用计划里已批准的预期输出哈希作写前基线；必须先核对磁盘与该哈希一致。其他文件仍用第 4 步原基线，不从任意实时磁盘内容刷新基线。
 1. **应用已确认的最小新仓配置与清单补缺 (Pre-install Manifest & Config Provisioning)**：
    - 若为新仓初始化分支（如新仓 TS）或已有工程清单字段缺失，优先写入整体确认清单内的最小新仓文件或补缺字段（新仓 `package.json`、scripts 动态路径、`packageManager` 声明、双 tsconfig 即 `tsconfig.json` 与 `tsconfig.build.json`、以及单包自安装保护 `pnpm-workspace.yaml`；Python 对应 `pyproject.toml` 既有约定）；
    - **严格受控边界**：仅写入确认清单内明示的文件与字段；既有文件与配置遵循按项补缺与冲突保护，若遇冲突暂停（`PAUSE`）由人工裁决；父级 workspace 绝不覆盖篡改；空仓无测试时不捏造 dummy 测试用例获取绿灯；
@@ -357,22 +371,12 @@ description: >-
      * **条件**：总是生成（与 AGENTS.md 同级）
      * **来源**：`templates/section9-discussion-protocol.md`（原样复制，不做变量替换）
      * **用途**：当需要改固定层条文时，提供 §9 多 AI 讨论的详细执行流程（临时目录、提示词隔离、三轮流程、独立性约束等）
-6. **受控迁移与文档登记单批次顺序执行与补偿保护 (Deterministic Execution with Single Atomic Write & Rollback Defense)**：
-   - 若本次变更包含文档归属整理或物理迁移，Agent 调用确定性执行器：
-     `node skills/lazypack-setup/scripts/doc_helper.mjs execute --cwd <targetRepo> --plan <plan.json> --approved-fp <plan_fp>`
-   - **执行器刚性防御**：
-     * 复核 `approved_plan_fp === current_plan_fp` 且磁盘无输入漂移，否则返回 `APPROVAL_DRIFT_BLOCKED` 阻断写盘；
-     * 严格检查 `backupRoot` 物理隔离（默认在系统临时目录，严禁位于目标代码仓内部）；
-     * 执行入口统一执行路径边界防伪（防逃逸、防跨盘、防越界符号链接）；
-     * 检查 `pre_write_target_collision`（目标物理路径是否已被占用）；
-     * 顺序写盘目标文件（含出站链接重写）、重写全仓入站引用、写盘 `docs/ARTIFACTS.md` Section 3，并物理删除已迁移源文件；每步执行前记录 WAL 意向日志；
-     * **物证核验**：核验目标文件最终哈希与预期输出哈希一致，源文件删除核验，有界扫描范围内的 Markdown 标准相对链接零死链核验；
-     * **自愈与防覆写补偿**：若执行失败触发应用层逆序补偿回滚；回滚还原前逐一核对当前磁盘哈希；若遇 `pre_rollback_collision`（源路径被外部重建或引用文件/登记册被外部篡改），暂停并挂起当前状态 (`SUSPENDED_ON_CONFLICT`)，刚性禁止覆盖外部修改，保留现场与外部数据。
+6. **产物登记册写入与整文件保护**：
    - `docs/ARTIFACTS.md`：
      * **前置门禁裁决与整文件保护**：在对本文件开展任何写入前，首先裁决前置保护与零写入门禁。若目标文件处于 `PAUSE`、`BROKEN` 或未托管状态，保持整文件保护零写入；若同主题冲突或留存策略处于 `pending` 或 `declined`，对应项的零写入门禁必须在写盘前判定拦截，严禁写入后再宣布零写入；
      * **统一写前重读防外部并发篡改 (Unified Pre-write Re-read Defense)**：在执行写盘前，重新读取磁盘上的目标文件：
-       - 若目标文件为 NEW（拟新建）：校验磁盘上目标文件物理不存在；若磁盘上已意外出现该文件，立即触发 `PAUSE`；
-       - 若目标文件为既有文件：读取其实时磁盘字节并计算 SHA256，与第 4 步记录的统一写前基线哈希 $H_{\text{baseline}}$ 比对。若哈希不符（表明在用户确认期间被外部并发修改），**立即触发 `PAUSE` 暂停写盘并向用户告警**；绝对禁止覆写外部改动，亦不执行回滚；绝不将外部并发变更吸收为己方基线；
+       - 若目标文件为 NEW（拟新建）且本轮第 0 项迁移没有创建它：校验磁盘上目标文件物理不存在；若磁盘上已意外出现该文件，立即触发 `PAUSE`；
+       - 若目标文件为既有文件：读取其实时磁盘字节并计算 SHA256，与第 4 步记录的统一写前基线哈希 $H_{\text{baseline}}$ 比对；仅本轮第 0 项迁移已改变的文件，按该步已批准且核验一致的预期输出哈希比对。若哈希不符（表明在用户确认期间被外部并发修改），**立即触发 `PAUSE` 暂停写盘并向用户告警**；绝对禁止覆写外部改动，亦不执行回滚；绝不将外部并发变更吸收为己方基线；
      * **内存统一合并 (In-Memory Merge, 彻底消除自身写入误判并发)**：重读核验通过后，在内存中统一计算受管区与协作区变更：
        - 受管区：严格基于前置存在核验（`docs/agents/issue-tracker.md`）及上述独立产物的真实写入成功状态渲染登记行；重新从磁盘采样 Layer 0 依赖状态生成最终 `header.input` 并计算 `fp`；若某产物处于 `PAUSE`、`BROKEN` 或未托管状态，彻底省略对应登记行；若受管块内容与磁盘已有托管块完全一致，判定为 `NO-OP`；
        - 协作区 (Section 3)：四类登记对象（本地文件/章节存在且非空、存在的目录索引入口、声明的外部 URL 不抓取、留存协作种子与私有绑定维持原有 session-auth 契约）经确认后按 5 列推荐表头（或既有兼容排版）与 POSIX 规范相对路径/章节锚点（`path#anchor`）去重追加；绝不覆盖已有旧表头与人工行；

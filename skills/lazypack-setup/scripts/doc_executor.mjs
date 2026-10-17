@@ -12,6 +12,7 @@ import os from 'os';
 import crypto from 'crypto';
 import { computeSha256, normalizeRelPath, buildExclusionMatcher, realRepoRelPath } from './doc_scanner.mjs';
 import { assertPathWithinRepo } from './doc_plan.mjs';
+import { readRetentionPolicySnapshot, isRetentionPolicySnapshot, assertNotPolicyCarrier } from './doc_retention_policy.mjs';
 
 /**
  * 冲突类型常量
@@ -185,7 +186,39 @@ export async function executePlan(plan, options = {}) {
       txId
     };
   }
+  // Revalidate policy before migration content reads, backups, WAL or writes.
+  // Older plans have no approved policy baseline and must be regenerated.
+  const approvedPolicy = plan.planSummary.retentionPolicy;
+  if (!isRetentionPolicySnapshot(approvedPolicy)) {
+    return {
+      status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED,
+      reason: 'RETENTION_POLICY_BASELINE_MISSING: Regenerate the plan and obtain approval for its new fingerprint.',
+      txId
+    };
+  }
+  let currentPolicy;
+  try {
+    currentPolicy = readRetentionPolicySnapshot(repoRoot);
+  } catch (error) {
+    return { status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED, reason: error.message, txId };
+  }
+  if (currentPolicy.sha256 !== approvedPolicy.sha256) {
+    return {
+      status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED,
+      reason: 'RETENTION_POLICY_DRIFT: docs/agents/roles.md changed after planning; re-read retention policy, regenerate exclusions and obtain approval for a new plan.',
+      txId
+    };
+  }
   const planExclusions = plan.exclusions;
+  try {
+    for (const action of plan.fileActions) {
+      for (const value of [action.sourcePath, action.targetPath, action.filePath]) {
+        if (value) assertNotPolicyCarrier(repoRoot, value);
+      }
+    }
+  } catch (error) {
+    return { status: ExecutionStatus.APPROVAL_DRIFT_BLOCKED, reason: error.message, txId };
+  }
   const isPlanPathExcluded = buildExclusionMatcher(planExclusions);
   const isExcludedHit = (value) => {
     if (!value) return false;

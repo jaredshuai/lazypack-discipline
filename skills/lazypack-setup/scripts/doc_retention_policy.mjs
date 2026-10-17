@@ -1,0 +1,64 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { realRepoRelPath } from './doc_scanner.mjs';
+
+export const RETENTION_POLICY_PATH = 'docs/agents/roles.md';
+
+// roles.md stores rendered policy, not a reliably parseable retention JSON object.
+// Bind its exact bytes (including absence) rather than infer policy from prose.
+// Only this fixed metadata file is read; no raw_qa contents or aliases are opened.
+export function readRetentionPolicySnapshot(repoRoot) {
+  const segments = ['docs', 'agents', 'roles.md'];
+  let current = path.resolve(repoRoot);
+  try {
+    const rootStat = fs.lstatSync(current);
+    if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('Unsafe repository root');
+    for (const [index, segment] of segments.entries()) {
+      current = path.join(current, segment);
+      const stat = fs.lstatSync(current, { throwIfNoEntry: false });
+      if (!stat) return { version: 1, sha256: null };
+      if (stat.isSymbolicLink() || (index < segments.length - 1 ? !stat.isDirectory() : !stat.isFile())) {
+        throw new Error('Unsafe policy file or parent');
+      }
+    }
+    const fd = fs.openSync(current, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    try {
+      if (!fs.fstatSync(fd).isFile()) throw new Error('Policy is not a regular file');
+      const bytes = fs.readFileSync(fd);
+      return { version: 1, sha256: crypto.createHash('sha256').update(bytes).digest('hex') };
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    const error = new Error('RETENTION_POLICY_UNREADABLE: Cannot safely read docs/agents/roles.md; restore a regular readable file and regenerate the plan.');
+    error.code = 'ERR_RETENTION_POLICY_UNREADABLE';
+    throw error;
+  }
+}
+
+export function assertRetentionPolicyUnchanged(repoRoot, approvedPolicy) {
+  if (readRetentionPolicySnapshot(repoRoot).sha256 !== approvedPolicy.sha256) {
+    const error = new Error('RETENTION_POLICY_DRIFT: Policy changed during planning; re-read policy and exclusions before generating a new plan.');
+    error.code = 'ERR_RETENTION_POLICY_DRIFT';
+    throw error;
+  }
+}
+
+// The fixed policy carrier belongs to setup, not to the document migrator.
+// Check physical aliases as well as portable, case-insensitive lexical names.
+export function assertNotPolicyCarrier(repoRoot, value) {
+  const relative = path.relative(path.resolve(repoRoot), path.resolve(repoRoot, value)).replace(/\\/g, '/');
+  const real = realRepoRelPath(repoRoot, value);
+  if ([relative, real].some(p => p?.toLowerCase() === RETENTION_POLICY_PATH)) {
+    const error = new Error('POLICY_FILE_RESERVED: The document migrator cannot move, replace or rewrite docs/agents/roles.md; keep it in place and handle affected links through an approved setup update.');
+    error.code = 'ERR_POLICY_FILE_RESERVED';
+    throw error;
+  }
+}
+
+export function isRetentionPolicySnapshot(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    value.version === 1 && Object.keys(value).sort().join(',') === 'sha256,version' &&
+    (value.sha256 === null || (typeof value.sha256 === 'string' && /^[a-f0-9]{64}$/.test(value.sha256)));
+}
