@@ -41,9 +41,17 @@ export function inspectHookBytes(bytes, mode = 'new') {
   } else if (!/^#!\/[\x21-\x7e]+(?:[ \t]+[\x21-\x7e]+)*\n$/.test(first.toString('utf8'))) {
     return result(false, 'INVALID_EXISTING_SHEBANG', 'existing native hook must preserve a valid absolute interpreter shebang');
   }
+  // New native files must be entirely LF; CRLF in the body can break POSIX sh.
+  // Existing-file CRLF is a separate protected-content/explicit-repair case.
+  if (mode === 'new' && bytes.includes(0x0d)) {
+    return result(false, 'NEW_HOOK_NON_LF', 'new native hook contains CR bytes after the shebang');
+  }
 
   // Match complete, unique, line-delimited markers, not a substring in shell code.
   const source = bytes.toString('utf8');
+  if (!Buffer.from(source, 'utf8').equals(bytes)) {
+    return result(false, 'INVALID_UTF8', 'hook bytes are not valid round-trippable UTF-8');
+  }
   const lines = [];
   let offset = 0;
   for (const raw of source.split('\n')) {
@@ -61,6 +69,13 @@ export function inspectHookBytes(bytes, mode = 'new') {
   }
   const start = lines[startIds[0]];
   const end = lines[endIds[0]];
+  // Fail closed on a plainly terminal prelude; this does NOT parse arbitrary shell
+  // control flow. Actual managed-gate execution still needs runtime evidence.
+  const preceding = lines.slice(0, startIds[0]).map(entry => entry.line.trim())
+    .filter(line => line && !line.startsWith('#'));
+  if (/^exit(?:[ \t]+[^#]+)?(?:[ \t]*#.*)?$/.test(preceding.at(-1) ?? '')) {
+    return result(false, 'UNREACHABLE_MANAGED_BLOCK', 'managed block follows an unconditional exit statement');
+  }
   const header = HEADER_RE.exec(start.line);
   if (!header || end.line !== END_MARKER) {
     return result(false, 'INVALID_MANAGED_MARKERS', 'managed block metadata or end marker is malformed');
@@ -82,7 +97,9 @@ function readGit(repo, args) {
   if (p.error?.code === 'ETIMEDOUT') return result(false, 'GIT_TIMEOUT', 'git query timed out');
   if (p.error) return result(false, 'GIT_UNAVAILABLE', 'git invocation failed');
   if (p.status !== 0) return result(false, 'GIT_QUERY_FAILED', 'git query returned nonzero exit code');
-  return { ok: true, value: p.stdout.trim() };
+  // Preserve quoted leading/trailing whitespace in Git config values.
+  // Only strip the record terminator emitted by Git itself.
+  return { ok: true, value: p.stdout.replace(/\r?\n$/, '') };
 }
 
 /** Only reads target files and Git metadata, never executes Git hooks. */

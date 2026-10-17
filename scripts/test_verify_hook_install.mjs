@@ -53,6 +53,24 @@ check('existing valid Bash interpreter accepted, not replaced by new-mode', () =
   assert.equal(inspectHookBytes(bash, 'existing').code, 'STATIC_BYTES_OK');
   assert.equal(inspectHookBytes(bash, 'new').code, 'WRONG_NEW_SHEBANG');
 });
+check('new hook with LF shebang and CRLF managed body is rejected', () => {
+  const broken = Buffer.from(good.replace('EXIT_CODE=0\n', 'EXIT_CODE=0\r\n'));
+  assert.equal(inspectHookBytes(broken, 'new').code, 'NEW_HOOK_NON_LF');
+});
+check('malformed UTF-8 rejected even if its lossy-decoded body hash was planted', () => {
+  let raw = Buffer.from(good, 'utf8');
+  raw[raw.indexOf(Buffer.from('EXIT_CODE=0'))] = 0xff;
+  const text = raw.toString('utf8');
+  const begin = text.indexOf('\n', text.indexOf(header)) + 1;
+  const end = text.indexOf(footer, begin);
+  const fake = crypto.createHash('sha256').update(text.slice(begin, end), 'utf8').digest('hex').slice(0, 16);
+  raw = Buffer.from(raw.toString('latin1').replace(/fp=[0-9a-f]{16}/, 'fp=' + fake), 'latin1');
+  assert.equal(inspectHookBytes(raw, 'new').code, 'INVALID_UTF8');
+});
+check('existing managed block immediately after unconditional exit 0 is rejected', () => {
+  const stopped = Buffer.from(good.replace(header, 'exit 0\n' + header));
+  assert.equal(inspectHookBytes(stopped, 'existing').code, 'UNREACHABLE_MANAGED_BLOCK');
+});
 check('Bash interpreter with CRLF rejected, repair must preserve Bash', () => {
   const bash = Buffer.from(good.replace(first, '#!/usr/bin/env bash\r\n'));
   assert.equal(inspectHookBytes(bash, 'existing').code, 'CRLF_SHEBANG');
@@ -119,6 +137,11 @@ try {
     assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.git/hooks').status, 0);
     assert.equal(inspectHookInstallation({ cwd: repo }).code, 'HOOKS_PATH_MISMATCH');
     assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks').status, 0);
+  });
+  check('trailing whitespace in Git hooksPath does not get trimmed into a false match', () => {
+    assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks ').status, 0);
+    try { assert.equal(inspectHookInstallation({ cwd: repo }).code, 'HOOKS_PATH_MISMATCH'); }
+    finally { assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks').status, 0); }
   });
   check('invalid --mode uses documented exit code 2', () => {
     const p = cli('--mode', 'bogus');
