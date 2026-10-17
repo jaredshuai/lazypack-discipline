@@ -49,17 +49,21 @@
    - 在写盘前的一次性确认清单中明确提示用户将执行：`git config core.hooksPath .githooks`。
 
 ### 2.2 跨平台兼容性与激活证据划分
-- **POSIX**：脚本第一行使用 `#!/bin/sh`；赋予可执行权限（`chmod +x <hook-path>`）。
+- **POSIX**：本技能新建的原生 `.githooks/pre-commit` 第一行固定 `#!/bin/sh` + LF，且整份新文件统一 LF（检查器拒绝正文混入 CRLF）；既有合法解释器（如 `#!/bin/bash`、`#!/usr/bin/env bash`）原样保留，若仅首行 CRLF 需要修复，只能在确认后保留原解释器并转换行尾为 LF。BOM 不得被移到解释器之后；无法安全移除时暂停。赋予权限（`chmod +x`）后用当前用户的有效执行权限（等价 `test -x`）核验；管理器入口遵循自身契约。
 - **Windows**：Git for Windows 自带 MSYS2 `sh.exe`，在 `core.hooksPath` 配置后能够原生执行该脚本。
 - **严格区分配置就绪与运行时验证**：
   1. **静态配置就绪 (Configured)**：
      - 对应的 Hook 入口脚本已存在且非空；
+     - 本技能新建的原生 `.githooks/pre-commit` 第一行字节恰为 `#!/bin/sh`（块外固定内容，写后必须读回断言）；既有合法解释器入口与管理器入口不适用本条；
      - `core.hooksPath`（或管理器配置）已正确指向对应目录；
      - POSIX 系统下脚本具备执行权限（`test -x`）。
      - 这**仅代表本地静态配置就绪，绝不能宣称 Git 真实激活**！
+     - 原生 `.githooks/pre-commit` 在 Node 可用时，还需在写盘和 Git 路由配置完成后执行只读检查（既有解释器检查只涵盖 shebang 语法，不证明目标解释器已安装）：`node <lazypack-setup目录>/scripts/verify_hook_install.mjs --cwd <目标仓根> --mode new`（新建）或 `--mode existing`（既有有效解释器）。退出码 0、`code=CONFIGURED_STATIC_ONLY` 仅表示首行字节、唯一完整受管块与 `fp`、路径无符号链接越界、POSIX 有效执行权限和 Hook 路由等静态检查通过；不得写成 Runtime Verified。非零应暂停并报告原因码；BOM、CRLF、错误 shebang 必须明确处理，不能将 BOM 移入第二行或未经确认覆盖既有合法解释器。Node 不可用或管理器入口不适用时，记录替代静态核验的实际证据或如实标未验证；
   2. **运行时已验证 (Runtime Verified)**：
-     - 必须在本地由 Git 原生机制实际触发调用（例如在验证环境中执行 `git hook run pre-commit`），且记录 Git 实际调用的命令、退出码与独立可观测证据。
+     - 必须在本地由 Git 原生机制实际触发调用（例如在验证环境中执行 `git hook run <hook-name>`），且记录 Git 实际调用的命令、退出码与独立可观测证据。当前本技能仅管理 `pre-commit`，后续扩展到其他 hook 类型时按同一模板执行。
+     - **验证方式限定**：运行时验证只认 Git 原生触发（`git hook run <hook-name>`），**严禁以真实 `git commit` 充当验证手段**（真实提交会留下提交记录并改动暂存区与分支历史）；以 `sh <file>` 等显式解释器直调不属于 Git 原生触发——解释器直调不要求 shebang，无法暴露首行缺失，其结果不得作为运行时验证证据。
      - **`git hook run` 边界声明**：执行 `git hook run pre-commit` 仅为触发 Hook 脚本运行，**并不是创建 Git 提交（not a commit）**；若项目处于全拒绝分支（未创建 Hook），`git hook run` 不触发或报错，**绝不能把 Hook 文件不存在误判为门禁通过**，必须明确断言 Hook 文件的缺席且无自动生成。
+     - **执行已到达受管门禁的证据**：只有 Git 退出码 0、没有 `[lazypack]` 四槽输出时，不能认定门禁运行成功。应从真实输出逐槽确认 `format`、`lint`、`type`、`test` 已执行或明确跳过；若已有 Hook 的前置 `exit 0` 使受管块不可达，则即使 `git hook run` 退出 0 也应标 `运行时未验证`，不得称质量门禁通过。静态检查器只对紧靠受管块前的明显无条件 `exit` 做保守失败检查（返回非零退出码），不声称可以解析所有 shell 控制流。
      - **调用证据与检查结果解耦**：若 Git 原生调用了 Hook，但其中某项门禁返回非零（或阻断），证明 **Git Hook 运行时调用已验证 (Runtime Verified)，但门禁检查失败 (Check Failed)**。两者严格分开记录，绝不能因为调用成功就称检查通过，也不能因为检查失败就否定 Git 调用的真实性。
   3. **未验证标注**：
      - 若未在实际环境中由 Git 原生机制触发过运行时验证，激活状态必须如实标注为 `未验证`（仅标明静态配置就绪）。
