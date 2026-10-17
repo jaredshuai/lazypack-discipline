@@ -49,18 +49,18 @@
    - 在写盘前的一次性确认清单中明确提示用户将执行：`git config core.hooksPath .githooks`。
 
 ### 2.2 跨平台兼容性与激活证据划分
-- **POSIX**：脚本第一行使用 `#!/bin/sh`；赋予可执行权限（`chmod +x <hook-path>`）。
+- **POSIX**：本技能新建的原生 `.githooks/pre-commit` 脚本第一行固定使用 `#!/bin/sh`；赋予可执行权限（`chmod +x <hook-path>`）。既有 Hook 若已使用其他合法解释器（如 `#!/bin/bash`），不强制改写亦不判失败；管理器入口（如 `.husky/pre-commit`）按各自管理器契约处理，无 shebang 要求。
 - **Windows**：Git for Windows 自带 MSYS2 `sh.exe`，在 `core.hooksPath` 配置后能够原生执行该脚本。
 - **严格区分配置就绪与运行时验证**：
   1. **静态配置就绪 (Configured)**：
      - 对应的 Hook 入口脚本已存在且非空；
-     - 脚本第一行字节恰为 `#!/bin/sh`（块外固定内容，写后必须读回断言）；
+     - 本技能新建的原生 `.githooks/pre-commit` 第一行字节恰为 `#!/bin/sh`（块外固定内容，写后必须读回断言）；既有合法解释器入口与管理器入口不适用本条；
      - `core.hooksPath`（或管理器配置）已正确指向对应目录；
      - POSIX 系统下脚本具备执行权限（`test -x`）。
      - 这**仅代表本地静态配置就绪，绝不能宣称 Git 真实激活**！
   2. **运行时已验证 (Runtime Verified)**：
-     - 必须在本地由 Git 原生机制实际触发调用（例如在验证环境中执行 `git hook run pre-commit`），且记录 Git 实际调用的命令、退出码与独立可观测证据。
-     - **验证方式限定**：运行时验证只认 Git 原生触发（`git hook run pre-commit` 或真实 `git commit`）；以 `sh <file>` 等显式解释器直调不属于 Git 原生触发——解释器直调不要求 shebang，无法暴露首行缺失，其结果不得作为运行时验证证据。
+     - 必须在本地由 Git 原生机制实际触发调用（例如在验证环境中执行 `git hook run <hook-name>`），且记录 Git 实际调用的命令、退出码与独立可观测证据。当前本技能仅管理 `pre-commit`，后续扩展到其他 hook 类型时按同一模板执行。
+     - **验证方式限定**：运行时验证只认 Git 原生触发（`git hook run <hook-name>`），**严禁以真实 `git commit` 充当验证手段**（真实提交会留下提交记录并改动暂存区与分支历史）；以 `sh <file>` 等显式解释器直调不属于 Git 原生触发——解释器直调不要求 shebang，无法暴露首行缺失，其结果不得作为运行时验证证据。
      - **`git hook run` 边界声明**：执行 `git hook run pre-commit` 仅为触发 Hook 脚本运行，**并不是创建 Git 提交（not a commit）**；若项目处于全拒绝分支（未创建 Hook），`git hook run` 不触发或报错，**绝不能把 Hook 文件不存在误判为门禁通过**，必须明确断言 Hook 文件的缺席且无自动生成。
      - **调用证据与检查结果解耦**：若 Git 原生调用了 Hook，但其中某项门禁返回非零（或阻断），证明 **Git Hook 运行时调用已验证 (Runtime Verified)，但门禁检查失败 (Check Failed)**。两者严格分开记录，绝不能因为调用成功就称检查通过，也不能因为检查失败就否定 Git 调用的真实性。
   3. **未验证标注**：
