@@ -48,6 +48,10 @@ Commands:
 Options:
   --exclude <relpath>  Repeatable. Also skip this repo-relative path and its
                        descendants (e.g. a configured retention.paths.raw_qa).
+
+  Plans bind the exact docs/agents/roles.md bytes (or absence) to approval.
+  Execute revalidates this snapshot before migration reads or writes.
+  Changed/unreadable policy or an old plan without a snapshot requires replanning.
     `);
     process.exit(0);
   }
