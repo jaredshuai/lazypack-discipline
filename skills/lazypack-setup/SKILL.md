@@ -68,7 +68,7 @@ description: >-
        · 优先级 5（传统纯 JS/无 tsconfig）：受限分支，保留已有命令，缺失项给手动指引；
        · 优先级 6（显式选择 TS 的新仓分支）：**恢复明确选择 TS 的新仓分支**；当目标目录为空目录或未初始化工程，且用户显式指定/选择了 TypeScript 时，**绝对不因无清单而直接退出，亦不自行猜测语言**；直接提供标准 TS 最小化工程模板初始化（ESM `"type": "module"`、最小 package/scripts、双 tsconfig、CLI `parseArgs`、bin/files、可选 MCP、单包 `pnpm-workspace.yaml: verifyDepsBeforeRun: error` 契约）。
    - **解耦声明**：缺对应清单或缺对应包管理器仅限制特定语言配方补缺，**绝对不关闭、不改写仓库已有的其他有效门禁**，亦不阻断通用纪律装配。
-4. **既有质量门禁命令**：检查 `scripts` 或配置文件中已有的 `format`、`lint`、`type`、`test` 命令（如 `eslint`, `prettier`, `biome`, `ruff`, `pytest`, `tsc` 等）。已有命令原样保留。
+4. **既有质量门禁命令**：检查 `scripts` 或配置文件中已有的 `format`、`lint`、`type`、`test` 命令（如 `eslint`, `prettier`, `biome`, `ruff`, `pytest`, `tsc` 等）。已有命令原样保留；同时冻结现有完整调用、工作目录与定义位置。遇到聚合脚本，按 [verification.md §3.3](references/verification.md#33-门禁命令规范执行边界与缓存授权) 只读核实覆盖，再把完整调用分配给各受覆盖槽，不展开内部子命令。
 5. **既有变异测试配置**：检查是否存在变异测试工具配置：
    - TypeScript 项目：检查 `stryker.conf.js`、`stryker.conf.mjs`、`.stryker.conf.json`；
    - Python 项目：检查 `pyproject.toml` 中的 `[tool.mutmut]` 段、`setup.cfg` 中的 `[mutmut]` 段。
@@ -346,6 +346,7 @@ description: >-
      * 若处于未变重跑（NO-OP）：**完全不写盘**（首行缺陷修复场景除外，见上条）；
      * 若采纳了配方（全量或部分）：渲染严格字典序的三段式出处注释行（`# lazypack:preset id=... version=...`），并在 Hook input 中包含 `preset`, `presetSrc` 与规范化 `provenance` 字典；
      * 若全部为既有工具且未采用配方（样例 C）：**完全省略 `# lazypack:preset` 出处行**，Hook input 中省略 `preset`/`presetSrc`/`provenance`；
+     * **聚合调用接线与核对**：按 verification §3.3 的完整调用映射渲染，受覆盖槽均 wired 并保存同一原串；本次 Hook 只跳过后续精确同串槽，不同命令仍各自执行；混合配方时保持各槽 existing 出处。写后逐字比对有效命令与探测时冻结调用，差异须先停下展示，不以覆盖语义等价冒充字面量未变；
      * 若安装失败，脚本明确写入 `install-failed` 状态，确保在提交前能够被阻断；
      * 若执行安全退出：重置配方槽位、移除出处行并重算 Hook `fp` 与 `input`；仅当满足三重整文件删除条件时物理删除；混合 Hook 绝对保留文件与 existing 命令；
    - `CODING_STANDARDS.md`（若未暂停）；
@@ -400,6 +401,7 @@ description: >-
 ### 第 6 步：输出诚实完成报告 (Honesty Report)
 
 写入完成后，输出结构化报告，严格区分各层次事实（遵循 [references/verification.md](references/verification.md) §4 与 §5）：
+- **既有命令保留事实**：逐字比对结果与聚合覆盖、执行来源、共享槽按 verification §3.3/§4 报告；只有有效调用字符串确实一致才可声称原样保留，工作目录适配另列。
 - **依赖安装事实**：列出实际执行的批量安装命令、退出码与命令可调用核验结果；未执行真实安装的环境明确说明为“流程演练”；若有环境残留独立说明。
 - **产物写入与登记事实**：逐项列出路径、实际操作状态（`new` / `append` / `unchanged` / `preserved` / `skipped`）、`src`、`gen`、`fp`。必须准确描述实际发生的操作，严禁使用含混的“已省略”掩盖保护或未修改事实：
   * **拟生成与写入项**：若产物已受管写入，且某下游依赖暂停/损坏，分别准确报告“本轮拟生成内容未纳入该产物指针/登记行”及“实际写入后该文件不存在该行”；
