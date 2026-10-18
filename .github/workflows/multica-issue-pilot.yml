@@ -20,10 +20,10 @@ jobs:
     steps:
       - name: Dispatch one Run Only pilot
         env:
-          MULTICA_WEBHOOK_URL: {{ secrets.MULTICA_GITHUB_PILOT_WEBHOOK_URL }}
-          EVENT_REPOSITORY: {{ github.repository }}
-          EVENT_ISSUE_NUMBER: {{ github.event.issue.number }}
-          EVENT_COMMENT_ID: {{ github.event.comment.id }}
+          MULTICA_WEBHOOK_URL: ${{ secrets.MULTICA_GITHUB_PILOT_WEBHOOK_URL }}
+          EVENT_REPOSITORY: ${{ github.repository }}
+          EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          EVENT_COMMENT_ID: ${{ github.event.comment.id }}
         run: |
           python3 - <<'PY'
           import json
