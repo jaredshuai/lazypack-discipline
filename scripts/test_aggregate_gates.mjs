@@ -35,7 +35,7 @@ function fixture(t, commands, states = {}, provenance = '') {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   assert.equal(git(root, 'init', '--quiet').status, 0);
   fs.mkdirSync(path.join(root, '.githooks'));
-  fs.writeFileSync(path.join(root, 'stage.cjs'), `const fs=require('node:fs');const name=process.argv[2];fs.appendFileSync('events.log',name+'\\n');process.exit(process.env.FAIL_STAGE===name?7:0);\n`);
+  fs.writeFileSync(path.join(root, 'stage.cjs'), `const fs=require('node:fs');const path=require('node:path');const name=process.argv[2];fs.appendFileSync(path.join(__dirname,'events.log'),name+'\\n');process.exit(process.env.FAIL_STAGE===name?7:0);\n`);
   fs.writeFileSync(path.join(root, '.githooks/pre-commit'), render(commands, states, provenance));
   fs.chmodSync(path.join(root, '.githooks/pre-commit'), 0o755);
   assert.equal(git(root, 'config', '--local', 'core.hooksPath', '.githooks').status, 0);

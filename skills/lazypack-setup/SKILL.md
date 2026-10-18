@@ -346,7 +346,7 @@ description: >-
      * 若处于未变重跑（NO-OP）：**完全不写盘**（首行缺陷修复场景除外，见上条）；
      * 若采纳了配方（全量或部分）：渲染严格字典序的三段式出处注释行（`# lazypack:preset id=... version=...`），并在 Hook input 中包含 `preset`, `presetSrc` 与规范化 `provenance` 字典；
      * 若全部为既有工具且未采用配方（样例 C）：**完全省略 `# lazypack:preset` 出处行**，Hook input 中省略 `preset`/`presetSrc`/`provenance`；
-     * **聚合调用接线与核对**：按 verification §3.3 的完整调用映射渲染，受覆盖槽均 wired 并保存同一原串，采用模板的本次调用结果复用机制；混合配方时保持各槽 existing 出处。写后逐字比对有效命令与探测时冻结调用，差异须先停下展示，不以覆盖语义等价冒充字面量未变；
+     * **聚合调用接线与核对**：按 verification §3.3 的完整调用映射渲染，受覆盖槽均 wired 并保存同一原串；本次 Hook 只跳过后续精确同串槽，不同命令仍各自执行；混合配方时保持各槽 existing 出处。写后逐字比对有效命令与探测时冻结调用，差异须先停下展示，不以覆盖语义等价冒充字面量未变；
      * 若安装失败，脚本明确写入 `install-failed` 状态，确保在提交前能够被阻断；
      * 若执行安全退出：重置配方槽位、移除出处行并重算 Hook `fp` 与 `input`；仅当满足三重整文件删除条件时物理删除；混合 Hook 绝对保留文件与 existing 命令；
    - `CODING_STANDARDS.md`（若未暂停）；
