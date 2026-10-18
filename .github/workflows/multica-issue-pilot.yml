@@ -1,0 +1,83 @@
+name: Multica Issue Pilot
+
+# Post exactly "/multica pilot" as the repository owner on a GitHub Issue.
+# The webhook token is stored only in the Actions repository secret.
+on:
+  issue_comment:
+    types: [created]
+
+# A public Issue comment must never grant repository write access to the runner.
+permissions: {}
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.login == 'jaredshuai' &&
+      github.event.comment.body == '/multica pilot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch one Run Only pilot
+        env:
+          MULTICA_WEBHOOK_URL: {{ secrets.MULTICA_GITHUB_PILOT_WEBHOOK_URL }}
+          EVENT_REPOSITORY: {{ github.repository }}
+          EVENT_ISSUE_NUMBER: {{ github.event.issue.number }}
+          EVENT_COMMENT_ID: {{ github.event.comment.id }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          def fail(message):
+              print(message, file=sys.stderr)
+              sys.exit(1)
+
+          url = os.environ.get("MULTICA_WEBHOOK_URL", "").strip()
+          if not url or urllib.parse.urlsplit(url).scheme != "https":
+              fail("Configure the MULTICA_GITHUB_PILOT_WEBHOOK_URL Actions secret.")
+
+          repo = os.environ["EVENT_REPOSITORY"]
+          if repo != "jaredshuai/lazypack-discipline":
+              fail("Unexpected repository; dispatch refused.")
+
+          issue_number = int(os.environ["EVENT_ISSUE_NUMBER"])
+          comment_id = int(os.environ["EVENT_COMMENT_ID"])
+          data = {
+              "event": "github.issue.pilot",
+              "eventPayload": {
+                  "repository": repo,
+                  "issue_number": issue_number,
+                  "issue_url": f"https://github.com/{repo}/issues/{issue_number}",
+                  "github_comment_id": comment_id,
+              },
+          }
+          request = urllib.request.Request(
+              url,
+              data=json.dumps(data, separators=(",", ":")).encode("utf-8"),
+              headers={
+                  "Content-Type": "application/json",
+                  "Idempotency-Key": f"github-issue-comment-{comment_id}",
+              },
+              method="POST",
+          )
+
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  result = json.loads(response.read(8192))
+          except urllib.error.HTTPError as error:
+              fail(f"Multica webhook HTTP {error.code} (URL hidden).")
+          except (urllib.error.URLError, TimeoutError):
+              fail("Multica webhook request failed (URL hidden).")
+          except (ValueError, json.JSONDecodeError):
+              fail("Multica webhook returned invalid JSON.")
+
+          status = result.get("status")
+          print(f"Multica webhook delivery: {status}")
+          if status not in ("accepted", "duplicate"):
+              fail("No Run Only execution was accepted; inspect Multica delivery history.")
+          PY
