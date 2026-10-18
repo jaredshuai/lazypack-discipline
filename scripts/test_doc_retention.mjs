@@ -98,7 +98,7 @@ test('legacy plan without policy baseline requires regeneration', async t => {
 });
 test('policy fingerprint is bound into approved plan fingerprint', async t => {
   const f = fixture(t);
-  f.plan.planSummary.retentionPolicy = { version: 1, sha256: '0'.repeat(64) };
+  f.plan.planSummary.retentionPolicy.files['docs/agents/roles.md'] = '0'.repeat(64);
   await blockedBeforeIO(t, f, /PLAN_INTEGRITY_BLOCKED/);
 });
 test('planning fails closed when policy path cannot be inspected safely', t => {
@@ -137,11 +137,54 @@ test('CLI plan and execute round trip preserves an absent-policy baseline', t =>
     { encoding: 'utf8', windowsHide: true });
   assert.equal(planned.status, 0, planned.stdout + planned.stderr);
   const plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
-  assert.deepEqual(plan.planSummary.retentionPolicy, { version: 1, sha256: null });
+  assert.deepEqual(plan.planSummary.retentionPolicy, { version: 2, files: {
+    'docs/agents/roles.md': null, 'AGENTS.md': null, 'CLAUDE.md': null
+  } });
   const executed = spawnSync(process.execPath, [helper, 'execute', '--cwd', f.repo, '--plan', planPath,
     '--approved-fp', plan.planFp, '--backup-root', f.backup], { encoding: 'utf8', windowsHide: true });
   assert.equal(executed.status, 0, executed.stdout + executed.stderr);
   assert.equal(JSON.parse(executed.stdout).status, 'SUCCESS');
+});
+
+for (const carrier of ['AGENTS.md', 'CLAUDE.md']) {
+  for (const transition of ['changed', 'deleted', 'created']) {
+    test(`legacy ${carrier} ${transition} after approval blocks before input reads`, async t => {
+      const f = fixture(t, null);
+      const entry = path.join(f.repo, carrier);
+      if (transition !== 'created') fs.writeFileSync(entry, '# Policy\nraw_qa: docs/old-private\n');
+      f.plan = buildMigrationPlan(f.repo, { migrate_items: [{ source_path: 'notes.md', target_path: 'docs/notes.md' }] },
+        { inboundReferences: {} }, { excludePaths: ['docs/old-private'] });
+      if (transition === 'deleted') fs.unlinkSync(entry);
+      else fs.writeFileSync(entry, '# Policy\nraw_qa: notes.md\n');
+      await blockedBeforeIO(t, f, /RETENTION_POLICY_DRIFT/);
+    });
+  }
+  test(`legacy ${carrier} cannot be migrated`, t => {
+    const f = fixture(t, null); fs.writeFileSync(path.join(f.repo, carrier), '# Legacy policy\n');
+    assert.throws(() => buildMigrationPlan(f.repo, { migrate_items: [{ source_path: carrier, target_path: 'docs/legacy.md' }] },
+      { inboundReferences: {} }), /POLICY_FILE_RESERVED/);
+  });
+}
+
+test('both unchanged legacy resident entries remain compatible', async t => {
+  const f = fixture(t, null);
+  for (const name of ['AGENTS.md', 'CLAUDE.md']) fs.writeFileSync(path.join(f.repo, name), '# Legacy policy\n');
+  f.plan = buildMigrationPlan(f.repo, { migrate_items: [{ source_path: 'notes.md', target_path: 'docs/notes.md' }] }, { inboundReferences: {} });
+  const result = await executePlan(f.plan, { approvedPlanFp: f.plan.planFp, backupRoot: f.backup });
+  assert.equal(result.status, 'SUCCESS');
+});
+
+test('legacy entry changes are checked even when roles.md exists', async t => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.repo, 'AGENTS.md'), '# Newly effective raw_qa: notes.md\n');
+  await blockedBeforeIO(t, f, /RETENTION_POLICY_DRIFT/);
+});
+
+test('version 1 single-carrier snapshots require regeneration', async t => {
+  const f = fixture(t);
+  f.plan.planSummary.retentionPolicy = { version: 1, sha256: null };
+  f.plan.planFp = crypto.createHash('sha256').update(JSON.stringify(f.plan.planSummary)).digest('hex');
+  await blockedBeforeIO(t, f, /RETENTION_POLICY_BASELINE_MISSING/);
 });
 
 test('junction repository root is rejected', async t => {
@@ -231,12 +274,21 @@ test('CLI explicit exclusion is persisted and prevents an excluded migration', t
   assert.equal(fs.existsSync(out), false);
 });
 
-for (const oldRoles of [null, '# Existing roles\n']) {
-  test('setup ordering: execute approved migration before writing new roles: ' + (oldRoles ?? 'new'), async t => {
-    const f = fixture(t, oldRoles);
-    const result = await executePlan(f.plan, { approvedPlanFp: f.plan.planFp, backupRoot: f.backup });
-    assert.equal(result.status, 'SUCCESS');
-    fs.writeFileSync(f.policy, '# Approved final roles\n');
-    assert.equal(fs.readFileSync(path.join(f.repo, 'docs/notes.md'), 'utf8'), '# Notes\n');
+for (const carrier of ['docs/agents/roles.md', 'AGENTS.md', 'CLAUDE.md']) {
+  test(`hard-link alias of ${carrier} cannot be migrated`, t => {
+    const f = fixture(t);
+    if (carrier !== 'docs/agents/roles.md') fs.writeFileSync(path.join(f.repo, carrier), '# Legacy policy\n');
+    fs.linkSync(path.join(f.repo, carrier), path.join(f.repo, 'alias.md'));
+    assert.throws(() => buildMigrationPlan(f.repo, { migrate_items: [{ source_path: 'alias.md', target_path: 'docs/leak.md' }] },
+      { inboundReferences: {} }), /POLICY_FILE_RESERVED/);
   });
 }
+test('executor blocks rewriting a policy hard link before input IO', async t => {
+  const f = fixture(t);
+  fs.linkSync(f.policy, path.join(f.repo, 'alias.md'));
+  f.plan.fileActions.push({ action: 'REWRITE_INBOUND_REFERENCE', filePath: 'alias.md', contentToWrite: 'replacement' });
+  f.plan.planSummary.fileActions.push({ action: 'REWRITE_INBOUND_REFERENCE', sourcePath: 'alias.md', targetPath: null });
+  f.plan.planSummary.actionsCount++;
+  f.plan.planFp = crypto.createHash('sha256').update(JSON.stringify(f.plan.planSummary)).digest('hex');
+  await blockedBeforeIO(t, f, /POLICY_FILE_RESERVED/);
+});

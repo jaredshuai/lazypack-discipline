@@ -103,6 +103,7 @@ description: >-
    - **未验证**（未经当前会话调用或项目图谱未建）：`依赖约束 (...)；工具可用但本项目未建立 .codegraph/ 索引目录 [部分依赖未验证/图谱未建]` 或 `未验证 (...) [未验证]`。
    不将所有 MCP 的安装作为前置双检的阻断项（非阻断项，仅如实反映在角色表中）。
 10. **存量文档与归属探测 (Document Homes Discovery)**：
+   - **扫描前留存边界**：先仅探测固定策略载体（`docs/agents/roles.md`、根 `AGENTS.md` / `CLAUDE.md`）和目录是否存在。留存策略或路径未决、失效、冲突，或本次将变更路径但尚未确认时，暂停递归发现、指针跟踪与文档内容读取，先进入 3.A 的留存澄清；确认后再以当前及拟写策略的 raw_qa 仓内路径并集恢复本项探测，然后处理文档归属。已有生效策略且本次不变时可直接使用现行排除集合；之后若提出路径变更，先确认新路径并更新排除集合，再继续扫描。
    - 遵循 [references/document-routing.md](references/document-routing.md) 执行指针先行探测与八大逻辑区域归属识别；
    - **指针先行**:
      * 优先读取目标项目现存 `docs/ARTIFACTS.md` 提取已登记项；
@@ -112,7 +113,7 @@ description: >-
       * **声明在先优先于通用剪枝**: 项目已明确声明的合法仓内路径（例如 `docs/agents/issue-tracker.md` 明确声明的 `.scratch/tickets/` 或常驻入口指向的规格文件）优先于通用剪枝，正常追踪纳入候选；
       * **未声明的排除目录**（路径段精确匹配，与 [document-routing.md](references/document-routing.md) §2.2 及 `doc_scanner.mjs` 同一集合）：`node_modules`, `.git`, `vendor`, `dist`, `build`, `target`, `out`, `.cache`, `.pytest_cache`, `__pycache__`, `.venv`, `venv`, `.idea`, `.vscode`, `.lazypack-backup`, `.DS_Store`, `raw-qa`；
       * **敏感文件**（精确匹配，与上述两处同一集合，以免误杀设计文档）：`.env`（文件名恰好等于 `.env`）、`.env.*`（文件名以 `.env.` 开头）、`credentials.json`、`client_secret.json`、`*.pem`（文件名以 `.pem` 结尾）、`*.key`（文件名以 `.key` 结尾）、`id_rsa`、`id_ed25519`、`.ssh/`（路径以 `.ssh/` 开头，或路径中含有 `/.ssh/`）。一律静默排除且不读取。普通设计文档（如 `docs/credentials-architecture.md`）正常解析。在扫描报告中概括说明“部分敏感与系统目录已按安全边界排除，本次探测属于有界扫描”，不虚报无界全覆盖；
-      * **敏感留存目录**：规范 raw_qa 目录（路径段 `raw-qa`，与 `doc_scanner.mjs` 同一排除集合）连同已配置的 `retention.paths.raw_qa` 仓内路径一律静默排除、不读取内容，避免把敏感原始问答的路径/哈希/标题带入扫描结果，上报时并入「按安全边界排除」；调用 `doc_helper.mjs scan`/`plan` 时用可重复的 `--exclude <相对路径>` 把已配置的 raw_qa 仓内路径一并传入排除；
+      * **敏感留存目录**：规范 raw_qa 目录（路径段 `raw-qa`，与 `doc_scanner.mjs` 同一排除集合）连同当前及本次已确认拟写策略的 `retention.paths.raw_qa` 仓内路径并集一律静默排除、不读取内容，避免把敏感原始问答的路径/哈希/标题带入扫描结果，上报时并入「按安全边界排除」；调用 `doc_helper.mjs scan`/`plan` 时用可重复的 `--exclude <相对路径>` 传入该并集；
       * 符号链接指向工作区外时立即停止深入并报告，绝不自动穿透读取；外部网络资源与私有存储未获显式授权不读取；
       * 区分四类登记对象（本地文件/有效章节锚点、存在的目录索引入口、声明的外部 URL、留存种子/私有绑定），维持既有非空与授权契约；
     - **逻辑归属与权威范围**:
@@ -161,7 +162,7 @@ description: >-
 - **受控物理迁移规划 (Phase 2)**:
   - **默认首选**: 坚持 `preserve-existing`（原位保留与登记）为默认路径，绝不把"整理文档"等同于"必须迁移"；
   - **正当性准入**: 仅当用户显式要求重组目录，或存量文档位置严重违背工程规范时，Agent 方可生成迁移计划规范 `plan_spec.json`；
-  - **确定性计划计算**: 调用 `node skills/lazypack-setup/scripts/doc_helper.mjs plan --cwd <targetRepo> --input <plan_spec.json>` 计算出站/入站相对链接重写、`docs/ARTIFACTS.md` Section 3 登记行追加、预期哈希以及双指纹（`input_fp` 与 `plan_fp`）；在命令中以重复 `--exclude <相对路径>` 传入当前生效策略与本次已确认拟写策略的 raw_qa 仓内路径并集，保证迁移先执行时两种策略的敏感路径都受保护；角色文件由 setup 保持原位，迁移源、目标或入站重写涉及它时停止该迁移计划，采用保留原位方案或先完成独立的角色引用更新后重新规划。
+  - **确定性计划计算**: 调用 `node skills/lazypack-setup/scripts/doc_helper.mjs plan --cwd <targetRepo> --input <plan_spec.json>` 计算出站/入站相对链接重写、`docs/ARTIFACTS.md` Section 3 登记行追加、预期哈希以及双指纹（`input_fp` 与 `plan_fp`）；在命令中以重复 `--exclude <相对路径>` 传入当前生效策略与本次已确认拟写策略的 raw_qa 仓内路径并集，保证迁移先执行时两种策略的敏感路径都受保护；角色文件及根 AGENTS.md / CLAUDE.md 均由 setup 保持原位，迁移源、目标或入站重写涉及它时停止该迁移计划，采用保留原位方案或先完成独立的角色引用更新后重新规划。
 - **三种在途流程状态与写前零写入拦截**: 当探测到同一业务主题存在多份竞争基准（如 `specs/pay-v1.md` 与 `specs/pay-v2.md`）时，向用户呈现单次合并澄清；用户选定项标为 `current`；**仅当用户明确确认存在替代/废弃关系时**，被取代项才标记为 `superseded` 并互指新项；**若用户仅选定 current 但未确认其他旧项状态或关系未知，其他旧项严格保持待裁（`待裁 / unconfirmed`），严禁擅自自动降级为 `superseded` 或 `reference`**；原件物理位置保持不变，**首期绝不自动执行 git mv 归档**；已有登记行依首期保护不予覆盖；
 - **用户请求迁移处理**: 若用户在交互中要求将文件物理搬迁至标准推荐目录，Agent 明确告知 Phase 1 仅支持保留既有原位登记（`preserve-existing`），物理迁移与链接重构属于 Phase 2 治理规划；询问用户是否接受原位保留登记；若用户不接受，保持**零写入并安全退出**；
 - **三种在途流程状态与写前零写入拦截**: 未答/超时记为 `pending`，明确拒绝记为 `declined`，迁移未果记为 `migration-unsupported-declined`；三者均严禁写入登记册，对应零写入门禁必须在写盘前判定拦截，原件不降级，保持目标文件严格零相关写入；
@@ -315,7 +316,7 @@ description: >-
      * **物证核验**：核验目标文件最终哈希与预期输出哈希一致，源文件删除核验，有界扫描范围内的 Markdown 标准相对链接零死链核验；
      * **自愈与防覆写补偿**：若执行失败触发应用层逆序补偿回滚；回滚还原前逐一核对当前磁盘哈希；若遇 `pre_rollback_collision`（源路径被外部重建或引用文件/登记册被外部篡改），暂停并挂起当前状态 (`SUSPENDED_ON_CONFLICT`)，刚性禁止覆盖外部修改，保留现场与外部数据。
    - 本步必须早于清单写入、依赖安装及角色文件更新。若返回任何阻断状态，停止后续 setup 写入，展示差异并重新生成/确认计划；不得把实际磁盘变化重算为原审批基线。
-   - 第 4 步同时展示本批次迁移结果与其后 setup 的最终草案。迁移成功后，后续步骤只对本批次实际改变的文件使用计划里已批准的预期输出哈希作写前基线；必须先核对磁盘与该哈希一致。其他文件仍用第 4 步原基线，不从任意实时磁盘内容刷新基线。
+   - 第 4 步同时展示本批次迁移的预期结果与其后 setup 的最终草案；实际执行结果在完成报告中展示。迁移成功后，后续步骤只对本批次实际改变的文件使用计划里已批准的预期输出哈希作写前基线；必须先核对磁盘与该哈希一致。其他文件仍用第 4 步原基线，不从任意实时磁盘内容刷新基线。
 1. **应用已确认的最小新仓配置与清单补缺 (Pre-install Manifest & Config Provisioning)**：
    - 若为新仓初始化分支（如新仓 TS）或已有工程清单字段缺失，优先写入整体确认清单内的最小新仓文件或补缺字段（新仓 `package.json`、scripts 动态路径、`packageManager` 声明、双 tsconfig 即 `tsconfig.json` 与 `tsconfig.build.json`、以及单包自安装保护 `pnpm-workspace.yaml`；Python 对应 `pyproject.toml` 既有约定）；
    - **严格受控边界**：仅写入确认清单内明示的文件与字段；既有文件与配置遵循按项补缺与冲突保护，若遇冲突暂停（`PAUSE`）由人工裁决；父级 workspace 绝不覆盖篡改；空仓无测试时不捏造 dummy 测试用例获取绿灯；
