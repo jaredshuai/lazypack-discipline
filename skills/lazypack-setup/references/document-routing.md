@@ -40,7 +40,7 @@
    - 配置文件与外部链接：`package.json` 中的 `bugs` / `repository` URL，或项目配置声明的外部跟踪器。
 5. **子项目根发现 (Sub-project Root Discovery)**:
    - **从仓内安全目录与项目清单枚举子项目根**，不以根目录名称、常见容器名白名单或模型假设代替：
-     * **仓根直接子目录**: 先枚举仓库根的**直接子目录**（不按容器名筛选），对每个直接子目录只读检查其是否构成候选子项目根——自身含有**工程标记**（项目清单，如 `package.json`、`Cargo.toml`、`go.mod`、`pyproject.toml`、`*.sln`、`build.gradle` 等）或存在文档标记（`README`、`RELEASE`、`CHANGELOG` 匹配无扩展名或常见文档扩展名 `.md` / `.rst` / `.txt` 等；`docs/**` 仅以安全目录存在作为候选标记，后续内容读取受 §2.2、§2.3 有界扫描约束，不隐含无界递归）。命中任一即纳入候选；`packages/`、`apps/`、`services/`、`modules/`、`crates/` 只是常见示例，**绝不作为白名单**；
+     * **仓根直接子目录**: 先枚举仓库根的**直接子目录**（不按容器名筛选），对每个直接子目录只读检查其是否构成候选子项目根——自身含有**工程标记**（项目清单，如 `package.json`、`Cargo.toml`、`go.mod`、`pyproject.toml`、`*.sln`、`build.gradle` 等）或存在文档标记（`README`、`RELEASE`、`CHANGELOG` 匹配无扩展名或常见文档扩展名 `.md` / `.rst` / `.txt` 等；`docs/**`、`specs/**` 均仅以安全目录存在作为候选标记，后续内容读取受 §2.2、§2.3 有界扫描约束，不隐含无界递归）。命中任一即纳入候选；`packages/`、`apps/`、`services/`、`modules/`、`crates/` 只是常见示例，**绝不作为白名单**；
      * **项目清单声明的成员**: 读取工作区声明（如 `package.json` 的 `workspaces`、`pnpm-workspace.yaml`、`Cargo.toml` 的 `[workspace] members`、`go.work`、`pyproject.toml` 工作区声明）中识别成员所需的字段，不复制清单正文，不扫描其他本地配置，把声明的成员一并纳入候选；
      * 枚举只做只读目录/清单检查，遇到嵌套 `.git` 仓库或 submodule 只作边界识别，不穿透其内部；
    - **把每个子项目根的存量文档纳入候选范围**：其 `README`、`RELEASE`、`CHANGELOG`、`docs/**`、`specs/**` 都按 §2.3 逐区记录，不因位于子目录而遗漏；
