@@ -1,6 +1,6 @@
 # lazypack-discipline
 
-装到任何代码项目上就生效的工程纪律懒人包。地基是 [Matt Pocock 的 skills](https://github.com/mattpocock/skills)，本包只补它没管的部分：角色分工、产物放哪、提交与版本规则、质量门禁、文档跟改、客户变更管理、多 AI 讨论章程。
+面向代码项目的工程纪律懒人包：在 [Matt Pocock 的 skills](https://github.com/mattpocock/skills) 地基上，装配正式维护的纪律、Hook、脚本、配置与配方。支持边界和验证状态见 [产品愿景](docs/VISION.md)。
 
 产品目标与设计取舍见 [产品愿景](docs/VISION.md)；维护本仓时，先读 [文档归属与产物登记册](docs/ARTIFACTS.md)。愿景描述目标，实际能力以产品文件与验收证据为准。
 
@@ -14,6 +14,7 @@
 | 路径 | 放什么 |
 |---|---|
 | `docs/VISION.md` | 产品核心思想与设计判断，当前产品方向的正文 |
+| `docs/adr/001-template-first.md` | 记录模板优先路线取代旧优先级的决定、理由与代价 |
 | `docs/ARTIFACTS.md` | 本仓文档归属、更新触发、入口状态与维护流程 |
 | `AGENTS.md` | 维护本仓的 AI 读取入口 |
 | `docs/DECISIONS.md` | 固定层条文，当前版本 0.7.0，唯一事实源 |
@@ -40,5 +41,5 @@
 在真实项目长对话后手动触发 [`/lazypack-harvest`](skills/lazypack-harvest/)，它会向本仓库提 `harvest` 标签的 issue（已脱敏）。issue 走 Matt 的 `triage` 流程，不直接改条文。
 
 > **说明**：
-> - `skills/lazypack-setup` 已集成文档归属首期 preserve-existing，并已合入本地受控迁移引擎（`doc_helper.mjs` 的 scan / plan / exec）及当前 AGY / Windows 限定沙箱验证；外部目标仓通用生产迁移、跨宿主（macOS/Linux）、真实大型旧仓接入、全局安装与发布仍为 UNPROVEN，不宣称生产级全面完成。
+> - `skills/lazypack-setup` 已集成文档归属首期 preserve-existing，并已合入本地受控迁移引擎（`doc_helper.mjs` 的 scan / plan / exec）及当前 AGY / Windows 限定沙箱验证。对任意目标仓和环境的通用自动改造不是当前承诺；在已声明条件内，跨宿主（macOS/Linux）、大型旧仓和外部目标仓生产迁移的实测仍不足，状态为 UNPROVEN；全局安装与发布也尚未验证。仓库大小不单独决定支持，具体边界见 [产品愿景](docs/VISION.md)。
 > - `skills/lazypack-harvest` 当前完成有限离线验证（状态机阶梯、账本防覆写保护与离线模拟）；真实 GitHub 创建与网络恢复链路尚未验证。运行前需具备可用写通道（如已认证的 `gh` CLI）及目标仓 `harvest` 标签，缺失标签时默认阻断发送。
