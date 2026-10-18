@@ -121,6 +121,7 @@ description: >-
       * `current` 状态在同一业务主题/用途范围内全局唯一；多 feature 需求规格或多个有效 ADR 各自主管对应主题，合法共存为 `current`；集合目录不自动批准其全部子文件；
       * 提取细粒度章节锚点（`path#anchor`），基于标准 Markdown 标题 Slug 规则解析；若锚点不确定或存在重名标题，不盲目猜测死锚点，退回使用相对路径并在说明列文字标注；
       * 发现同主题竞争基准时，标记为冲突项，留待第 3 步聚合澄清。
+    - **逐区覆盖与本地失效信号留痕**：遵循 [references/document-routing.md](references/document-routing.md) §2.1 第 5 项（子项目根发现）、§2.3、§2.4；先冻结搜索范围再扫描，八大逻辑区域逐区记录「实际搜索范围 / 发现情况 / 未覆盖原因」，并为每个发现项给出去向（已登记 / 拟登记 / 待裁 / 保护跳过 + 理由）；对已读取存量文档中的仓内相对路径引用记录「出处 / 解析基准 / 实际检查结果」，失效信号仅作待裁线索。判定口径、排除/敏感/静默边界与去向契约以该 reference 为唯一正文，本节不复述。
 
 ---
 
@@ -259,6 +260,8 @@ description: >-
      * **事实真实与类别自洽 (R2)**：取消对目标仓 `docs/DECISIONS.md` 的预登记（固定层为来源说明，不假设目标仓存在同名文件）；严格遵循固定层 §4.2“同一类别 current 唯一”原则，将产物类别细分为任务跟踪（`docs/agents/issue-tracker.md`）、编码规范（`CODING_STANDARDS.md`）、发版规范（`RELEASE.md`）、角色映射（`docs/agents/roles.md`）。
      * **条件渲染登记行与人工扩展区 (P6 追加与路径去重)**：根据各产物的真实存在与受管状态生成登记行。若某产物处于 `PAUSE`、`BROKEN` 或未托管状态，**彻底省略对应登记行**，严禁将其虚构为 `current` 或受管产物；其余有效产物正常登记；协作产物（如想法池）在托管块外部 Section 3 人工扩展区登记，绝不污染托管块固定依赖集。若目标仓已有 Section 3，按 POSIX 归一化相对路径执行去重追加，严禁修改或删除已有的人工登记行；若无 Section 3，确认后追加模板尾部。所有条件替换必须在计算指纹 (`fp`) 前完成，正文严禁残留未展开占位符。
      * **既有文档归属拟登记项预览 (Document Homes Section 3 Preview)**：
+       - 展示**逐区覆盖记录**（按 [references/document-routing.md](references/document-routing.md) §2.3，八区各一行：实际搜索范围 / 发现情况 / 未覆盖原因；显式排除项只写类别，不复述敏感路径）与**每个发现项的去向**（已登记 / 拟登记 / 待裁 / 保护跳过 + 理由）；说明搜索范围如何冻结及本次范围调整（如有）。
+       - 展示**本地 CI/脚本路径失效信号清单**（按 §2.4，逐条：出处 / 解析基准 / 实际检查结果），明确标注为**待裁线索**，对未知/动态/外部引用显式区分。
      * **物理迁移与链接重写变更草案 (若包含迁移)**：
        - 展示拟迁移项清单（源路径 $\to$ 目标路径）；
        - 展示出站链接重写 diff（移动后自身内部相对链接调整）；
@@ -418,6 +421,8 @@ description: >-
   * 若发生冲突或失败，明确报告是补偿回滚成功（恢复初态）还是因 `pre_rollback_collision` 暂停挂起；
   * 明确死链核验范围仅限于有界扫描范围内的 Markdown 标准相对链接。
   *如实列出识别到的业务文档、物理路径（保留原位）、归属的 8 个知识区、分配的角色与状态（`current` / `superseded`）、同主题裁决结果；若因并发冲突或用户拒绝而暂停/未写入，如实记录为 `pending` / `declined` / `migration-unsupported-declined` 并说明零写入事实；明确报告“所有既有文档保留原位，未执行物理移动或迁移”。
+  * **逐区覆盖事实**：按 [references/document-routing.md](references/document-routing.md) §2.3 列出八大逻辑区域逐区记录（实际搜索范围 / 发现情况 / 未覆盖原因；显式排除项只写类别，不复述敏感路径）与每个发现项的去向（已登记 / 拟登记 / 待裁 / 保护跳过 + 理由）；某区未发现时保留实际搜索范围并写明「未发现」；「已完整覆盖」仅指声明的有界范围；说明搜索范围如何冻结及本次范围调整（如有）。
+  * **本地失效信号事实**：按 §2.4 列出本地 CI/脚本路径失效信号清单（出处 / 解析基准 / 实际检查结果），将「不存在」标注为**待裁线索**，如实记录本轮是否获得用户授权处理以及实际处理结果（未获授权即保持原样）；对未知/动态/外部引用写明类别，未伪判 missing；未执行任何所发现命令，未出仓或读取敏感文件。
 - **留存策略与协作材料事实**：如实报告访谈留存模式与启用维度（`decisions-only` / `ideas-pool` / `minutes-only` / `raw-qa` / `hybrid` / `unconfigured` / `pending`）、目标路径、纪要入口建立情况与可见性；未答或超时如实报告为“待确认 pending（未配置，零写入）”；用户明确回答「暂不配置」报告为“用户明确暂不配置 unconfigured”；私有原文报告存储形态与状态（仓外别名未绑定标 `unbound`，仓内私有相对路径标 `private-repo`，不虚报已交付）；既有人工文件报告为“人工产物受保护引用（未覆盖写盘）”。
 - **门禁状态**：逐项列出 `format`、`lint`、`type`、`test` 的接线状态（`wired` / `missing` / `install-failed` / `n/a`）；若存在 `install-failed`，重点告警阻断风险。
 - **门禁实跑与出处事实**：记录各命令实跑退出码（若 pytest 因无用例退出 5 明确说明为无用例收集而非错误）；记录配方标识、版本与四槽出处记录（全已有未采用时明确记录省略出处行）。
@@ -438,7 +443,7 @@ description: >-
 - [presets/ts-biome-vitest.md](presets/ts-biome-vitest.md)：TypeScript/JavaScript 质量门禁配方数据卡（只读源）。
 - [presets/mutation-testing.md](presets/mutation-testing.md)：变异测试配方数据卡（只读源，多语言优先级 0 补充质检层）。
 - [references/retention-sections.md](references/retention-sections.md)：规划者访谈与碎片想法留存指引正文库（单一事实源）。
-- [references/document-routing.md](references/document-routing.md)：既有文档归属与 8 大知识区路由规范（原位保留与安全登记）。
+- [references/document-routing.md](references/document-routing.md)：既有文档归属与 8 大知识区路由规范（原位保留与安全登记），并含子项目根发现、逐区探测覆盖记录与本地 CI/脚本路径失效信号只读核对（§2.1 第 5 项、§2.3、§2.4）。
 - [references/managed-blocks.md](references/managed-blocks.md)：标记语法、换行/编码规范、指纹与输入摘要算法、重跑决策树。
 - [references/verification.md](references/verification.md)：前置检查规范、Hook 激活证据判定、门禁短路策略。
 - [templates/](templates/)：六类产物的最小种子模板，以及随包派发的 `changelog.mjs`（复制至目标仓 `scripts/changelog.mjs`）与 `check_report_layers.mjs`（复制至目标仓 `scripts/check_report_layers.mjs`）。
