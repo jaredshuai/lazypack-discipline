@@ -46,6 +46,8 @@
 | [../scripts/handoff_bom_classify_repro.js](../scripts/handoff_bom_classify_repro.js) | 本仓执行辅助 | current | 上述分类的手动回归。在系统临时目录写夹具，不改仓库。未接 hook/CI。不是门禁 |
 | [agents/doc-pairs.md](agents/doc-pairs.md) | 给 agent 的按需说明 | current | 本仓项目层文档关系声明（P1–P5、P8、P9、P10、P11）。每条只在本文件出现一次，并写明来源、目标范围、检查方式、处理权限。不是跨项目固定层，不要求其他仓手填同一批对子。P8 仍动态抽取交接指引全部 `### 2.x`；P9 核对 CHANGELOG 表述与随包机制一致；P10 核对报告分层表述与随包校验器一致；P11 核对 §9 讨论规程与 setup 分发模板字节 SHA-256 相等；P4/P5 围栏含反引号与波浪号。开工收尾的使用步骤不在本文件，见 freshness-check.md |
 | [agents/freshness-check.md](agents/freshness-check.md) | 给 agent 的按需说明 | current | 本仓开工识别核对范围、收尾留下五态记录的流程。不复述这些声明，不新建角色。检查器仍手动运行，未接 hook/CI。流程已写明不等于日常自动维护已交付 |
+| [../skills/lazypack-setup/scripts/managed_blocks.mjs](../skills/lazypack-setup/scripts/managed_blocks.mjs) | setup 随包执行辅助 | current | 角色等产物的确定性留存段渲染、托管块写入与最终字节核验；保留原始块外字节并拒绝未展开变量。入口与范围见 managed-blocks §5.3.1；登记册协作区仍走专用执行器，不执行项目命令或配置 Git |
+| [../scripts/test_managed_blocks.mjs](../scripts/test_managed_blocks.mjs) | 本仓回归测试 | current | 使用 TEMP 无害夹具核对留存段展开、指纹、块外字节保护和重跑；手动运行，未接 hook/CI，不代表真实宿主交互已复验 |
 | [../scripts/check_doc_pairs.mjs](../scripts/check_doc_pairs.mjs) | 本仓执行辅助 | current | 只读检查上述声明。先核对 `## 声明` 下的编号与四要素是否在场，再执行 P1–P5、P8、P9、P10、P11。缺字段、未声明或没有实现的编号为 FAIL，不能记 PASS。旧的 X/Y/判定 标记不再被认作声明。P8 不写死 generate/verify。P4/P5 按 CommonMark 跳过反引号与波浪号围栏，开闭须同字符。手动运行。未接 hook/CI。不宣称门禁已生效 |
 | [agents/commit-msg-check.md](agents/commit-msg-check.md) | 给 agent 的按需说明 | current | 本仓提交说明格式的只读检查口径（§5.1 标题形状与运行时抽出的 type）。缺省仍读脚本所在仓的 `docs/DECISIONS.md`；`--rules <path>` 只改读哪一份含 §5.1 行的文件。本仓仍手动运行，未接 hook/CI。格式通过不等于语义已验证。不是门禁。2026-09-22 的隔离仓接线没有改这份口径 |
 | [agents/section9-discussion-protocol.md](agents/section9-discussion-protocol.md) | 给 agent 的按需说明 | current | §9 多 AI 讨论执行规程（操作细则）。固化基于 issue #36 实践的流程最佳实践：角色定义（主持人/参与者/维护者）、阶段化流程（准备/一轮/二轮/三轮/裁决）、实施边界清晰化（强制项 vs 可选项）、文件与路径规范（统一 `participants/` 有 s）、用户交互协议（"好了"="全部完成"信号、主持人角色切换时机）、常见问题处理（缺席/收敛度/路径不一致等）。减少未来讨论的流程摩擦。与 DECISIONS.md §9 的关系：本文件是操作层，§9 是原则层；2026-10-15 v1.2（#68）：输入材料路径与交付输出目录分开，自包含理由改为独立性与可移植，逐份预检，日期与目录核对，附辅助正则；2026-10-15 v1.3（#74 审查跟进）：隔离执行器写明两条交付通道（能写盘则写交付目录；不能则按 `=== 文件：<文件名> ===` 标记逐文件分节回复，经维护者整段转交后由主持人切分保存，缺节重发不补写），「待创建」仅限本轮新建目录，会议目录与 session-id 在准备阶段锁定；`skills/lazypack-setup/templates/section9-discussion-protocol.md` 分发模板与正文按 P11 声明字节同源；仍为流程文字，未接脚本或 hook，未在真实讨论中复验 |
@@ -117,6 +119,14 @@
 | [reviews/2026-10-06-iterative-dev-architecture/](reviews/2026-10-06-iterative-dev-architecture/) | 讨论留档 | current | 2026-10-06「迭代开发与架构复盘」§9 会议留档（issue #41 反重前置规划 + 需求文档生命周期、issue #40 每轮迭代后的人工架构复盘），二轮讨论通过并经维护者裁定，0.7.0 生效依据。草案 A（§4.1 文档二分判据）与草案 B（§7.7 跨票据结构复盘）通过纳入固定层；草案 C（单迭代上限）拆分为 §6.5 可判定内核 + `docs/agents/iteration-scope.md` 行为指引。`round-1/` 五位参与者意见、`round-2/` 评估与维护者最终裁定（`FINAL-RULINGS.md`）为真实内容。Closes #41, Closes #40。2026-10-08 收尾文档防腐：P1/P2/P3 失败（固定层 0.7.0 需同步到 setup skill，待另有授权），P4/P5/P8 通过，iteration-scope.md 登记准确性人工审查通过，详见系统临时目录 `lazypack-discipline-freshness-check-2026-10-08.md` |
 
 ## 4. 本次补齐的范围
+
+### 2026-10-18 托管产物确定性写入修复
+
+- 检查范围：P1–P5、P8–P11；人工核对 setup、留存正文与托管块契约的调用关系，以及登记册专用写入边界。
+- 依据版本：开工 `8b331381e289c307fb91abfe9598d0b75bc22977`，收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
+- 处理结果：已同步随包工具及流程指针；文档关系检查未发现差异（9/9 PASS，退出码 0）。固定层正文、快照及六个托管模板未改。
+- 未覆盖范围：本轮修复源码与回归用例，不把工具级验证称为重新完成 Claude Code + GLM 的交互盲测；真实业务仓不参与写入或 Hook 触发。
+- 未决事项：无新固定层决策；后续真实宿主交互覆盖仍按对应 issue 单独判断，不由本条登记替代。
 
 2026-09-09：维护者指出，文档应该由纪律预先规定归属，不应由用户每次提醒。核对发现固定层已有一般分类，本仓缺少登记册与 AI 读取入口，产品愿景也未被归类。本轮补齐这些入口并记录愿景。文档同步、归档与 AI 协作的程序化自动执行仍是产品工作，不能由本次文档补齐推导为已经完成。
 

@@ -75,6 +75,7 @@ description: >-
    已有配置原样保留。
 6. **既有 Hook 管理器**：探测 `.husky/`、`lefthook.yml`、`package.json` 中的 `simple-git-hooks` 等。
 7. **既有产物状态与受管 Hook 出处读回**：
+   - 对本轮涉及的角色、常驻入口、编码标准、发布纪律与 Hook 产物（含拟新建项）先按 [managed-blocks.md §5.3.1](references/managed-blocks.md#531-确定性写入与最终核验) 采集一次原始基线并执行只读 `verify`；重跑判定 NO-OP 前也必须执行。占位符残留、无效 header 或指纹不符均不得因 `input` 相同而跳过；首次发现问题只列修复差异，不自动覆写。后续写盘复用这份基线，草案阶段不重新采样。登记册单独按第 5 步第 6 项处理其受管区与获批 Section 3，不把该专用协作写入吸收为通用基线。
    - 检查根目录与 `docs/` 下是否已存在六类产物，解析是否存在有效 lazypack 托管标记（见 [references/managed-blocks.md](references/managed-blocks.md)）；
    - 探测 `CHANGELOG.md`、`scripts/changelog.mjs` 与 `scripts/check_report_layers.mjs`：三者均为**非受管对象**（无 lazypack 标记，不参与 fp/input 决策树）。`CHANGELOG.md` 存在即原位保留并记入 Section 3 登记候选；两个 `.mjs` 已存在时视为本地副本，不覆盖；
    - **受管 Hook 出处读回与重跑恢复 (Hook Provenance Read-back)**：
@@ -238,6 +239,8 @@ description: >-
 
 ### 第 4 步：生成拟写入草案与整体确认 (Overall Confirmation)
 
+**托管产物写前基线**：复用第 2 步在任何写入前采集的基线；如本轮新增目标路径，应在展示和确认草案前为尚未写过的路径另建基线，保留此前基线，最终逐份核验。显式文件列表、基线与写入 spec 均放系统临时目录，按 [managed-blocks.md §5.3.1](references/managed-blocks.md#531-确定性写入与最终核验) 操作；不得用实时文件刷新原基线来掩盖并发变化。草案渲染与最终写盘使用同一份已展开模板。
+
 **条件渲染说明**：本步骤根据第 3 步的执行结果，条件渲染草案内容：
 - 若 3.B 已执行（配置了质量门禁）：展示完整草案（通用纪律产物 + 质量门禁产物）
 - 若 3.B 被跳过（用户选择"暂不配置"或空仓未配置门禁）：仅展示通用纪律产物，不展示 Hook 文件、依赖安装计划、门禁接线清单等质量门禁相关内容
@@ -307,6 +310,9 @@ description: >-
 ### 第 5 步：精准写入顺序 (PRECISE Execution)
 
 用户整体确认后，按以下严格顺序安全写盘（写入规则遵循 [references/managed-blocks.md](references/managed-blocks.md)）：
+
+**统一托管块写入入口**：角色、常驻入口、编码标准、发布纪律与 Hook 的新建、追加、升级以及后续 `gen` / `input` / `fp` 修正，均通过 `scripts/managed_blocks.mjs write` 的字节范围合并；不得改用文本 Edit 或临时手写指纹算法。写入 spec 的 `path`、`block`、完整 `template` 与 `replacements` 取自本轮已批准草案。登记册因含独立获批的 Section 3 写入，继续按第 6 项的专用执行及核验契约，不纳入通用写入基线；工具拒绝其他路径漂移时暂停，不能重采样绕过。
+
 0. **先执行受控迁移与文档登记单批次顺序执行与补偿保护 (Deterministic Execution with Single Atomic Write & Rollback Defense)**：
    - 先完成下文第 6 项的前置保护及零写入门禁裁决；若登记册受保护或对应项仍待答/拒绝，本步及后续相关写入均暂停。以下第 6 项的保护规则在执行迁移前即适用。
    - 若本次变更包含文档归属整理或物理迁移，Agent 调用确定性执行器：
@@ -372,7 +378,7 @@ description: >-
      * **ideas 种子 (P4)**：若确认启用了想法池，目标路径读取自 `retention.paths.ideas`（默认 `docs/ideas/inbox.md`）。写盘前严格遵循“先审查再落盘 (Pre-write Inspection & Sanitization)”，剔除密钥与敏感数据。若磁盘上该文件已存在，触发既有文件保护，绝对不覆盖已有正文；若不存在，写入非受管种子文件并校验非空；
      * **minutes 入口 (P8)**：若确认启用了纪要归档，目标目录读取自 `retention.paths.minutes`（默认 `docs/interviews`）。若磁盘上该目录不存在，经整体确认后在目标路径建立空目录或入口索引，**严禁虚构伪造任何虚假访谈纪要会议记录**；若已存在则保护引用；
      * **raw_qa 绑定与核验 (P3, P8, R2)**：若确认启用了原始问答片段，按 `paths.raw_qa` 的形态分支：仓外安全引用别名（`private-storage`）必须在写前通过当前可见会话检查别名到宿主私有物理路径的显式授权映射（`session-authorized`）。若已在当前会话安全绑定，仅在授权私有位置写入初始引导/片段，公开产物仅存安全别名（如 `vault:raw-qa`），严禁落绝对私有路径或凭据；若当前会话未提供安全绑定映射，状态严格保持为 `unbound`（待绑定），不向任何地方写入文件，不虚报已可用，不预登记。仓内规范相对路径（`private-repo`，规范路径为 `docs/raw-qa/`，文件名同纪要 `YYYY-MM-DD-<主题>.md`）无需会话授权映射，但写前必须重新核实仓库本身为私有——核验每个推送目标均经其托管平台报告为 `PRIVATE` 并把解析出的主机绑定到查询命令（不能绑定主机即视为无法核实），任一目标 `INTERNAL`/`PUBLIC`/无法查询/无远端/查询失败则不写盘、如实报告并按未给出私有存储位置处理；仓内路径须为不含 `..` 且非仓根本身（非 `.`）的 POSIX 相对路径，写入前逐项校验解析后的真实路径位于仓库根内、各级路径组件非符号链接/Junction、目标所在的 Git 顶层就是本仓根（不在 submodule 或其他嵌套 worktree 内）、该目录与每次待写入的具体文件路径（含最终文件名）均未被忽略规则覆盖（`git check-ignore` 命中即不可用）、且不在仓库对外发布的站点内容范围内（如托管平台报告 GitHub Pages 从该路径或其祖先目录发布），任一项不满足则不写盘、告知用户并按未给出位置处理；核实通过则按与 ideas 相同的先审查再落盘、脱敏与既有文件保护写入该相对路径。两种形态均严禁写入宿主绝对路径；
-   - `docs/agents/roles.md`（若未暂停）：若留存策略已明确（非 pending 待确认），从 [references/retention-sections.md](references/retention-sections.md) 单一事实源获取对应正文，严格按替换表展开占位符（其中 `__RAW_QA_VISIBILITY__` 统一替换为 schema枚举值 `private-storage` 或 `private-repo`）后渲染 §3 规划者指引，并计算包含规范 `retention` 字段与 `retentionSrc` 权威正文源摘要的 input 摘要写盘；若留存策略处于 pending 状态，则不渲染 §3 亦不写入留存 input，杜绝生成假 header。
+   - `docs/agents/roles.md`（若未暂停）：若留存策略已明确（非 pending 待确认），用 `scripts/managed_blocks.mjs render-retention --retention-json <临时策略JSON>` 从 [references/retention-sections.md](references/retention-sections.md) 唯一正文源选择并展开对应段落，把结果作为 `__INTERVIEW_RETENTION_SECTION__` 的替换值；再用统一写入入口生成角色文件，input 仍按原契约包含规范 `retention` 与 `retentionSrc`。工具非零则暂停，不用自行拼接正文兜底；若留存策略处于 pending 状态，则不渲染 §3 亦不写入留存 input，杜绝生成假 header。
    - `docs/agents/section9-discussion-protocol.md`（§9 多 AI 讨论执行规程）：
      * **条件**：总是生成（与 AGENTS.md 同级）
      * **来源**：`templates/section9-discussion-protocol.md`（原样复制，不做变量替换）
@@ -399,6 +405,8 @@ description: >-
    - 若操作中断或失败，回退升级块时完整恢复旧块字节 $S_{\text{pre\_block}}$（含旧头与旧标记）；
    - 依赖文件仅在 $S_{\text{curr}} == S_{\text{agent}}$ 时直接写回 $S_{\text{pre}}$ 原始字节文件；
    - `core.hooksPath` 仅在当前值等于代理写入值时执行防覆盖恢复。
+
+**最终产物检查**：最后一次正文或元数据修改后，执行 `node <lazypack-setup目录>/scripts/managed_blocks.mjs verify --cwd <目标仓根> --baseline <本轮原始基线JSON>`。非零则本轮未完成，列明原因并暂停；不得只修好 Hook 指纹就宣称所有产物有效。该检查确认受管 header、变量展开、正文指纹、原始块外字节及本轮预期写入状态；不执行项目命令，也不代替 Hook 运行时验证。NO-OP 需通过同一只读检查，不能只比较 input/fp。
 
 ---
 

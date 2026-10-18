@@ -35,6 +35,8 @@
 
 在从本文档提取对应组合的围栏正文后，依据目标项目的 `retention` 配置字段，严格按以下映射表执行字符串替换。生成文件正文中严禁残留任何未展开占位符。
 
+实际编译使用随包 `scripts/managed_blocks.mjs render-retention --retention-json <临时策略JSON>` 选择并展开下表变量，再把其输出填入角色模板的 `__INTERVIEW_RETENTION_SECTION__`；不由宿主临时手写围栏提取或漏项替换。角色文件写入与重跑均按 [managed-blocks.md §5.3.1](managed-blocks.md#531-确定性写入与最终核验) 校验，不能把含占位符但 fp 自洽的正文当成有效产物。工具不会替用户选择维度、核实远端可见性、绑定私有位置或写入过程材料，这些授权仍按原交互契约执行。
+
 | 占位符 | 来源配置字段 | 合法格式 | 未启用该维度时的处理 | 公开产物输出规范 |
 |---|---|---|---|---|
 | `__IDEAS_PATH__` | `retention.paths.ideas` | POSIX 规范相对路径（默认：`docs/ideas/inbox.md`） | 对应段落不出现，无需替换 | 写入规范相对路径 |
