@@ -1,0 +1,134 @@
+name: Multica Issue Discussion
+
+# Owner-only command on a regular Issue:
+#   /multica discuss                    (default: gemini glm qoder)
+#   /multica discuss glm deepseek       (explicit model selection)
+# The model is pinned to the existing Multica agent, not to webhook payload text.
+on:
+  issue_comment:
+    types: [created]
+
+# A public issue_comment must never grant the runner repository write access.
+permissions: {}
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.login == 'jaredshuai' &&
+      startsWith(github.event.comment.body, '/multica discuss')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch independent Run Only participants
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_COMMENT_ID: ${{ github.event.comment.id }}
+          GEMINI_URL: ${{ secrets.MULTICA_DISCUSS_GEMINI_WEBHOOK_URL }}
+          GLM_URL: ${{ secrets.MULTICA_DISCUSS_GLM_WEBHOOK_URL }}
+          QODER_URL: ${{ secrets.MULTICA_DISCUSS_QODER_WEBHOOK_URL }}
+          DEEPSEEK_URL: ${{ secrets.MULTICA_DISCUSS_DEEPSEEK_WEBHOOK_URL }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          REPOSITORY = 'jaredshuai/lazypack-discipline'
+          OWNER = 'jaredshuai'
+          DEFAULT = ('gemini', 'glm', 'qoder')
+          WEBHOOK_ENVS = {
+              'gemini': 'GEMINI_URL',
+              'glm': 'GLM_URL',
+              'qoder': 'QODER_URL',
+              'deepseek': 'DEEPSEEK_URL',
+          }
+
+          def fail(reason):
+              print(reason, file=sys.stderr)
+              sys.exit(1)
+
+          try:
+              with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as f:
+                  event = json.load(f)
+              comment = event['comment']
+              issue = event['issue']
+              repository = event['repository']['full_name']
+              actor = comment['user']['login']
+              sender = event['sender']['login']
+              issue_number = issue['number']
+              comment_id = comment['id']
+              command = comment['body']
+          except (OSError, KeyError, TypeError, ValueError):
+              fail('Invalid GitHub event; no dispatch.')
+
+          if (repository != REPOSITORY or os.environ['GH_REPOSITORY'] != REPOSITORY or
+                  actor != OWNER or sender != OWNER or 'pull_request' in issue or
+                  issue.get('state') != 'open'):
+              fail('Unauthorized or non-open-issue event; no dispatch.')
+          if issue_number != int(os.environ['GH_ISSUE_NUMBER']) or comment_id != int(os.environ['GH_COMMENT_ID']):
+              fail('Issue or comment ID mismatch; no dispatch.')
+
+          if command == '/multica discuss':
+              roles = list(DEFAULT)
+          elif command.startswith('/multica discuss '):
+              selection = command[len('/multica discuss '):]
+              roles = selection.split(' ')
+              if not roles or any(role not in WEBHOOK_ENVS for role in roles):
+                  fail('Invalid role selection; valid roles: gemini glm qoder deepseek.')
+          else:
+              fail('Command must match lowercase /multica discuss exactly.')
+
+          if not (1 <= len(roles) <= 4) or len(roles) != len(set(roles)):
+              fail('Select 1-4 different roles without duplicates.')
+
+          # Check ALL requested credentials before starting ANY model.
+          endpoints = {}
+          for role in roles:
+              url = os.environ.get(WEBHOOK_ENVS[role], '').strip()
+              parsed = urllib.parse.urlsplit(url)
+              if parsed.scheme != 'https' or not parsed.hostname:
+                  fail(f'Missing or invalid HTTPS secret for {role}; no models dispatched.')
+              endpoints[role] = url
+
+          for role in roles:
+              payload = {
+                  'event': 'github.issue.discussion',
+                  'eventPayload': {
+                      'repository': REPOSITORY,
+                      'issue_number': issue_number,
+                      'github_comment_id': comment_id,
+                      'discussion_role': role,
+                  },
+              }
+              request = urllib.request.Request(
+                  endpoints[role],
+                  data=json.dumps(payload, separators=(',', ':')).encode('utf-8'),
+                  headers={
+                      'Content-Type': 'application/json',
+                      'Idempotency-Key': f'github-issue-discuss-{comment_id}-{role}',
+                  },
+                  method='POST',
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      raw = response.read(65537)
+                  if len(raw) > 65536:
+                      fail(f'{role}: webhook response exceeds 64 KiB.')
+                  result = json.loads(raw)
+              except urllib.error.HTTPError as error:
+                  fail(f'{role}: webhook returned HTTP {error.code} (URL not logged).')
+              except (urllib.error.URLError, TimeoutError):
+                  fail(f'{role}: webhook request failed (URL not logged).')
+              except (ValueError, TypeError):
+                  fail(f'{role}: malformed webhook response.')
+              if not isinstance(result, dict) or result.get('status') != 'accepted':
+                  status = result.get('status') if isinstance(result, dict) else 'invalid-body'
+                  fail(f'{role}: no new Run Only execution accepted (status={status!s}).')
+              print(f'{role}: Multica accepted a Run Only execution; completion not verified.')
+          PY
