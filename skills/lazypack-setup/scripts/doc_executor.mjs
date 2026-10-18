@@ -12,7 +12,7 @@ import os from 'os';
 import crypto from 'crypto';
 import { computeSha256, normalizeRelPath, buildExclusionMatcher, realRepoRelPath } from './doc_scanner.mjs';
 import { assertPathWithinRepo } from './doc_plan.mjs';
-import { readRetentionPolicySnapshot, isRetentionPolicySnapshot, assertNotPolicyCarrier, retentionPoliciesEqual } from './doc_retention_policy.mjs';
+import { readRetentionPolicySnapshot, isRetentionPolicySnapshot, assertNotPolicyCarrier, retentionPoliciesEqual, assertPolicyCarriersVisible } from './doc_retention_policy.mjs';
 
 /**
  * 冲突类型常量
@@ -211,6 +211,7 @@ export async function executePlan(plan, options = {}) {
   }
   const planExclusions = plan.exclusions;
   try {
+    assertPolicyCarriersVisible(currentPolicy, planExclusions);
     for (const action of plan.fileActions) {
       for (const value of [action.sourcePath, action.targetPath, action.filePath]) {
         if (value) assertNotPolicyCarrier(repoRoot, value);

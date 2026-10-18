@@ -294,3 +294,62 @@ test('executor blocks rewriting a policy hard link before input IO', async t => 
   f.plan.planFp = crypto.createHash('sha256').update(JSON.stringify(f.plan.planSummary)).digest('hex');
   await blockedBeforeIO(t, f, /POLICY_FILE_RESERVED/);
 });
+
+for (const command of ['scan', 'plan']) {
+  for (const carrier of ['docs/agents/roles.md', 'AGENTS.md', 'CLAUDE.md']) {
+    test(`CLI ${command} cannot overwrite ${carrier}`, t => {
+      const f = fixture(t);
+      const out = path.join(f.repo, carrier);
+      fs.writeFileSync(out, '# Policy preserved\n');
+      const spec = path.join(f.root, 'spec.json');
+      fs.writeFileSync(spec, JSON.stringify({ preserve_items: [{ path: 'notes.md' }] }));
+      const p = spawnSync(process.execPath, [helper, command, '--cwd', f.repo, '--input', spec, '--out', out], { encoding: 'utf8', windowsHide: true });
+      assert.equal(p.status, 1, p.stdout + p.stderr);
+      assert.match(p.stderr, /POLICY_FILE_RESERVED/);
+      assert.equal(fs.readFileSync(out, 'utf8'), '# Policy preserved\n');
+    });
+    test(`CLI ${command} cannot exclude existing ${carrier}`, t => {
+      const f = fixture(t);
+      fs.writeFileSync(path.join(f.repo, carrier), '# Policy\n[Notes](notes.md)\n');
+      const spec = path.join(f.root, 'spec.json');
+      const out = path.join(f.root, 'output.json');
+      fs.writeFileSync(spec, JSON.stringify({ migrate_items: [{ source_path: 'notes.md', target_path: 'docs/notes.md' }] }));
+      const p = spawnSync(process.execPath, [helper, command, '--cwd', f.repo, '--input', spec, '--out', out, '--exclude', carrier], { encoding: 'utf8', windowsHide: true });
+      assert.equal(p.status, 1, p.stdout + p.stderr);
+      assert.match(p.stderr, /POLICY_CARRIER_EXCLUDED/);
+      assert.equal(fs.existsSync(out), false);
+    });
+  }
+  for (const kind of ['hardlink', 'absent', 'junction']) {
+    test(`CLI ${command} rejects ${kind} policy output`, t => {
+      const f = fixture(t);
+      let out;
+      if (kind === 'hardlink') { out = path.join(f.root, 'alias.json'); fs.linkSync(f.policy, out); }
+      if (kind === 'absent') { fs.unlinkSync(f.policy); out = f.policy; }
+      if (kind === 'junction') {
+        fs.unlinkSync(f.policy);
+        const alias = path.join(f.root, 'agents-alias');
+        fs.symlinkSync(path.dirname(f.policy), alias, 'junction');
+        out = path.join(alias, 'roles.md');
+      }
+      const spec = path.join(f.root, 'spec.json');
+      fs.writeFileSync(spec, JSON.stringify({ preserve_items: [{ path: 'notes.md' }] }));
+      const p = spawnSync(process.execPath, [helper, command, '--cwd', f.repo, '--input', spec, '--out', out], { encoding: 'utf8', windowsHide: true });
+      assert.equal(p.status, 1, p.stdout + p.stderr);
+      assert.match(p.stderr, /POLICY_FILE_RESERVED|POLICY_OUTPUT_UNSAFE/);
+      if (kind === 'hardlink') assert.equal(fs.readFileSync(f.policy, 'utf8'), '# Roles\nraw_qa: docs/old-private\n');
+      else assert.equal(fs.existsSync(f.policy), false);
+    });
+  }
+}
+test('direct planner rejects ancestor exclusion hiding policy references', t => {
+  const f = fixture(t);
+  assert.throws(() => buildMigrationPlan(f.repo, { preserve_items: [{ path: 'notes.md' }] }, { inboundReferences: {} }, { excludePaths: ['docs/agents/'] }), /POLICY_CARRIER_EXCLUDED/);
+});
+test('executor rejects an approved exclusion hiding a policy carrier before IO', async t => {
+  const f = fixture(t);
+  f.plan.exclusions = ['docs/agents'];
+  f.plan.planSummary.exclusions = f.plan.exclusions;
+  f.plan.planFp = crypto.createHash('sha256').update(JSON.stringify(f.plan.planSummary)).digest('hex');
+  await blockedBeforeIO(t, f, /POLICY_CARRIER_EXCLUDED/);
+});

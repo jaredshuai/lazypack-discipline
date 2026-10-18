@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { parseMarkdownUrl, computeSha256, normalizeRelPath, buildExclusionMatcher, normalizeExcludePaths, realRepoRelPath } from './doc_scanner.mjs';
-import { readRetentionPolicySnapshot, assertRetentionPolicyUnchanged, assertNotPolicyCarrier } from './doc_retention_policy.mjs';
+import { readRetentionPolicySnapshot, assertRetentionPolicyUnchanged, assertNotPolicyCarrier, assertPolicyCarriersVisible } from './doc_retention_policy.mjs';
 
 /**
  * 严格路径边界核验 (B2 修复)
@@ -212,6 +212,7 @@ export function updateArtifactsSection3(existingContent, entries, artifactsRelPa
 export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {}) {
   const absRepo = path.resolve(repoRoot);
   const retentionPolicy = readRetentionPolicySnapshot(absRepo);
+  assertPolicyCarriersVisible(retentionPolicy, options.excludePaths);
   const preserveItems = planSpec.preserve_items || [];
   const migrateItems = planSpec.migrate_items || [];
 

@@ -18,7 +18,7 @@ import { parseArgs } from 'util';
 import { scanProjectDocuments, computeSha256 } from './doc_scanner.mjs';
 import { buildMigrationPlan } from './doc_plan.mjs';
 import { executePlan, ExecutionStatus } from './doc_executor.mjs';
-import { readRetentionPolicySnapshot, assertRetentionPolicyUnchanged } from './doc_retention_policy.mjs';
+import { readRetentionPolicySnapshot, assertRetentionPolicyUnchanged, assertPolicyCarriersVisible, assertSafePolicyOutput } from './doc_retention_policy.mjs';
 
 const options = {
   cwd: { type: 'string', default: process.cwd() },
@@ -52,6 +52,8 @@ Options:
 
   Plans bind the exact docs/agents/roles.md, root AGENTS.md and CLAUDE.md bytes (or absence) to approval.
   Scan and plan validate policy before and after scanning; drift blocks output.
+  Exclusions must not hide an existing policy carrier. Outputs cannot replace
+  carriers or use symlink/junction paths or parents.
   Execute revalidates this snapshot before migration reads or writes.
   Changed/unreadable policy or an old plan without a snapshot requires replanning.
     `);
@@ -59,13 +61,16 @@ Options:
   }
 
   const cwd = path.resolve(values.cwd);
+  if (values.out && ['scan', 'plan'].includes(command)) assertSafePolicyOutput(cwd, values.out);
 
   if (command === 'scan') {
     const policyBeforeScan = readRetentionPolicySnapshot(cwd);
+    assertPolicyCarriersVisible(policyBeforeScan, values.exclude || []);
     const result = scanProjectDocuments(cwd, { excludePaths: values.exclude || [] });
     assertRetentionPolicyUnchanged(cwd, policyBeforeScan);
     const json = JSON.stringify(result, null, 2);
     if (values.out) {
+      assertSafePolicyOutput(cwd, values.out);
       fs.writeFileSync(path.resolve(values.out), json, 'utf8');
       console.log(`Scan completed. Output saved to ${values.out}`);
     } else {
@@ -80,6 +85,7 @@ Options:
     const planSpec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
 
     const policyBeforeScan = readRetentionPolicySnapshot(cwd);
+    assertPolicyCarriersVisible(policyBeforeScan, values.exclude || []);
     const scanResult = scanProjectDocuments(cwd, { excludePaths: values.exclude || [] });
     assertRetentionPolicyUnchanged(cwd, policyBeforeScan);
     const plan = buildMigrationPlan(cwd, planSpec, scanResult, { excludePaths: values.exclude || [] });
@@ -87,6 +93,7 @@ Options:
     const json = JSON.stringify(plan, null, 2);
 
     if (values.out) {
+      assertSafePolicyOutput(cwd, values.out);
       fs.writeFileSync(path.resolve(values.out), json, 'utf8');
       console.log(`Plan generated. plan_fp: ${plan.planFp}, input_fp: ${plan.inputFp}`);
       console.log(`Output saved to ${values.out}`);

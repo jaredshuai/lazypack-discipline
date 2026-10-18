@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { realRepoRelPath } from './doc_scanner.mjs';
+import { realRepoRelPath, buildExclusionMatcher } from './doc_scanner.mjs';
 
 export const RETENTION_POLICY_PATHS = Object.freeze(['docs/agents/roles.md', 'AGENTS.md', 'CLAUDE.md']);
 
@@ -45,6 +45,29 @@ function readPolicyFile(root, relativePath) {
 
 export function retentionPoliciesEqual(a, b) {
   return RETENTION_POLICY_PATHS.every(p => a.files[p] === b.files[p]);
+}
+
+export function assertPolicyCarriersVisible(snapshot, exclusions) {
+  const excluded = buildExclusionMatcher(exclusions);
+  if (RETENTION_POLICY_PATHS.some(p => snapshot.files[p] !== null && excluded(p))) {
+    const error = new Error('POLICY_CARRIER_EXCLUDED: Exclusions must not hide an existing retention policy carrier or its inbound references.');
+    error.code = 'ERR_POLICY_CARRIER_EXCLUDED';
+    throw error;
+  }
+}
+
+export function assertSafePolicyOutput(repoRoot, output) {
+  const absolute = path.resolve(output);
+  assertNotPolicyCarrier(repoRoot, absolute);
+  // Refuse links even when dangling: writing through one can create a carrier.
+  for (let p = absolute; ; p = path.dirname(p)) {
+    if (fs.lstatSync(p, { throwIfNoEntry: false })?.isSymbolicLink()) {
+      const error = new Error('POLICY_OUTPUT_UNSAFE: Output path and parents must not be symbolic links or junctions.');
+      error.code = 'ERR_POLICY_OUTPUT_UNSAFE';
+      throw error;
+    }
+    if (p === path.dirname(p)) break;
+  }
 }
 
 export function assertRetentionPolicyUnchanged(repoRoot, approvedPolicy) {
