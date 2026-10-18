@@ -6,6 +6,43 @@
 # -----------------------------------------------------------------------------
 
 EXIT_CODE=0
+FORMAT_RESULT=''
+LINT_RESULT=''
+TYPE_RESULT=''
+TEST_RESULT=''
+
+# Exact command strings shared by covered slots run once in this invocation.
+reuse_gate_result() {
+  for PREVIOUS_GATE in format lint type test; do
+    case "$PREVIOUS_GATE" in
+      format) PREVIOUS_CMD=${FORMAT_CMD-}; PREVIOUS_RESULT=$FORMAT_RESULT ;;
+      lint) PREVIOUS_CMD=${LINT_CMD-}; PREVIOUS_RESULT=$LINT_RESULT ;;
+      type) PREVIOUS_CMD=${TYPE_CMD-}; PREVIOUS_RESULT=$TYPE_RESULT ;;
+      test) PREVIOUS_CMD=${TEST_CMD-}; PREVIOUS_RESULT=$TEST_RESULT ;;
+    esac
+    case "$PREVIOUS_RESULT" in
+      passed|failed)
+        if [ "$GATE_CMD" = "$PREVIOUS_CMD" ]; then
+          echo "[lazypack] $GATE_NAME: reused aggregate result from $PREVIOUS_GATE ($PREVIOUS_RESULT)"
+          if [ "$PREVIOUS_RESULT" = failed ]; then
+            EXIT_CODE=1
+          fi
+          return 0
+        fi
+        ;;
+    esac
+  done
+  return 1
+}
+
+remember_gate_result() {
+  case "$GATE_NAME" in
+    format) FORMAT_RESULT="$1" ;;
+    lint) LINT_RESULT="$1" ;;
+    type) TYPE_RESULT="$1" ;;
+    test) TEST_RESULT="$1" ;;
+  esac
+}
 
 run_gate() {
   GATE_NAME="$1"
@@ -24,13 +61,18 @@ run_gate() {
           return
           ;;
       esac
+      if reuse_gate_result; then
+        return
+      fi
       echo "[lazypack] Running $GATE_NAME: $GATE_CMD"
       # Execute command in an isolated subshell to prevent exit 0 bypass or variable leakage
       if ! ( eval "$GATE_CMD" ); then
         echo "❌ [lazypack] $GATE_NAME check failed!" >&2
         EXIT_CODE=1
+        remember_gate_result failed
       else
         echo "✅ [lazypack] $GATE_NAME check passed."
+        remember_gate_result passed
       fi
       ;;
     missing)

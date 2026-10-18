@@ -79,6 +79,8 @@
 
 无条件依赖托管块**不包含** `artifacts` 字段。
 
+聚合调用覆盖多槽时，各槽在 `commands` 中保存同一完整原串（例如 `type` 与 `test` 均为 `npm test`），不展开其子命令，也不增加 aggregate 输入字段。覆盖与逐字核对依据见 [verification §3.3](verification.md#33-门禁命令规范执行边界与缓存授权)。运行时共享结果只存于本次 Hook 进程，不进入 input；出处沿用 existing/配方原有规则。模板变化按本节既有 gen 与更新决策树处理，批准升级后的未变重跑仍应 NO-OP；不得承诺模板变化只影响 Hook 而不传播其他受管产物。
+
 #### 3.1.1.1 角色映射托管块序列化结构 (docs/agents/roles.md)
 `docs/agents/roles.md` 的 `agent-roles` 托管块属于 Layer 0 独立产物（无条件依赖托管块）。为持久化项目留存策略且保持单向无环依赖（DAG），其 input 字典中包含规范机器字段 `retention`：
 
