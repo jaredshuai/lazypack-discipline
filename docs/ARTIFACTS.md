@@ -726,8 +726,9 @@ PR #88 合入前复核：用户明确授权提交、推送已验证补丁并在�
 
 - 检查范围：P1–P5、P8–P11；人工核对完整调用→多槽映射→精确匹配→结果复用及报告边界，固定层未改。
 - 依据版本：开工3bc9bc61509a569929c983b25ac68b57e173d817，收尾本轮工作区；声明docs/agents/doc-pairs.md，命令node scripts/check_doc_pairs.mjs。
-- 处理结果：新增12项在开工模板上6/12通过、6项失败，补丁后12/12通过；既有Hook33/33、扫描器7/7通过。文档关系P1–P5、P8–P11共9项均未发现差异；收尾日志与新同源清单放系统TEMP。曾有一项只检查测试渲染辅助函数的稳定性，已移除，不作为真实setup幂等证据。
-- 未覆盖：真实业务Hook未运行；完整setup及Claude Code+GLM宿主未复验。JS fixture的type覆盖仅指其现有语法检查，不外推为完整类型检查。聚合失败只报告聚合调用失败，不能证明短路后的内部检查已执行。独立Agent示例仓装配的实际记录另存TEMP，不替代全宿主验收。
+- 处理结果：初始12项在旧模板上6/12通过、6项失败，修复后12/12通过；Cubic复核指出Node测试运行器嵌套环境、wired空字符串覆盖和replace元字符三处测试边界，补齐后14项在直接运行及 `node --test` 两种方式均通过。旧渲染器的 `$&` 失败由回归实测；既有Hook33/33、扫描器7/7、文档关系9/9通过。独立克隆最终提交复验同样全部通过；6份载荷的原始字节清单生成与反查通过。
+- 宿主证据：首次干净示例setup因缺前置tracker及resident入口按Skill规定BLOCKED并零写入；随后在另一份预置合成前置文件的隔离仓运行限定setup，type/test均接入完整 `npm test`，format/lint missing，原生 `git hook run pre-commit` 退出0且显示跳过与复用；静态检查通过，同范围复跑NO-OP、提问0次，所有原有fixture文件SHA256不变，仅新增 `.githooks/pre-commit` 并写该仓局部 `core.hooksPath`。合成前置由总控明确编写，未声称运行了 `setup-matt-pocock-skills`。完整证据见系统TEMP `setup-runner-report.md`、`setup-ready-runner-report.md`、两份运行日志及 `independent-target-verification.log`。
+- 未覆盖：真实业务仓未触碰；完整bootstrap、真实Matt前置安装、Claude Code+GLM及POSIX宿主未验证。JS fixture的type覆盖仅指既有语法检查，不外推为完整类型检查。聚合失败只报告调用失败，不能证明短路后的内部检查已执行。无新固定层决策；PR开放待审，Issue未关闭。
 - 未决事项：无新固定层条文或产品选项；已有拆写Hook须按实际项目证据展示修复diff，不从旧fp猜测原命令。模板gen变化遵守既有整体更新流程，不承诺仅Hook受影响。
 
 2026-10-18（#86 / PR91 测试宿主边界补齐）：保留原12项6失败→12通过的阶段证据。新增wired空字符串与替换标记两项，当前14项。复现node --test外层运行时原套件11/12通过、1项失败：嵌套Node测试继承NODE_TEST_CONTEXT导致测试体未进入；现仅在测试夹具子进程环境移除该变量，生产Hook不改环境。测试渲染采用replace回调，$&等内容不再被当作替换语法；新增用例在旧渲染器上实际得到__TEST_CMD__而非$&，补丁后验证完整字面量。直接与--test两种启动方式均按最终收尾日志记录。
