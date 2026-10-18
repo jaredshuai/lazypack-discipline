@@ -297,8 +297,25 @@ function readJsonExternal(root, value, label) {
 
 function writeJsonAtomic(abs, value) {
   const tmp = `${abs}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, abs);
+  let created = false;
+  let committed = false;
+  try {
+    // Exclusive create: never clobber a pre-existing file that shares this temp name, and
+    // never unlink one this call did not create.
+    const fd = fs.openSync(tmp, 'wx', 0o600);
+    created = true;
+    try {
+      fs.writeFileSync(fd, `${JSON.stringify(value, null, 2)}\n`);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tmp, abs);
+    committed = true;
+  } finally {
+    if (created && !committed) {
+      try { fs.unlinkSync(tmp); } catch { /* own temp only; keep the original failure */ }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -466,20 +483,31 @@ function assertOriginalIntegrity(curScan, expectedBlock, approvalSha) {
 function atomicReplace(abs, bytes, mode) {
   const dir = path.dirname(abs);
   fs.mkdirSync(dir, { recursive: true });
+  const fileMode = mode ?? 0o644;
   const tmp = path.join(dir, `.lazypack-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.tmp`);
-  const fd = fs.openSync(tmp, 'wx', mode ?? 0o644);
+  let created = false;
+  let committed = false;
   try {
-    fs.writeFileSync(fd, bytes);
-    fs.fsyncSync(fd);
+    const fd = fs.openSync(tmp, 'wx', fileMode);
+    created = true; // the exclusive create succeeded: this temp is ours to clean up
+    try {
+      fs.writeFileSync(fd, bytes);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    // Applying the mode is part of the write: a chmod failure must abort before the
+    // replace instead of silently reporting success with unverified permissions.
+    fs.chmodSync(tmp, fileMode);
+    fs.renameSync(tmp, abs);
+    committed = true;
   } finally {
-    fs.closeSync(fd);
+    if (created && !committed) {
+      // Remove only this call's own unique temp; a failed exclusive open (EEXIST) leaves
+      // someone else's file alone, and the original error is never masked.
+      try { fs.unlinkSync(tmp); } catch { /* keep the original error */ }
+    }
   }
-  try {
-    fs.chmodSync(tmp, mode ?? 0o644);
-  } catch {
-    /* best-effort permission preservation */
-  }
-  fs.renameSync(tmp, abs);
 }
 
 function cmdWrite({ cwd, baseline, spec }) {
@@ -558,7 +586,18 @@ function cmdWrite({ cwd, baseline, spec }) {
     return { status: 'noop', path: rel };
   }
 
-  atomicReplace(abs, next, entry.exists ? entry.mode : 0o644);
+  // A rewrite inherits the target's CURRENT permissions: an authorised chmod after the
+  // baseline (including +x on a file this helper just created) must survive, so never reuse
+  // the snapshot's recorded mode. Only a genuinely new file falls back to 0644.
+  let writeMode = 0o644;
+  if (current !== null) {
+    const liveStat = fs.lstatSync(abs, { throwIfNoEntry: false });
+    if (!liveStat || liveStat.isSymbolicLink() || !liveStat.isFile()) {
+      throw new CliError(EXIT.UNSAFE, `target must be a regular file: ${rel}`);
+    }
+    writeMode = liveStat.mode & 0o777;
+  }
+  atomicReplace(abs, next, writeMode);
   const readBack = readRegularFile(abs, rel);
   if (readBack === null || !readBack.equals(next)) {
     throw new CliError(EXIT.UNSAFE, `read-back verification failed for ${rel}`);
@@ -704,14 +743,57 @@ function validateRetentionPolicy(policy) {
 
 function extractRetentionSection(sectionNumber) {
   const source = fs.readFileSync(RETENTION_REFERENCE, 'utf8').replace(/\r\n/g, '\n');
-  const headingIndex = source.indexOf(`### 4.${sectionNumber} `);
-  if (headingIndex < 0) throw new CliError(EXIT.USAGE, `retention-sections.md is missing section 4.${sectionNumber}`);
-  const fenceStart = source.indexOf('```markdown', headingIndex);
-  if (fenceStart < 0) throw new CliError(EXIT.USAGE, `section 4.${sectionNumber} has no fenced markdown block`);
-  const bodyStart = source.indexOf('\n', fenceStart) + 1;
-  const fenceEnd = source.indexOf('```', bodyStart);
-  if (fenceEnd < 0) throw new CliError(EXIT.USAGE, `section 4.${sectionNumber} fence is not terminated`);
-  return source.slice(bodyStart, fenceEnd);
+  const lines = source.split('\n');
+  const heading = lines.findIndex((line) => line.startsWith(`### 4.${sectionNumber} `));
+  if (heading < 0) throw new CliError(EXIT.USAGE, `retention-sections.md is missing section 4.${sectionNumber}`);
+
+  // Bound the scan to this section: the next heading (or EOF) ends it, so a missing or
+  // malformed fence fails closed instead of borrowing the following section's fence.
+  // Only real numbered section markers bound the region: `### 4.N ...` siblings and the
+  // `## N. ...` parents. Ordinary headings emitted INSIDE a fenced body (e.g. `## 小节`,
+  // `### 说明` or `# 注释`) must not end the section early.
+  let regionEnd = lines.findIndex((line, index) => index > heading
+    && (/^### \d+\.\d+ /.test(line) || /^## \d+\./.test(line)));
+  if (regionEnd < 0) regionEnd = lines.length;
+
+  // Line-delimited CommonMark fence parsing: an opening fence is a backtick run of 3+ at
+  // <=3 spaces of indent followed by the info string `markdown`; a closing fence is a
+  // backtick run at least as long with nothing but whitespace after it. Inline backticks and
+  // shorter runs inside a longer fence therefore cannot terminate the block early.
+  const fenceLine = (line) => {
+    let indent = 0;
+    while (indent < line.length && indent < 3 && line[indent] === ' ') indent += 1;
+    let end = line.length;
+    while (end > indent && (line[end - 1] === ' ' || line[end - 1] === '\t')) end -= 1;
+    let run = 0;
+    while (indent + run < end && line[indent + run] === '`') run += 1;
+    return { run, rest: line.slice(indent + run, end) };
+  };
+
+  let openIndex = -1;
+  let fenceLength = 0;
+  for (let index = heading + 1; index < regionEnd; index += 1) {
+    const { run, rest } = fenceLine(lines[index]);
+    if (run >= 3 && rest === 'markdown') {
+      openIndex = index;
+      fenceLength = run;
+      break;
+    }
+  }
+  if (openIndex < 0) throw new CliError(EXIT.USAGE, `section 4.${sectionNumber} has no fenced markdown block`);
+
+  let closeIndex = -1;
+  for (let index = openIndex + 1; index < regionEnd; index += 1) {
+    const { run, rest } = fenceLine(lines[index]);
+    if (run >= fenceLength && rest === '') {
+      closeIndex = index;
+      break;
+    }
+  }
+  if (closeIndex < 0) throw new CliError(EXIT.USAGE, `section 4.${sectionNumber} fence is not terminated`);
+
+  const body = lines.slice(openIndex + 1, closeIndex);
+  return body.length === 0 ? '' : `${body.join('\n')}\n`;
 }
 
 function cmdRenderRetention({ retentionJson }) {

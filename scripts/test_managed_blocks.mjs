@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { inspectHookBytes } from '../skills/lazypack-setup/scripts/verify_hook_install.mjs';
 
@@ -15,8 +15,8 @@ const HOOK_TEMPLATE = fileURLToPath(new URL('../skills/lazypack-setup/templates/
 // Exit code contract of managed_blocks.mjs
 const EXIT = Object.freeze({ OK: 0, USAGE: 2, UNSAFE: 3, STALE: 4, BLOCK: 5, PAUSE: 6, VALIDATE: 7 });
 
-function run(args) {
-  return spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' });
+function run(args, cli = CLI) {
+  return spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
 }
 
 function tmpRepo(t) {
@@ -593,7 +593,6 @@ test('new artifact is created with a valid block and verifies', (t) => {
 // Retention rendering
 // ---------------------------------------------------------------------------
 function retentionPolicy(dimensions, mode, overrides = {}) {
-  const keys = ['ideas', 'minutes', 'raw_qa'];
   const paths = { ideas: '', minutes: '', raw_qa: '' };
   const visibility = { ideas: 'none', minutes: 'none', raw_qa: 'none' };
   if (dimensions.includes('ideas')) { paths.ideas = 'docs/ideas/inbox.md'; visibility.ideas = 'private-repo'; }
@@ -791,4 +790,367 @@ test('writer refuses mismatched marker names/styles and duplicate markers', (t) 
   const dupSpec = writeSpec(dup.root, { path: 'CODING_STANDARDS.md', block: 'coding-standards', template, replacements: {} });
   const duplicated = run(['write', '--cwd', dup.repo, '--baseline', dupSnap.baseline, '--spec', dupSpec]);
   assert.equal(duplicated.status, EXIT.BLOCK, `duplicate markers must fail closed, got ${duplicated.status}`);
+});
+
+// ---------------------------------------------------------------------------
+// Follow-up (PR93 bot review): own-temp cleanup, live-mode rewrites, bounded
+// retention fence extraction. Fault injection runs the real CLI under a native
+// `--import` preload that monkeypatches `node:fs` for the helper's OWN temp only.
+// ---------------------------------------------------------------------------
+const PRELOAD_SOURCE = `
+import fs from 'node:fs';
+import path from 'node:path';
+
+const realOpenSync = fs.openSync;
+const realWriteFileSync = fs.writeFileSync;
+const realRenameSync = fs.renameSync;
+const realChmodSync = fs.chmodSync;
+const realLstatSync = fs.lstatSync;
+const fdPaths = new Map();
+
+const op = process.env.LAZYPACK_FAULT_OP || '';
+const match = process.env.LAZYPACK_FAULT_MATCH || '';
+const logPath = process.env.LAZYPACK_FAULT_LOG || '';
+const collideMatch = process.env.LAZYPACK_COLLIDE_MATCH || '';
+const collideBytes = process.env.LAZYPACK_COLLIDE_BYTES || '';
+const ownTemp = (p) => typeof p === 'string' && path.basename(p).endsWith('.tmp') && (match === '' || p.includes(match));
+const record = (entry) => { if (logPath) fs.appendFileSync(logPath, JSON.stringify(entry) + '\\n'); };
+
+fs.openSync = (p, flag, ...rest) => {
+  if (collideMatch && typeof p === 'string' && p.includes(collideMatch) && String(flag).includes('x')) {
+    realWriteFileSync(p, collideBytes);
+    record({ collide: p });
+  }
+  const fd = realOpenSync(p, flag, ...rest);
+  if (typeof p === 'string') fdPaths.set(fd, p);
+  return fd;
+};
+fs.writeFileSync = (target, ...rest) => {
+  const p = typeof target === 'number' ? fdPaths.get(target) : target;
+  if (op === 'writeFileSync' && ownTemp(p)) {
+    record({ fault: 'writeFileSync', path: p });
+    throw new Error('injected writeFileSync failure');
+  }
+  return realWriteFileSync(target, ...rest);
+};
+fs.chmodSync = (p, mode, ...rest) => {
+  if (ownTemp(p)) {
+    if (op === 'chmodSync') {
+      record({ fault: 'chmodSync', path: p, mode: mode & 0o777 });
+      throw new Error('injected chmodSync failure');
+    }
+    record({ chmod: p, mode: mode & 0o777 });
+  }
+  return realChmodSync(p, mode, ...rest);
+};
+fs.renameSync = (from, to, ...rest) => {
+  if (op === 'renameSync' && ownTemp(from)) {
+    record({ fault: 'renameSync', from, to });
+    throw new Error('injected renameSync failure');
+  }
+  return realRenameSync(from, to, ...rest);
+};
+
+const forced = process.env.LAZYPACK_LSTAT_FORCE ? JSON.parse(process.env.LAZYPACK_LSTAT_FORCE) : null;
+if (forced) {
+  fs.lstatSync = (p, ...rest) => {
+    const st = realLstatSync(p, ...rest);
+    if (st && path.resolve(String(p)) === forced.path) {
+      const patched = Object.create(st);
+      patched.mode = forced.mode;
+      return patched;
+    }
+    return st;
+  };
+}
+`;
+
+function writePreload(dir, source) {
+  const file = path.join(dir, `preload-${crypto.randomBytes(4).toString('hex')}.mjs`);
+  fs.writeFileSync(file, source);
+  return file;
+}
+
+function runPreload({ cli = CLI, args, preload, env = {} }) {
+  return spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, cli, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, ...env }
+  });
+}
+
+function findTemps(dir) {
+  const found = [];
+  const walk = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const abs = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(abs);
+      else if (entry.name.endsWith('.tmp')) found.push(abs);
+    }
+  };
+  if (fs.existsSync(dir)) walk(dir);
+  return found;
+}
+
+function logEntries(logFile) {
+  return fs.readFileSync(logFile, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
+}
+
+const oct = (mode) => `0o${(mode ?? 0).toString(8)}`;
+function recordedTempMode(logFile) {
+  const entries = fs.readFileSync(logFile, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
+  const hit = entries.find((entry) => typeof entry.chmod === 'string' && path.basename(entry.chmod).endsWith('.tmp'));
+  return hit?.mode;
+}
+
+function copyRetentionLayout(root) {
+  const layout = path.join(root, 'layout');
+  fs.mkdirSync(path.join(layout, 'scripts'), { recursive: true });
+  fs.mkdirSync(path.join(layout, 'references'), { recursive: true });
+  const cli = path.join(layout, 'scripts', 'managed_blocks.mjs');
+  const ref = path.join(layout, 'references', 'retention-sections.md');
+  fs.copyFileSync(CLI, cli);
+  fs.copyFileSync(RETENTION_REF, ref);
+  return { layout, cli, ref };
+}
+
+test('atomicReplace deletes its own temp on write/rename/chmod failure, target+baseline untouched', (t) => {
+  for (const op of ['writeFileSync', 'renameSync', 'chmodSync']) {
+    const { root, repo } = tmpRepo(t);
+    const target = path.join(repo, 'docs/notes.md');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const original = markdownFile('notes-block', '\n# 原始\n');
+    fs.writeFileSync(target, original);
+    const { res: snap, baseline } = snapshot(repo, root, ['docs/notes.md']);
+    assert.equal(snap.status, EXIT.OK, snap.stderr);
+    const baselineBefore = fs.readFileSync(baseline);
+
+    const body = `\n# 原始\n\n更新 ${op}\n`;
+    const template = `${HDR('notes-block', '__FP__')}\n${body}${END('notes-block')}\n`;
+    const spec = writeSpec(root, { path: 'docs/notes.md', block: 'notes-block', template, replacements: {} });
+    const preload = writePreload(root, PRELOAD_SOURCE);
+    const faultLog = path.join(root, `fault-${op}.log`);
+
+    const faulted = runPreload({
+      args: ['write', '--cwd', repo, '--baseline', baseline, '--spec', spec],
+      preload,
+      env: { LAZYPACK_FAULT_OP: op, LAZYPACK_FAULT_LOG: faultLog }
+    });
+    assert.notEqual(faulted.status, EXIT.OK, `${op}: injected failure must fail the write, got ${faulted.status}: ${faulted.stderr}`);
+    assert.match(fs.readFileSync(faultLog, 'utf8'), /"fault"/, `${op}: injection did not fire on the helper temp`);
+    assert.ok(fs.readFileSync(target).equals(original), `${op}: target bytes changed on a pre-target failure`);
+    assert.ok(fs.readFileSync(baseline).equals(baselineBefore), `${op}: baseline changed on a pre-target failure`);
+    assert.deepEqual(findTemps(root), [], `${op}: helper left an orphan temp`);
+
+    const recovered = run(['write', '--cwd', repo, '--baseline', baseline, '--spec', spec]);
+    assert.equal(recovered.status, EXIT.OK, `${op}: recovery write failed: ${recovered.stderr}`);
+    assert.deepEqual(findTemps(root), [], `${op}: recovery left a temp`);
+    assert.equal(run(['verify', '--cwd', repo, '--baseline', baseline]).status, EXIT.OK);
+  }
+});
+
+test('writeJsonAtomic deletes its own baseline temp on write/rename failure, baseline never rewritten', (t) => {
+  for (const op of ['writeFileSync', 'renameSync']) {
+    const { root, repo } = tmpRepo(t);
+    const target = path.join(repo, 'docs/notes.md');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, markdownFile('notes-block', '\n# 原始\n'));
+    const { res: snap, baseline } = snapshot(repo, root, ['docs/notes.md']);
+    assert.equal(snap.status, EXIT.OK, snap.stderr);
+    const baselineBefore = fs.readFileSync(baseline);
+
+    const body = `\n# 原始\n\n基线 ${op}\n`;
+    const template = `${HDR('notes-block', '__FP__')}\n${body}${END('notes-block')}\n`;
+    const spec = writeSpec(root, { path: 'docs/notes.md', block: 'notes-block', template, replacements: {} });
+    const preload = writePreload(root, PRELOAD_SOURCE);
+    const faultLog = path.join(root, `baseline-fault-${op}.log`);
+
+    const faulted = runPreload({
+      args: ['write', '--cwd', repo, '--baseline', baseline, '--spec', spec],
+      preload,
+      env: { LAZYPACK_FAULT_OP: op, LAZYPACK_FAULT_MATCH: baseline, LAZYPACK_FAULT_LOG: faultLog }
+    });
+    assert.notEqual(faulted.status, EXIT.OK, `${op}: injected baseline failure must fail the write`);
+    assert.match(fs.readFileSync(faultLog, 'utf8'), /"fault"/, `${op}: injection did not fire on the baseline temp`);
+    assert.ok(fs.readFileSync(baseline).equals(baselineBefore), `${op}: baseline bytes changed although the atomic rename failed`);
+    assert.deepEqual(findTemps(root), [], `${op}: helper left an orphan baseline temp`);
+  }
+});
+
+test('a pre-existing foreign temp is never overwritten or unlinked (EEXIST stays owned by its creator)', (t) => {
+  const FOREIGN = 'foreign-temp-payload\n';
+
+  // (a) target rewrite: atomicReplace's exclusive open collides; the foreign temp must survive.
+  {
+    const { root, repo } = tmpRepo(t);
+    const target = path.join(repo, 'docs/notes.md');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const original = markdownFile('notes-block', '\n# 原始\n');
+    fs.writeFileSync(target, original);
+    const { res: snap, baseline } = snapshot(repo, root, ['docs/notes.md']);
+    assert.equal(snap.status, EXIT.OK, snap.stderr);
+    const spec = writeSpec(root, { path: 'docs/notes.md', block: 'notes-block', template: `${HDR('notes-block', '__FP__')}\n\n# 变更\n${END('notes-block')}\n`, replacements: {} });
+    const preload = writePreload(root, PRELOAD_SOURCE);
+    const log = path.join(root, 'collide-target.log');
+    const faulted = runPreload({
+      args: ['write', '--cwd', repo, '--baseline', baseline, '--spec', spec],
+      preload,
+      env: { LAZYPACK_COLLIDE_MATCH: '.lazypack-', LAZYPACK_COLLIDE_BYTES: FOREIGN, LAZYPACK_FAULT_LOG: log }
+    });
+    assert.notEqual(faulted.status, EXIT.OK, `target collision must fail the write, got ${faulted.status}: ${faulted.stderr}`);
+    const collided = logEntries(log).find((entry) => entry.collide)?.collide;
+    assert.ok(collided, 'preload must have created the colliding target temp');
+    assert.equal(fs.readFileSync(collided, 'utf8'), FOREIGN, 'atomicReplace touched a temp it did not create');
+    assert.ok(fs.readFileSync(target).equals(original), 'target bytes changed on an EEXIST failure');
+    fs.unlinkSync(collided);
+    assert.deepEqual(findTemps(root), [], 'no other target temp may be left behind');
+  }
+
+  // (b) baseline write: writeJsonAtomic must exclusive-create, never overwrite the foreign temp.
+  {
+    const { root, repo } = tmpRepo(t);
+    const target = path.join(repo, 'docs/notes.md');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, markdownFile('notes-block', '\n# 原始\n'));
+    const { res: snap, baseline } = snapshot(repo, root, ['docs/notes.md']);
+    assert.equal(snap.status, EXIT.OK, snap.stderr);
+    const baselineBefore = fs.readFileSync(baseline);
+    const spec = writeSpec(root, { path: 'docs/notes.md', block: 'notes-block', template: `${HDR('notes-block', '__FP__')}\n\n# 变更\n${END('notes-block')}\n`, replacements: {} });
+    const preload = writePreload(root, PRELOAD_SOURCE);
+    const log = path.join(root, 'collide-baseline.log');
+    const faulted = runPreload({
+      args: ['write', '--cwd', repo, '--baseline', baseline, '--spec', spec],
+      preload,
+      env: { LAZYPACK_COLLIDE_MATCH: baseline, LAZYPACK_COLLIDE_BYTES: FOREIGN, LAZYPACK_FAULT_LOG: log }
+    });
+    assert.notEqual(faulted.status, EXIT.OK, `baseline collision must fail the write, got ${faulted.status}: ${faulted.stderr}`);
+    const collided = logEntries(log).find((entry) => entry.collide)?.collide;
+    assert.ok(collided, 'preload must have created the colliding baseline temp');
+    assert.equal(fs.readFileSync(collided, 'utf8'), FOREIGN, 'writeJsonAtomic clobbered or removed a temp it did not create');
+    assert.ok(fs.readFileSync(baseline).equals(baselineBefore), 'baseline bytes changed');
+    fs.unlinkSync(collided);
+    assert.deepEqual(findTemps(root), [], 'no other baseline temp may be left behind');
+  }
+});
+
+test('rewrites inherit the live target mode, never the snapshot default (Windows POSIX-mode simulation)', (t) => {
+  const { root, repo } = tmpRepo(t);
+  const mkTemplate = (body) => `${HDR('hook-block', '__FP__')}\n${body}${END('hook-block')}\n`;
+  const preload = writePreload(root, PRELOAD_SOURCE);
+
+  // (a) file this helper just created, then authorised chmod +x, then a metadata rewrite.
+  // Windows cannot set real executable bits, so the second write SIMULATES a live 0755
+  // stat through the preload; this asserts the mode SOURCE, not real POSIX bits.
+  const created = path.join(repo, 'scripts/hook.sh');
+  fs.mkdirSync(path.dirname(created), { recursive: true });
+  const snapA = snapshot(repo, root, ['scripts/hook.sh']);
+  assert.equal(snapA.res.status, EXIT.OK, snapA.res.stderr);
+  const firstA = run(['write', '--cwd', repo, '--baseline', snapA.baseline, '--spec', writeSpec(root, { path: 'scripts/hook.sh', block: 'hook-block', template: mkTemplate('\n# v1\n'), replacements: {} })]);
+  assert.equal(firstA.status, EXIT.OK, firstA.stderr);
+  const logA = path.join(root, 'chmod-created.log');
+  const secondA = runPreload({
+    args: ['write', '--cwd', repo, '--baseline', snapA.baseline, '--spec', writeSpec(root, { path: 'scripts/hook.sh', block: 'hook-block', template: mkTemplate('\n# v2\n'), replacements: {} })],
+    preload,
+    env: { LAZYPACK_LSTAT_FORCE: JSON.stringify({ path: created, mode: 0o100755 }), LAZYPACK_FAULT_LOG: logA }
+  });
+  assert.equal(secondA.status, EXIT.OK, secondA.stderr);
+  const modeA = recordedTempMode(logA);
+  assert.equal(modeA, 0o755, `created-then-chmod rewrite must chmod its temp to the live mode, got ${oct(modeA)}`);
+
+  // (b) pre-existing file whose permissions changed after the snapshot: same live-mode rule.
+  const existing = path.join(repo, 'scripts/existing.sh');
+  fs.writeFileSync(existing, markdownFile('existing-block', '\n# e1\n'));
+  const snapB = snapshot(repo, root, ['scripts/existing.sh']);
+  assert.equal(snapB.res.status, EXIT.OK, snapB.res.stderr);
+  const logB = path.join(root, 'chmod-existing.log');
+  const third = runPreload({
+    args: ['write', '--cwd', repo, '--baseline', snapB.baseline, '--spec', writeSpec(root, { path: 'scripts/existing.sh', block: 'existing-block', template: `${HDR('existing-block', '__FP__')}\n\n# e2\n${END('existing-block')}\n`, replacements: {} })],
+    preload,
+    env: { LAZYPACK_LSTAT_FORCE: JSON.stringify({ path: existing, mode: 0o100755 }), LAZYPACK_FAULT_LOG: logB }
+  });
+  assert.equal(third.status, EXIT.OK, third.stderr);
+  const modeB = recordedTempMode(logB);
+  assert.equal(modeB, 0o755, `post-snapshot chmod rewrite must chmod its temp to the live mode, got ${oct(modeB)}`);
+  assert.deepEqual(findTemps(root), []);
+});
+
+test('POSIX only: a real post-snapshot chmod 0755 survives the rewrite', { skip: process.platform === 'win32' }, (t) => {
+  const { root, repo } = tmpRepo(t);
+  const target = path.join(repo, 'scripts/hook.sh');
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const mkTemplate = (body) => `${HDR('hook-block', '__FP__')}\n${body}${END('hook-block')}\n`;
+  const { res: snap, baseline } = snapshot(repo, root, ['scripts/hook.sh']);
+  assert.equal(snap.status, EXIT.OK, snap.stderr);
+  assert.equal(run(['write', '--cwd', repo, '--baseline', baseline, '--spec', writeSpec(root, { path: 'scripts/hook.sh', block: 'hook-block', template: mkTemplate('\n# v1\n'), replacements: {} })]).status, EXIT.OK);
+  fs.chmodSync(target, 0o755);
+  assert.equal(run(['write', '--cwd', repo, '--baseline', baseline, '--spec', writeSpec(root, { path: 'scripts/hook.sh', block: 'hook-block', template: mkTemplate('\n# v2\n'), replacements: {} })]).status, EXIT.OK);
+  assert.equal(fs.statSync(target).mode & 0o777, 0o755);
+});
+
+test('render-retention reads a bounded section across inline and shorter fences', (t) => {
+  const { root } = tmpRepo(t);
+  const { cli, ref } = copyRetentionLayout(root);
+  // The checkout ships the authority file with CRLF: normalize ONLY the copied fixture
+  // text before editing it; the real authority bytes stay untouched.
+  const authorityBefore = fs.readFileSync(RETENTION_REF);
+  const text = fs.readFileSync(ref, 'utf8').replace(/\r\n/g, '\n');
+  const startOfSection = text.indexOf('### 4.9 ');
+  const openIndex = text.indexOf('```markdown', startOfSection);
+  const closeIndex = text.indexOf('\n```\n', openIndex);
+  assert.ok(startOfSection >= 0 && openIndex > startOfSection && closeIndex > openIndex, '4.9 fence layout must be found');
+  const mutated = '````markdown\n'
+    + '- **当前项目留存模式**：`unconfigured`（INLINE-SENTINEL ```inline span``` 与下方短围栏）\n'
+    + '## 内嵌小节标题\n'
+    + '### 内嵌说明\n'
+    + '# 顶格注释\n'
+    + '```\n'
+    + '- **执行规范**：TAIL-SENTINEL 保底正文\n'
+    + '````\n';
+  fs.writeFileSync(ref, text.slice(0, openIndex) + mutated + text.slice(closeIndex + 5));
+
+  const policy = writeJson(path.join(root, 'policy.json'), retentionPolicy([], 'unconfigured'));
+  const res = run(['render-retention', '--retention-json', policy], cli);
+  assert.equal(res.status, EXIT.OK, res.stderr);
+  assert.match(res.stdout, /INLINE-SENTINEL/, 'inline sentinel lost');
+  assert.match(res.stdout, /TAIL-SENTINEL/, 'body after a shorter inner fence was truncated');
+  assert.match(res.stdout, /```inline span```/, 'inline triple-backtick run must survive extraction');
+  assert.match(res.stdout, /^## 内嵌小节标题$/m, 'an emitted ## heading must stay inside the extracted body');
+  assert.match(res.stdout, /^### 内嵌说明$/m, 'an emitted ### heading must stay inside the extracted body');
+  assert.match(res.stdout, /^# 顶格注释$/m, 'an emitted # heading must stay inside the extracted body');
+  assert.ok(fs.readFileSync(RETENTION_REF).equals(authorityBefore), 'real authority reference bytes must stay unchanged');
+});
+
+test('render-retention fails closed on a missing closing fence instead of consuming the next section', (t) => {
+  const { root } = tmpRepo(t);
+  const { cli, ref } = copyRetentionLayout(root);
+  // The checkout ships the authority file with CRLF: normalize ONLY the copied fixture
+  // text before editing it; the real authority bytes stay untouched.
+  const authorityBefore = fs.readFileSync(RETENTION_REF);
+  const text = fs.readFileSync(ref, 'utf8').replace(/\r\n/g, '\n');
+  const needle = '- **防污染边界**：保持仓库精简，零额外资产负担；未成文讨论不作为现行基准。\n```\n';
+  assert.ok(text.includes(needle), '4.1 closing fence must be found');
+  fs.writeFileSync(ref, text.replace(needle, '- **防污染边界**：保持仓库精简，零额外资产负担；未成文讨论不作为现行基准。\n'));
+
+  const policy = writeJson(path.join(root, 'policy.json'), retentionPolicy([], 'decisions-only'));
+  const res = run(['render-retention', '--retention-json', policy], cli);
+  assert.notEqual(res.status, EXIT.OK, 'a missing closing fence must fail closed');
+  assert.doesNotMatch(res.stdout, /ideas-pool/, 'must not fall through into the following section');
+  assert.ok(fs.readFileSync(RETENTION_REF).equals(authorityBefore), 'real authority reference bytes must stay unchanged');
+});
+
+test('render-retention fails closed when a section has no own fence instead of borrowing the next', (t) => {
+  const { root } = tmpRepo(t);
+  const { cli, ref } = copyRetentionLayout(root);
+  // The checkout ships the authority file with CRLF: normalize ONLY the copied fixture
+  // text before editing it; the real authority bytes stay untouched.
+  const authorityBefore = fs.readFileSync(RETENTION_REF);
+  const text = fs.readFileSync(ref, 'utf8').replace(/\r\n/g, '\n');
+  const needle = '### 4.1 组合 1：仅留决议 (decisions-only, dimensions=[])\n\n适用于极简项目或用户明确选择不额外持久化过程材料的场景。\n\n```markdown\n';
+  assert.ok(text.includes(needle), '4.1 opening fence must be found');
+  fs.writeFileSync(ref, text.replace(needle, '### 4.1 组合 1：仅留决议 (decisions-only, dimensions=[])\n\n适用于极简项目或用户明确选择不额外持久化过程材料的场景。\n\n'));
+
+  const policy = writeJson(path.join(root, 'policy.json'), retentionPolicy([], 'decisions-only'));
+  const res = run(['render-retention', '--retention-json', policy], cli);
+  assert.notEqual(res.status, EXIT.OK, 'a missing own fence must fail closed');
+  assert.doesNotMatch(res.stdout, /ideas-pool/, 'must not borrow the following section fence');
+  assert.ok(fs.readFileSync(RETENTION_REF).equals(authorityBefore), 'real authority reference bytes must stay unchanged');
 });
