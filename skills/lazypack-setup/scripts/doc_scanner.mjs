@@ -153,7 +153,14 @@ export function realRepoRelPath(repoRoot, relPath) {
   let cur = abs;
   try {
     while (!fs.existsSync(cur) && cur !== path.dirname(cur)) {
-      if (fs.lstatSync(cur, { throwIfNoEntry: false })?.isSymbolicLink()) return null;
+      let stat;
+      try {
+        stat = fs.lstatSync(cur, { throwIfNoEntry: false });
+      } catch (error) {
+        // A regular file used as a directory is still a reportable deadlink.
+        if (error.code !== 'ENOTDIR') throw error;
+      }
+      if (stat?.isSymbolicLink()) return null;
       cur = path.dirname(cur);
     }
     if (!fs.existsSync(cur)) return null;

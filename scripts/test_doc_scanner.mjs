@@ -5,7 +5,7 @@
  * 在系统临时目录生成 Markdown 夹具，直接调用
  * skills/lazypack-setup/scripts 下的 doc_scanner.mjs 与 doc_plan.mjs，
  * 校验排除判定、链接过滤与计划拒绝路径，不修改本仓库。
- * 保留 #70 审查跟进的 7 个基础用例，并补齐 issue #83 的真实目录别名与 CLI 回归（共 18 用例）：
+ * 保留 #70 审查跟进的 7 个基础用例，并补齐 issue #83 的真实目录别名与 CLI 回归（共 19 用例）：
  *  - 归一化、固定/自定义排除判定、链接过滤、计划与执行器词法排除复核；
  *  - Windows Junction 与 dir 目录符号链接覆盖固定 raw-qa、自定义 excludePaths、仓外目标失败关闭；
  *  - buildMigrationPlan 拒绝 preserve/迁移源/迁移目标的真实排除路径，executePlan 在自洽指纹后复核真实路径；
@@ -827,7 +827,38 @@ function caseCliExclude(base) {
   assertCase(JSON.stringify(excluded.deadlinks.map((item) => item.targetRel)) === JSON.stringify(['docs/missing.md']), 'CLI exclude 后真实死链应保留');
 }
 
+// Windows may return ENOENT for this path; inject ENOTDIR to cover the POSIX error branch.
+function caseFileAncestorDeadlink(base) {
+  const repo = path.join(base, 'file-ancestor');
+  fs.mkdirSync(path.join(repo, 'docs'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'docs', 'file.md'), '# ordinary file\n');
+  const target = 'docs/file.md/sub.md';
+  fs.writeFileSync(path.join(repo, 'README.md'), `[broken](${target})\n`);
+  const check = () => {
+    assertCase(realRepoRelPath(repo, target) === target, 'file ancestor must retain the missing target');
+    const scan = scanProjectDocuments(repo);
+    assertCase(scan.deadlinks.some((item) => item.targetRel === target), 'file ancestor must remain a deadlink');
+  };
+  check();
+  const original = fs.lstatSync;
+  let injected = 0;
+  try {
+    fs.lstatSync = function (filename, ...args) {
+      if (path.resolve(String(filename)) === path.resolve(repo, target)) {
+        injected++;
+        throw Object.assign(new Error('not a directory'), { code: 'ENOTDIR' });
+      }
+      return original.call(this, filename, ...args);
+    };
+    check();
+    assertCase(injected > 0, 'ENOTDIR branch must actually execute');
+  } finally {
+    fs.lstatSync = original;
+  }
+}
+
 const CASES = [
+  ['scan 普通文件祖先死链与 ENOTDIR 分支', caseFileAncestorDeadlink],
   ['normalizeExcludePaths 归一化', caseNormalizeExcludePaths],
   ['buildExclusionMatcher 命中判定', caseBuildExclusionMatcher],
   ['scan 固定集合排除与链接过滤', caseScanWithoutConfiguredExclude],
