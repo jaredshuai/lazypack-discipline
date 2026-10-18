@@ -16,7 +16,8 @@ jobs:
     if: >-
       github.event.issue.pull_request == null &&
       github.event.comment.user.login == 'jaredshuai' &&
-      startsWith(github.event.comment.body, '/multica discuss')
+      (github.event.comment.body == '/multica discuss' ||
+       startsWith(github.event.comment.body, '/multica discuss '))
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -31,6 +32,7 @@ jobs:
           DEEPSEEK_URL: ${{ secrets.MULTICA_DISCUSS_DEEPSEEK_WEBHOOK_URL }}
         run: |
           python3 - <<'PY'
+          import concurrent.futures
           import json
           import os
           import sys
@@ -39,7 +41,8 @@ jobs:
           import urllib.request
 
           REPOSITORY = 'jaredshuai/lazypack-discipline'
-          OWNER = 'jaredshuai'
+          # Keep GitHub owner and repository gates synchronized when migrating.
+          OWNER = REPOSITORY.split('/')[0]
           DEFAULT = ('gemini', 'glm', 'qoder')
           WEBHOOK_ENVS = {
               'gemini': 'GEMINI_URL',
@@ -95,7 +98,7 @@ jobs:
                   fail(f'Missing or invalid HTTPS secret for {role}; no models dispatched.')
               endpoints[role] = url
 
-          for role in roles:
+          def dispatch_one(role):
               payload = {
                   'event': 'github.issue.discussion',
                   'eventPayload': {
@@ -118,16 +121,38 @@ jobs:
                   with urllib.request.urlopen(request, timeout=30) as response:
                       raw = response.read(65537)
                   if len(raw) > 65536:
-                      fail(f'{role}: webhook response exceeds 64 KiB.')
+                      return role, False, 'webhook response exceeded 64 KiB'
                   result = json.loads(raw)
               except urllib.error.HTTPError as error:
-                  fail(f'{role}: webhook returned HTTP {error.code} (URL not logged).')
+                  return role, False, f'HTTP {error.code}'
               except (urllib.error.URLError, TimeoutError):
-                  fail(f'{role}: webhook request failed (URL not logged).')
+                  return role, False, 'request failed or timed out'
               except (ValueError, TypeError):
-                  fail(f'{role}: malformed webhook response.')
-              if not isinstance(result, dict) or result.get('status') != 'accepted':
-                  status = result.get('status') if isinstance(result, dict) else 'invalid-body'
-                  fail(f'{role}: no new Run Only execution accepted (status={status!s}).')
-              print(f'{role}: Multica accepted a Run Only execution; completion not verified.')
+                  return role, False, 'malformed webhook response'
+              except Exception as error:
+                  return role, False, 'unexpected ' + type(error).__name__
+              if not isinstance(result, dict):
+                  return role, False, 'invalid JSON object'
+              status = result.get('status')
+              if status == 'accepted':
+                  return role, True, 'accepted (Run created; completion not verified)'
+              if status == 'duplicate':
+                  return role, False, 'duplicate (original Run outcome not verified)'
+              if status in ('skipped', 'ignored'):
+                  return role, False, status + ' (no Run created)'
+              return role, False, 'unrecognized webhook status'
+
+          # Independent participants do not depend on one another. Report ALL outcomes.
+          with concurrent.futures.ThreadPoolExecutor(max_workers=len(roles)) as pool:
+              results = list(pool.map(dispatch_one, roles))
+
+          failed = []
+          for role, accepted, summary in results:
+              print(f'{role}: {summary}', flush=True)
+              if not accepted:
+                  failed.append(role)
+          if failed:
+              fail('Failed roles: ' + ' '.join(failed) + '. Post a NEW owner-only '
+                   'Issue comment with only those roles; do NOT rerun this Actions job '
+                   '(the same idempotency key may return duplicate).')
           PY
