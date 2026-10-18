@@ -142,7 +142,7 @@ export function normalizeExcludePaths(excludePaths = []) {
 
 /**
  * 解析仓内相对路径的真实路径，用于拦截经仓内符号链接/Junction 别名指向被排除目录的绕过。
- * 沿父级向上找到首个已存在的祖先并取其 realpath，再拼回未存在的尾段。
+ * 沿父级向上找到首个已存在的祖先并取其 realpath，再拼回未存在的尾段；悬空链接不可当作普通缺失目录跳过。
  * @param {string} repoRoot 仓库根
  * @param {string} relPath 仓内相对路径
  * @returns {string|null} 仓内相对的真实路径；越界或不可解析时为 null
@@ -151,9 +151,12 @@ export function realRepoRelPath(repoRoot, relPath) {
   const absRepo = path.resolve(repoRoot);
   const abs = path.resolve(absRepo, normalizeRelPath(String(relPath)));
   let cur = abs;
-  while (!fs.existsSync(cur) && cur !== path.dirname(cur)) cur = path.dirname(cur);
-  if (!fs.existsSync(cur)) return null;
   try {
+    while (!fs.existsSync(cur) && cur !== path.dirname(cur)) {
+      if (fs.lstatSync(cur, { throwIfNoEntry: false })?.isSymbolicLink()) return null;
+      cur = path.dirname(cur);
+    }
+    if (!fs.existsSync(cur)) return null;
     const realRepo = fs.realpathSync(absRepo);
     const realCur = fs.realpathSync(cur);
     const relCur = path.relative(realRepo, realCur);
