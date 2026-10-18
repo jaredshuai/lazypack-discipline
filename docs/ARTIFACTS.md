@@ -58,6 +58,7 @@
 | [../.github/workflows/droid.yml](../.github/workflows/droid.yml) | 本仓执行辅助 | current | Factory Droid 第三方 AI 审查触发面（#78）：`@droid` 仅响应 PR 内评论与审查（issue_comment 限 PR 评论，pull_request_review / review_comment 限本仓分支 PR）；action 固定到 v10 提交 `ec767fc`；需仓库 secret `FACTORY_API_KEY`；不是门禁，不替代 `check_doc_pairs`/`check_commit_msg`，结果只作参考 |
 | [../.github/workflows/droid-review.yml](../.github/workflows/droid-review.yml) | 本仓执行辅助 | current | Factory Droid 第三方 AI 自动审查（#78）：非 draft 且本仓分支的 PR 在 opened/ready_for_review/reopened 时自动评审；action 固定到 v10 提交 `ec767fc`；需仓库 secret `FACTORY_API_KEY`；不是门禁，不替代 `check_doc_pairs`/`check_commit_msg`，结果只作参考 |
 | [../.github/workflows/qodercn-review.yml](../.github/workflows/qodercn-review.yml) | 本仓执行辅助 | current | Qoder CN 自动审查：官方 Action 不支持国内版账号（token 交换端点 403），绕开 Action 直接运行国内版 CLI `@qodercn-ai/qoderclicn@1.1.65`；CLI 禁用全部工具、空工作目录与配置目录、环境内无 GitHub 令牌，diff 与 PR 标题/描述经文件和 stdin 传入、不在 `run:` 中插值；评论由独立步骤以 `github-actions` 身份发布并按标记原位更新；仅本仓分支非 draft PR；需仓库 secret `QODERCN_PERSONAL_ACCESS_TOKEN`；不是门禁，不替代 `check_doc_pairs`/`check_commit_msg`，结果只作参考 |
+| [../.github/workflows/multica-issue-pilot.yml](../.github/workflows/multica-issue-pilot.yml) | 本仓事件触发辅助 | current | PR #98 的 GitHub Issue 评论 → Multica `run_only` 冒烟入口；仅 `jaredshuai` 的精确 `/multica pilot` 在非 PR Issue 触发；GitHub Runner 无仓库写权限，只向 Webhook 转发仓库名、Issue 编号和评论 ID。需 GitHub Actions Secret `MULTICA_GITHUB_PILOT_WEBHOOK_URL`（仅存秘钥，非公开文件），使用评论 ID 幂等；只把 `accepted` 判为已创建 Run，`duplicate`/`skipped`/`ignored` 不冒充成功；Agent 完成、回执及跨阶段编排另行验收。不是本仓 CI 门禁，也不包含产品 setup 能力。 |
 | [../skills/lazypack-setup/SKILL.md](../skills/lazypack-setup/SKILL.md) | setup 执行入口 | current | 以本仓磁盘正文为准；不代表所有宿主或目标仓实测通过。第 2 步有界扫描的排除目录与敏感文件与 document-routing §2.2、doc_scanner 为同一显式集合 |
 | [../skills/lazypack-setup/references/document-routing.md](../skills/lazypack-setup/references/document-routing.md) | 文档路由规范 | current | S1 产物：既有文档 8 大知识区归属规范、原位保留登记与同主题判定；首期 preserve-existing 在当前 AGY/Windows 限定沙箱验收完成（见 §4）。Phase 2 受控迁移规约已合入本文件；通用生产迁移仍 UNPROVEN。§2.2 排除目录与敏感文件与 doc_scanner 为同一显式集合（含 `.DS_Store`；敏感文件为精确文件名或明确前后缀） |
 | [../skills/lazypack-setup/scripts/verify_hook_install.mjs](../skills/lazypack-setup/scripts/verify_hook_install.mjs) | setup 执行辅助 | current | #85 原生 `.githooks/pre-commit` **只读静态验收**：拒绝缺 shebang/BOM、错误换行（shebang 之后任何 CR 字节，`new`/`existing` 均拒绝：`NEW_HOOK_NON_LF`/`EXISTING_HOOK_NON_LF`）、非法 UTF-8、残缺受管块或 `fp` 漂移、父目录/Hook 符号链接逃逸、明显 `exit` 前置、POSIX 下无有效执行权限及错误 `core.hooksPath`（以 `git config --null` 读取，不剥离值内合法 CR 与尾空格）。成功输出 `CONFIGURED_STATIC_ONLY`，失败非零并附原因码。`existing` 只验证解释器 shebang 语法，无法证明命令实际存在；不执行目标真实 Hook，不等于 Runtime Verified。Node 标准库，Windows 宿主未验收 |
@@ -787,3 +788,11 @@ PR #88 合入前复核：用户明确授权提交、推送已验证补丁并在�
 - 处理结果：扫描器、测试及登记为「已同步」；语法、相邻留存 63/63、文档关系 9/9 与差异格式为「未发现差异」（退出码 0）。
 - 未覆盖范围：POSIX 实机、旧版 Node、真实项目 setup 和跨宿主交互未运行；不扩展支持范围或接入 Hook/CI。
 - 未决事项：无新的产品或固定层决策；#83 保持开放。
+
+2026-10-18（PR #98 GitHub Issue → Multica Run Only 冒烟接线）：新增仅允许仓库维护者以精确 Issue 评论触发的 Action，不使用 RDC 轮询。Webhook 地址只经 GitHub Actions Secret 配置；初始阶段只验证单 Agent 读 Issue 与回执，不扩展为自动讨论、Astra 裁决或全自动施工。
+
+- 检查范围：人工核对 GitHub `issue_comment` 触发与非 PR 限制、大小写敏感的第二次校验、事件编号一致性、Runner `permissions: {}`、无 checkout、Secret 不落仓、Webhook 请求幂等及响应 `accepted`/`duplicate`/`skipped`/`ignored` 分类；不改固定层、分发模板、setup 或本仓其他 workflow。
+- 依据版本：PR 基线 `08f580bc385d0a44e675d49bd28183e3cf2b2f55`；收尾为该基线加 PR #98 分支工作区；文档关系声明 `docs/agents/doc-pairs.md`，检查命令 `node scripts/check_doc_pairs.mjs`。
+- 处理结果：workflow 与本册登记为「已同步」；以上触发条件与安全分支由 GitHub PR 差异人工核对。`check_doc_pairs`、运行时 webhook 投递与远端 Agent GitHub 回执为「未运行」：本轮通过 GitHub connector 远程修改和审查，未在本机/Runner 实际执行这些检查；不得把静态复核写成 9/9 PASS。新增链接目标已在 PR 同时创建。
+- 未覆盖范围：Secret 内容不可由 GitHub connector 读取；实际 GitHub → Multica 触发、WebHook 响应的 Run 创建、Runtime 在线状态、Agent 获取事件载荷和发布回执仍需在合并后以真实事件验证；`accepted` 表示创建运行，不表示执行已完成。没有测试 Runtime 离线、旧 token 轮换或多 Agent 调度。
+- 未决事项：首次真实冒烟通过前，PR #98 的实现仍不能视为端到端验收完成；失败时优先查 GitHub Actions 日志及 Multica Webhook delivery 记录，禁止因 `duplicate` 结果误认成功。
