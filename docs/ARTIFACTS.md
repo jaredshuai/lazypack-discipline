@@ -798,10 +798,10 @@ PR #88 合入前复核：用户明确授权提交、推送已验证补丁并在�
 - 未覆盖范围：Secret 内容不可由 GitHub connector 读取；实际 GitHub → Multica 触发、WebHook 响应的 Run 创建、Runtime 在线状态、Agent 获取事件载荷和发布回执仍需在合并后以真实事件验证；`accepted` 表示创建运行，不表示执行已完成。没有测试 Runtime 离线、旧 token 轮换或多 Agent 调度。
 - 未决事项：首次真实冒烟通过前，PR #98 的实现仍不能视为端到端验收完成；失败时优先查 GitHub Actions 日志及 Multica Webhook delivery 记录，禁止因 `duplicate` 结果误认成功。
 
-2026-10-19（GitHub Issue 多模型讨论路由，延续 PR #98 的最小闭环）：将用户每轮模型选择落实为 Owner-only 评论白名单，不修改现有 Pilot、不改固定层/正式产品模板。Multica 侧复用 Gemini、GLM、CodeBuddy 三个空闲 Agent，并为无对应 Agent 的 Qoder CN Runtime 创建一个 `Qwen3.8-Flash` 讨论者；四条独立 `run_only` Autopilot 各自拥有 Webhook，不创建新的 Multica Issue。
+2026-10-19（GitHub Issue 多模型讨论路由，延续 PR #98 的最小闭环）：将用户每轮模型选择落实为 Owner-only 评论白名单，不修改现有 Pilot、不改固定层/正式产品模板。四个角色到 Agent / Runtime 的对应为：`gemini` → 既有「极速开发助手」/ Antigravity / `gemini-3.8-flash-high`；`glm` → 既有「GLM 编程助手」/ OMP / `zhipu-coding-plan/glm-5.3`；`deepseek` → 既有「快速执行者」/ CodeBuddy / `deepseek-v4.1-flash`；`qoder` → 新建「Qoder CN Discussant」/ Qoder CN / `Qwen3.8-Flash`。四条 **新建** 的独立 `run_only` Autopilot 复用上述 Agent（仅 Qoder Agent 新建），各自拥有 Webhook；不创建新的 Multica Issue。
 
 - 检查范围：新 `.github/workflows/multica-issue-discussion.yml` 的用户身份、仓库、非 PR/open Issue、评论 ID 与原文精确匹配、角色白名单与去重、所有所选 Secret 的先行校验、请求幂等、Webhook 响应、异常信息不泄露凭据；人工核对 Agent Runbook 限制为只读讨论+同一 Issue 的一条回执，不授权源码修改或旗舰模型。
 - 依据版本：开工 `dc095b39c7351ed4fb691771c339682afd2f44b7`；收尾为该基线加本轮 PR 分支改动；关联文档关系声明 `docs/agents/doc-pairs.md`，预期检查命令 `node scripts/check_doc_pairs.mjs`。
-- 处理结果：workflow 和本册登记为「已同步」；独立本地模拟的 15 项调度解析/安全校验断言 **15/15 PASS**（包括大小写、权限、Secret 全量预检、幂等重复状态、Open Issue）；只是模拟网络，不能替代在线 E2E。`check_doc_pairs` 为「未运行」：本次通过 GitHub 连接器修改仓库且本地不具备完整同版仓库以执行项目检查器；不声称 P1–P11 通过。
+- 处理结果：workflow 和本册登记为「已同步」；独立本地模拟的 17 项调度解析/安全校验断言 **17/17 PASS**（包括大小写、权限、Secret 全量预检、幂等重复状态、Open Issue）；只是模拟网络，不能替代在线 E2E。`check_doc_pairs` 为「未运行」：本次通过 GitHub 连接器修改仓库且本地不具备完整同版仓库以执行项目检查器；不声称 P1–P11 通过。
 - 未覆盖范围：四项 GitHub Actions Secret 尚待持有者从对应 Multica Webhook 复制到仓库；GitHub → 四模型真实 `accepted`、Qoder CN 的 `Qwen3.8-Flash` 实际权限、各 Agent 的 Issue 反馈、Multica 运行最终状态与模型用量尚未验证。不接入 Astra 自动裁决或多轮调度。
 - 未决事项：Secret 配置完成后，以一条 `/multica discuss` 在合适的现有 Issue 做首次受控联调，确认三个独立评论与实际调用的模型。未实测前，本项只算路由代码完成、端到端未验收。
