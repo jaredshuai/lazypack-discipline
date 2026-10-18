@@ -18,7 +18,7 @@ function render(commands, states = {}, provenance = '') {
   for (const slot of slots) {
     const upper = slot.toUpperCase();
     hook = hook.replace(`__${upper}_STATUS__`, quote(states[slot] ?? (commands[slot] ? 'wired' : 'missing')));
-    hook = hook.replace(`__${upper}_CMD__`, quote(commands[slot] ?? ''));
+    hook = hook.replace(`__${upper}_CMD__`, () => quote(commands[slot] ?? ''));
   }
   const begin = hook.indexOf('\n', hook.indexOf('# lazypack:start')) + 1;
   const end = hook.indexOf('# lazypack:end');
@@ -40,7 +40,9 @@ function fixture(t, commands, states = {}, provenance = '') {
   fs.chmodSync(path.join(root, '.githooks/pre-commit'), 0o755);
   assert.equal(git(root, 'config', '--local', 'core.hooksPath', '.githooks').status, 0);
   const run = (env = {}) => {
-    const p = spawnSync('git', ['-C', root, 'hook', 'run', 'pre-commit'], { encoding: 'utf8', windowsHide: true, timeout: 30000, env: { ...process.env, ...env } });
+    const childEnv = { ...process.env, ...env };
+    delete childEnv.NODE_TEST_CONTEXT;
+    const p = spawnSync('git', ['-C', root, 'hook', 'run', 'pre-commit'], { encoding: 'utf8', windowsHide: true, timeout: 30000, env: childEnv });
     assert.equal(p.error, undefined, String(p.error));
     return { ...p, output: p.stdout + p.stderr };
   };
@@ -109,11 +111,22 @@ test('wired whitespace-only command is still rejected after a successful gate', 
   assert.notEqual(f.run().status, 0);
   assert.deepEqual(f.events(), ['item']);
 });
+test('wired empty command is rejected even after a successful gate', t => {
+  const f = fixture(t, { format: 'node stage.cjs item', test: '' }, { test: 'wired' });
+  assert.notEqual(f.run().status, 0);
+  assert.deepEqual(f.events(), ['item']);
+});
 test('command strings with quotes, dollars, delimiters and newlines are compared literally', t => {
   const command = `node stage.cjs 'quoted|$literal'\nnode stage.cjs tail`;
   const f = fixture(t, { type: command, test: command });
   assert.equal(f.run().status, 0);
   assert.deepEqual(f.events(), ['quoted|$literal', 'tail']);
+});
+test('replacement metacharacters remain literal in rendered commands', t => {
+  const f = fixture(t, { test: "node stage.cjs '$&'" });
+  const p = f.run();
+  assert.equal(p.status, 0, p.output);
+  assert.deepEqual(f.events(), ['$&']);
 });
 test('a child exit and variable assignments cannot clear a cached failure', t => {
   const f = fixture(t, { format: 'node stage.cjs bad', lint: 'EXIT_CODE=0; exit 0', type: 'node stage.cjs bad', test: 'node stage.cjs last' });
