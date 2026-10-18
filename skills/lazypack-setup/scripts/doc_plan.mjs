@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { parseMarkdownUrl, computeSha256, normalizeRelPath, buildExclusionMatcher, normalizeExcludePaths, realRepoRelPath } from './doc_scanner.mjs';
+import { readRetentionPolicySnapshot, assertRetentionPolicyUnchanged, assertNotPolicyCarrier, assertPolicyCarriersVisible } from './doc_retention_policy.mjs';
 
 /**
  * 严格路径边界核验 (B2 修复)
@@ -210,6 +211,8 @@ export function updateArtifactsSection3(existingContent, entries, artifactsRelPa
  */
 export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {}) {
   const absRepo = path.resolve(repoRoot);
+  const retentionPolicy = readRetentionPolicySnapshot(absRepo);
+  assertPolicyCarriersVisible(retentionPolicy, options.excludePaths);
   const preserveItems = planSpec.preserve_items || [];
   const migrateItems = planSpec.migrate_items || [];
 
@@ -251,6 +254,8 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {})
   for (const item of migrateItems) {
     const src = assertPathWithinRepo(absRepo, item.source_path, 'migrate_items.source_path');
     const tgt = assertPathWithinRepo(absRepo, item.target_path, 'migrate_items.target_path');
+    assertNotPolicyCarrier(absRepo, src);
+    assertNotPolicyCarrier(absRepo, tgt);
     rejectExcluded(src, 'migrate_items.source_path');
     rejectExcluded(tgt, 'migrate_items.target_path');
 
@@ -334,6 +339,8 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {})
   }
 
   for (const refPath of inboundRefsToUpdate.keys()) {
+    assertNotPolicyCarrier(absRepo, refPath);
+    rejectExcluded(refPath, 'inboundReferences.sourceRelPath');
     const absRef = path.resolve(absRepo, refPath);
     if (fs.existsSync(absRef)) {
       const origContent = fs.readFileSync(absRef, 'utf8');
@@ -424,6 +431,7 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {})
     actionsCount: fileActions.length,
     inputFp,
     exclusions: normalizedExclusions,
+    retentionPolicy,
     fileActions: fileActions.map((a) => ({
       action: a.action,
       sourcePath: a.sourcePath || a.filePath,
@@ -433,6 +441,8 @@ export function buildMigrationPlan(repoRoot, planSpec, scanResult, options = {})
   };
 
   const planFp = crypto.createHash('sha256').update(JSON.stringify(planSummary)).digest('hex');
+
+  assertRetentionPolicyUnchanged(absRepo, retentionPolicy);
 
   return {
     repoRoot: absRepo,

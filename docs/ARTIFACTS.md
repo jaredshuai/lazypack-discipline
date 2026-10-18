@@ -59,9 +59,11 @@
 | [../skills/lazypack-setup/references/document-routing.md](../skills/lazypack-setup/references/document-routing.md) | 文档路由规范 | current | S1 产物：既有文档 8 大知识区归属规范、原位保留登记与同主题判定；首期 preserve-existing 在当前 AGY/Windows 限定沙箱验收完成（见 §4）。Phase 2 受控迁移规约已合入本文件；通用生产迁移仍 UNPROVEN。§2.2 排除目录与敏感文件与 doc_scanner 为同一显式集合（含 `.DS_Store`；敏感文件为精确文件名或明确前后缀） |
 | [../skills/lazypack-setup/scripts/verify_hook_install.mjs](../skills/lazypack-setup/scripts/verify_hook_install.mjs) | setup 执行辅助 | current | #85 原生 `.githooks/pre-commit` **只读静态验收**：拒绝缺 shebang/BOM、错误换行（shebang 之后任何 CR 字节，`new`/`existing` 均拒绝：`NEW_HOOK_NON_LF`/`EXISTING_HOOK_NON_LF`）、非法 UTF-8、残缺受管块或 `fp` 漂移、父目录/Hook 符号链接逃逸、明显 `exit` 前置、POSIX 下无有效执行权限及错误 `core.hooksPath`（以 `git config --null` 读取，不剥离值内合法 CR 与尾空格）。成功输出 `CONFIGURED_STATIC_ONLY`，失败非零并附原因码。`existing` 只验证解释器 shebang 语法，无法证明命令实际存在；不执行目标真实 Hook，不等于 Runtime Verified。Node 标准库，Windows 宿主未验收 |
 | [../skills/lazypack-setup/scripts/doc_scanner.mjs](../skills/lazypack-setup/scripts/doc_scanner.mjs) | setup 执行辅助 | current | 有界 Markdown 扫描与引用图构建器。证据：Phase 2 主仓应用收尾与本仓只读 scan。已验证：当前 Windows/AGY 隔离沙箱与本仓只读扫描；本机 Windows 上 #13 复跑死链 17→0（消除项均为 `file:` 与代码语境伪链接），临时 fixture 仍检出真死链。不代表外部目标仓生产级自动迁移。排除目录含 `.DS_Store`（路径小写化后按 `.ds_store` 匹配）；敏感文件仍为精确匹配。忽略带 scheme 的 URL（含 `file:`）与纯锚点；抽链前剥离围栏与行内反引号，标题抽取仍用原始正文。排除判定由 `normalizeExcludePaths`（归一化、去重并排序）与 `buildExclusionMatcher` 实现；链接目标先做百分号解码，再按词法路径与 `realRepoRelPath`（真实路径）双重判定，指向排除目录的链接不写入出站/入站引用与死链；`realRepoRelPath` 由 `scanProjectDocuments` 的链接分支与计划器/执行器调用，walk 中的符号链接条目另有一段内联 realpath 防御分支（此类条目本身不被遍历，仅用于阻断越界或指向排除目录的别名） |
-| [../skills/lazypack-setup/scripts/doc_plan.mjs](../skills/lazypack-setup/scripts/doc_plan.mjs) | setup 执行辅助 | current | 迁移计划生成器（含双指纹与 Section 3 紧凑表修复；归一化排除集合随计划返回并计入 `planFp`）。证据：Phase 2 应用收尾与 fix2 回归。已验证：当前 Windows/AGY 隔离沙箱。不代表外部目标仓生产级自动迁移 |
+| [../skills/lazypack-setup/scripts/doc_plan.mjs](../skills/lazypack-setup/scripts/doc_plan.mjs) | setup 执行辅助 | current | 迁移计划生成器（含双指纹与 Section 3 紧凑表修复；归一化排除集合及角色文件及两个根常驻入口的原始字节/缺失快照计入 `planFp`）。留存策略复核契约见 [document-routing §7.2](../skills/lazypack-setup/references/document-routing.md)。证据：Phase 2 应用收尾、fix2 与 #84 回归。已验证：Windows 隔离夹具。不代表外部目标仓生产级自动迁移 |
 | [../skills/lazypack-setup/scripts/doc_executor.mjs](../skills/lazypack-setup/scripts/doc_executor.mjs) | setup 执行辅助 | current | 双指纹绑定的受控执行器（含补偿回滚；执行前重算 `planFp` 校验计划完整性，并把 `plan.exclusions` 与指纹中的记录比对，再按排除集合复核每条动作与 `inputDigests` 路径——命中时状态为 `APPROVAL_DRIFT_BLOCKED`、原因码 `EXCLUDED_PATH_BLOCKED`，完整性问题为 `PLAN_INTEGRITY_BLOCKED`，均不落盘）。证据：Phase 2 应用收尾与 S6 沙箱批次。已验证：当前 Windows/AGY 隔离沙箱。不宣称系统级抗崩溃原子性，不代表外部目标仓生产级自动迁移 |
 | [../skills/lazypack-setup/scripts/doc_helper.mjs](../skills/lazypack-setup/scripts/doc_helper.mjs) | setup 执行辅助 | current | scan/plan/exec 调度入口。证据：Phase 2 应用收尾与 3 个沙箱 fixture 的真实 Agent 验收。已验证：当前 Windows/AGY 隔离沙箱。不代表外部目标仓生产级自动迁移 |
+| [../skills/lazypack-setup/scripts/doc_retention_policy.mjs](../skills/lazypack-setup/scripts/doc_retention_policy.mjs) | setup 执行辅助 | current | #84 只读策略载体快照与结构验证，供计划器及执行器共同使用。契约及兼容边界见 [document-routing §7.2](../skills/lazypack-setup/references/document-routing.md)；不解析正文为 retention JSON，不读取 raw_qa 内容 |
+| [../scripts/test_doc_retention.mjs](../scripts/test_doc_retention.mjs) | 本仓执行辅助 | current | #84 的 63 项 Windows 隔离回归：策略变更/字段删除/文件删除/截断/非法字节/新增、不可读及目录/Junction、未变及缺失兼容、旧计划/指纹绑定、CLI 阻断与 plan→execute 成功、扫描前校验及扫描中漂移、根 Junction、策略载体迁移/覆盖/入站重写拒绝、显式 --exclude 传递、AGENTS/CLAUDE 两旧入口的修改/删除/新增/迁移拒绝、双入口未变兼容和旧单载体快照升级、三载体硬链接迁移及执行器硬链接重写拒绝、scan/plan输出载体及别名保护、载体排除绕过拒绝；阻断分支断言没有输入内容读取、备份/WAL 或迁移落盘。权限失败通过故障注入；Junction 与硬链接为实际夹具。未执行真实 setup 顺序。手动执行 `node --test scripts/test_doc_retention.mjs`，未接 Hook/CI |
 | [../scripts/test_verify_hook_install.mjs](../scripts/test_verify_hook_install.mjs) | 本仓执行辅助 | current | #85 使用真实 `templates/pre-commit.sh` 四槽渲染、规范 SHA-256 fp 的隔离 Git 回归。新增新 Hook 正文混合 CRLF、既有 Hook（LF shebang + CRLF 正文）不得静默通过、非法 UTF-8 的 lossy-fp 假成功、明显提前 `exit 0`、条件式 `exit 0; fi` 不得误判为不可达、Git config 尾部空格与尾随字面 CR 负例；Linux Node v22.16.0 / Git v2.47.3 **非 root 35/35 PASS**、root 34/34 PASS（权限优先级用例按条件跳过）；补入条件式 `exit 0; fi` 用例后 Node v24.15.0 / Git v2.39.5 **非 root 36/36 PASS**；再补入既有 CRLF 正文与 `core.hooksPath` 尾随字面 CR 两例后 Node v24.15.0 / Git v2.39.5 **非 root 38/38 PASS**。所有真实执行仅在临时无害夹具中进行，不调用目标仓真实 Hook；完整 Windows 安装仍未验证。手动运行，未接 CI/Hook |
 | [../scripts/test_doc_scanner.mjs](../scripts/test_doc_scanner.mjs) | 本仓执行辅助 | current | 文档扫描/迁移计划/执行器排除逻辑的断言驱动测试套件（#70 审查跟进）。7 个用例覆盖：`normalizeExcludePaths` 归一化（尾斜杠/分隔符/大小写/空白项/`.`/`..` 段）、`buildExclusionMatcher` 命中判定（固定集合按路径段、配置路径自身及子孙、同前缀兄弟不误伤、仓根哨兵 `.` 命中一切路径）、`scanProjectDocuments` 排除 canonical `raw-qa` 并过滤指向它的链接（含百分号编码写法 `docs/raw%2Dqa/...`）/入站引用/死链、`excludePaths` 传尾斜杠/含 `.` 段的写法均生效、词法在仓外的链接维持既有处理仍入图（`realRepoRelPath` 对仓外路径返回 null；词法在仓内但真实路径无法核验的失败关闭分支需符号链接夹具，见 issue #83）、`buildMigrationPlan` 对 preserve/迁移源/迁移目标落在排除路径内抛 `ERR_EXCLUDED_PATH` 且普通项放行、登记册 `docs/ARTIFACTS.md` 本身被排除时同样拒绝（fieldName=`artifactsRelPath`）、排除集合随计划返回并计入 `planFp`（等价写法去重排序后不误触发重新审批）、`executePlan` 重算指纹并核对 `plan.exclusions`（不一致即 `PLAN_INTEGRITY_BLOCKED`）、按排除集合复核动作与 `inputDigests` 路径（命中即状态 `APPROVAL_DRIFT_BLOCKED`、原因码 `EXCLUDED_PATH_BLOCKED`）且不落盘。CLI `--exclude` 由本册当轮冒烟记录覆盖，不在本套件内。在 os.tmpdir() 生成 Markdown 夹具，直接 import 调用 `doc_scanner.mjs`/`doc_plan.mjs`/`doc_executor.mjs`，用后清理。手动运行。未接 hook/CI |
 | [../skills/lazypack-harvest/SKILL.md](../skills/lazypack-harvest/SKILL.md) | harvest 执行入口 | current | 显式调用边界由该 skill 定义。其 references 与 helper 注释改指本文件现存步骤；本仓没有冻结规格 SPEC.md |
@@ -689,3 +691,32 @@ PR #88 合入前复核：用户明确授权提交、推送已验证补丁并在�
 - 处理结果：`node scripts/test_verify_hook_install.mjs`（Node v24.15.0 / Git 2.39.5，非 root）**38/38 PASS**，含新增「既有 Hook LF shebang + CRLF 正文拒绝」与「`core.hooksPath` 尾随字面 CR 失败关闭」两例；两条缺陷均先独立复现（`existing` CRLF 正文返回 `STATIC_BYTES_OK`、`core.hooksPath` 尾随 CR 返回 `CONFIGURED_STATIC_ONLY`）再确认修复后行为；`node scripts/check_doc_pairs.mjs` 9/9 PASS；两份 `node --check` 与 `git diff --check` 通过。
 - 未覆盖范围：Windows / Git for Windows 真实宿主、原目标项目完整 `/lazypack-setup`、POSIX 五条件用例的 root 分支以及真实安装未运行；本机为 Linux 非 root 单环境。本次为合并后跟进修复，需经新 PR 合入 main。
 - 未决事项：新 PR 的远程检查与合并结果以实际 GitHub 回执为准，本段不预写；#85/#82/#69/#70 保持 OPEN，不因本轮静态与隔离测试关闭。
+
+2026-10-18（#84 审批后留存策略漂移）：在计划指纹中加入固定角色文件的原始字节/缺失快照；execute 默认在迁移输入内容读取、备份、WAL 与写盘前重读比对。角色文件变更（含删除留存字段）、新增、删除或不可读时阻断；旧计划没有快照须重新生成、审批。采用整个文件快照是因为现有角色正文没有统一持久化的 retention JSON，不从散文猜路径；既有 --exclude 传递仍按 document-routing §2.2 执行。默认兼容始终缺失或不含留存字段但未变的角色文件；不提供关闭检查的旗标。
+
+- 检查范围：P1–P5、P8–P11；人工核对 plan→execute→内容读取/备份/WAL 的顺序，角色文件与父目录的符号链接/Junction 防御、旧计划恢复步骤和 CLI 文案；固定层未改。
+- 依据版本：开工 0d2dceeccff33b04ddf846f7c514503f5aa2b1ff；收尾本轮工作区；声明 docs/agents/doc-pairs.md，命令 node scripts/check_doc_pairs.mjs。
+- 处理结果：策略漂移保护与执行契约已同步；新增 18 项 Windows 回归通过，既有扫描器 7/7 通过；旧实现失败输出保存在 TEMP。P1–P5、P8–P11 实际 9/9 PASS，均未发现差异。
+- 未覆盖范围：POSIX、真实目标仓迁移及完整 setup 未运行；快照不是跨进程锁，不承诺验证后的并发变更被原子阻止；不验证原有策略语义，不自动推导 --exclude，不解决 #83 的全部扫描别名测试。
+- 未决事项：无新的固定层或产品选项；无关角色正文/换行变化也需重生成并审批，已在执行契约披露。
+
+2026-10-18（#84 / PR #90 集成审查补救）：保留首版18项通过的历史证据；远端审查指出该测试范围未覆盖真实 CLI 扫描顺序及 setup 自身写盘顺序。新增回归在首版 f40eda5 上实际 21/28 通过、7项失败，修复后 28/28 通过；最初测试预载脚本的 Windows URL 写法错误已修正，并在首版快照重新验证失败原因。
+
+- CLI plan 在扫描前读取快照、扫描后和返回计划前核对，构建器自身也在结束前核对；策略不可读时不先扫描输入，扫描过程中变化不生成计划。
+- 固定角色文件保留原位，计划器及执行器拒绝迁移源/目标/入站重写涉及它；真实扫描入站引用测试确认拒绝，避免把角色正文放入计划内容。入口根目录本身为 Junction/符号链接时拒绝；并发替换竞态按平台如实披露，未声称Windows有原子 O_NOFOLLOW。
+- setup 第5步先完成保护裁决并执行已批准的迁移，再执行依赖安装和角色文件写入；规划排除参数覆盖现行与拟写策略的 raw_qa 路径并集。只有本次迁移已批准且验证的输出可作后续特定文件写前基线。新增初装与升级编排夹具通过，不冒充真实宿主完整setup。
+- Qoder关于指纹自相矛盾及漂移分支不可达的两项意见不成立：删除计划快照并重算旧格式计划与修改已批准快照但不重算是不同情况；磁盘策略变化不会自动改变已序列化 planSummary，18项原测试已分别到达预期分支。
+- 检查范围仍为 P1–P5、P8–P11 与上述代码/文档集成路径，依据 f40eda5 加本轮补丁；固定层未改。实际检查结果、语法与差异检查以本轮收尾日志为据；未覆盖POSIX、真实目标仓完整setup及并发原子性。#83仅顺带覆盖一条CLI排除路径，不据此关闭全票。
+
+
+2026-10-18（#84 / PR #90 旧入口兼容补强）：SKILL 第2步明确允许常驻入口承载既有留存策略，故快照升级为 version 2，固定同时绑定 docs/agents/roles.md、根 AGENTS.md 与根 CLAUDE.md 的 SHA-256/缺失状态；不靠正文猜测实际生效来源。三个载体均受迁移写保护；旧单载体快照要求重规划。新增旧入口8项在97d9daa上全部失败（总28/36通过），补救加兼容断言后39/39通过；既有扫描器7/7与文档对子以最终日志核对。全文件变化仍需重新审批、原并发边界不变，固定层未改，真实宿主完整setup仍未复跑。
+
+2026-10-18（#84 / PR #90 最终范围校正）：快照 v2 同时绑定三个策略载体；通过 dev/ino 比较拒绝其硬链接别名，真实 Windows 硬链接回归补丁前37/41通过、4项失败，补丁后41/41通过。最终套件移除了两项只调用 executePlan 后手写角色文件的编排夹具，它们不能证明 Skill 实际执行顺序；前段28项通过仅为历史执行事实，不再作为宿主顺序验证证据。新增测试覆盖旧入口变化及缺失兼容、旧v1基线拒绝与硬链接源/入站重写保护。
+
+- 第2步明确在留存路径未决时延后递归发现和指针跟踪，先完成3.A留存澄清，再按当前与拟写路径并集恢复；已知未变策略不增加提问。第4步仅展示预期结果，实际结果在执行后报告。
+- 最终检查：41项留存回归、7项扫描器回归与P1–P5、P8–P11共9项关系检查均通过，脚本语法及git diff --check通过；命令与完整输出存系统TEMP，本轮新同源清单对应最终提交。九项声明均未发现差异。
+- 未覆盖：真实宿主完整setup、Claude Code + GLM、POSIX及跨进程原子性；Skill顺序仅静态核对，不计端到端PASS。固定层未改，不关闭#83或#84。
+
+2026-10-18（#84 / PR90 独立scan入口补齐）：最终补充两项独立scan守卫测试，补丁前41/43通过、2项失败，补丁后43/43通过。scan现在与plan一样在扫描前读取策略、扫描后复核，变化时不写扫描结果。帮助文字改为完整docs/agents/roles.md路径。登记表同步43项；前述41项为此前版本事实，不改写历史。文档说明扫描可在内存读取策略元数据提取链接，但不得写进迁移动作。最终语法、扫描器7/7、文档关系9/9和diff检查通过；完整setup仍未运行。
+
+2026-10-18（#84 / PR90 输出与排除边界收口）：新增20项回归在b699ff7上43/63通过、20项失败，补丁后63/63通过。scan/plan在扫描前及实际写盘前拒绝--out覆盖三个策略载体（含缺失状态、硬链接及Junction别名），输出文件和父目录有符号链接/Junction时失败关闭，避免悬空链接创建策略文件。CLI、计划器及执行器拒绝排除现存策略载体或其祖先目录，避免借--exclude隐藏入站引用；载体全缺失的旧项目不因此拒绝排除。该限制不解析留存正文，仍无并发锁保证。扫描器7/7与文档关系9/9通过；最终测试为63项，前述43项保留为阶段事实。完整真实宿主setup仍未运行。
