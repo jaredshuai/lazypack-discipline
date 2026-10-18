@@ -50,7 +50,8 @@ Options:
   --exclude <relpath>  Repeatable. Also skip this repo-relative path and its
                        descendants (e.g. a configured retention.paths.raw_qa).
 
-  Plans bind the exact roles.md, root AGENTS.md and CLAUDE.md bytes (or absence) to approval.
+  Plans bind the exact docs/agents/roles.md, root AGENTS.md and CLAUDE.md bytes (or absence) to approval.
+  Scan and plan validate policy before and after scanning; drift blocks output.
   Execute revalidates this snapshot before migration reads or writes.
   Changed/unreadable policy or an old plan without a snapshot requires replanning.
     `);
@@ -60,7 +61,9 @@ Options:
   const cwd = path.resolve(values.cwd);
 
   if (command === 'scan') {
+    const policyBeforeScan = readRetentionPolicySnapshot(cwd);
     const result = scanProjectDocuments(cwd, { excludePaths: values.exclude || [] });
+    assertRetentionPolicyUnchanged(cwd, policyBeforeScan);
     const json = JSON.stringify(result, null, 2);
     if (values.out) {
       fs.writeFileSync(path.resolve(values.out), json, 'utf8');

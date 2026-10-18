@@ -225,8 +225,9 @@ test('executor rejects a self-consistent plan replacing the policy carrier', asy
   await blockedBeforeIO(t, f, /POLICY_FILE_RESERVED/);
 });
 
+for (const command of ['plan', 'scan']) {
 for (const changeDuringScan of [false, true]) {
-  test(changeDuringScan ? 'CLI rejects a policy change during scanning' : 'CLI validates policy before reading any scanned input', t => {
+  test(`CLI ${command}: ` + (changeDuringScan ? 'rejects a policy change during scanning' : 'validates policy before reading any scanned input'), t => {
     const f = fixture(t);
     if (!changeDuringScan) { fs.unlinkSync(f.policy); fs.mkdirSync(f.policy); }
     const guard = path.join(f.root, 'guard.mjs');
@@ -243,13 +244,14 @@ fs.readFileSync=function(p,...args){
  }
  return original.call(this,p,...args);
 };`);
-    const p = spawnSync(process.execPath, ['--import', pathToFileURL(guard).href, helper, 'plan', '--cwd', f.repo, '--input', spec, '--out', out],
+    const p = spawnSync(process.execPath, ['--import', pathToFileURL(guard).href, helper, command, '--cwd', f.repo, '--input', spec, '--out', out],
       { encoding: 'utf8', windowsHide: true });
     assert.equal(p.status, 1, p.stdout + p.stderr);
     assert.match(p.stderr, changeDuringScan ? /RETENTION_POLICY_DRIFT/ : /RETENTION_POLICY_UNREADABLE/);
     assert.equal(fs.existsSync(marker), changeDuringScan);
     assert.equal(fs.existsSync(out), false);
   });
+}
 }
 
 test('CLI explicit exclusion is persisted and prevents an excluded migration', t => {
