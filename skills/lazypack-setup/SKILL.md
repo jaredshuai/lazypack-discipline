@@ -209,6 +209,10 @@ description: >-
       - **未探测到测试框架处理**：若 TypeScript 项目未探测到支持的测试框架，给出信息性警告并跳过 Stryker 安装，但**仍分发工具脚本**（框架无关，可用于手动配置）；
       - **退出处理**：用户可选择退出变异测试配方；退出后不自动删除工具脚本与触发面文件（保护用户修改），再次 setup 时将其作为未接线的环境既有工具展示，需用户显式选择是否重新启用；
       - **边界声明**：变异测试**不进入 pre-commit Hook**（属于夜跑质检层，不是秒级提交前门禁）；零工具私有配置写入（不创建 `stryker.conf.js` / `setup.cfg [mutmut]`）。
+    * **Recipe 5: React + Vite App Shell 1 UI 配方**（项目层 UI 装配，按需；与语言门禁配方并存）：
+      - **适用条件**：目标需要文件/任务/消息/设置型 Web 客户端，且可用 Node 24 + npm；已有 Ant Design/ProComponents、其他 shadcn style、Next.js/Vue 或非 npm 包管理器时退出，不混装。
+      - **配方正文**：[recipes/react-vite-app-shell.md](recipes/react-vite-app-shell.md)；起始副本 `templates/react-vite-app-shell-1/`（ShadcnStore 免费 Block，MIT，合成数据）。
+      - **边界**：L2 App Shell + L1 控件，不是 L3 业务页；不复制 TS 质量门禁规则、不迁移包管理器、不覆盖已存在文件或视觉基线；`New task` / `Open task` 是未接线占位。
   - **未命中配方适用条件时的处理**：若缺少 `pyproject.toml` 或不满足配方条件，明确告知退出 Python 门禁配方，通用纪律装配继续，不向用户发起无意义的配方提问；
   - **重跑与退出后的澄清边界**：
     * 若重跑探测成功恢复了有效出处与接线事实，且仓库状态未变：**默认零提问 (0 questions)**，不向用户重复报价或再次询问是否采纳已决定项；
