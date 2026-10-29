@@ -33,7 +33,13 @@ const filterLabel: Record<TaskFilter, string> = {
   done: "Done",
 }
 
-function CatalogHeader() {
+function CatalogHeader({
+  query,
+  onQueryChange,
+}: {
+  query: string
+  onQueryChange: (value: string) => void
+}) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4 sm:px-6">
       <SidebarTrigger aria-label="Toggle navigation" className="min-h-11 min-w-11" />
@@ -48,7 +54,13 @@ function CatalogHeader() {
         </BreadcrumbList>
       </Breadcrumb>
       <div className="ml-auto hidden w-56 md:block">
-        <Input aria-label="Search workspace" placeholder="Search…" />
+        <Input
+          aria-label="Search workspace"
+          placeholder="Search…"
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          autoComplete="off"
+        />
       </div>
     </header>
   )
@@ -99,14 +111,19 @@ function TaskCard({ task }: { task: (typeof tasks)[number] }) {
   )
 }
 
-export function TasksCatalog() {
-  const [query, setQuery] = useState("")
+export function TasksCatalog({
+  query,
+  onQueryChange,
+}: {
+  query: string
+  onQueryChange: (value: string) => void
+}) {
   const [filter, setFilter] = useState<TaskFilter>("all")
 
   const visible = useMemo(() => filterTasks(tasks, query, filter), [query, filter])
 
   return (
-    <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+    <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Task catalog</h1>
@@ -126,7 +143,7 @@ export function TasksCatalog() {
           <Input
             id="task-search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Search by title, description or id"
             autoComplete="off"
           />
@@ -161,7 +178,7 @@ export function TasksCatalog() {
           <Button
             variant="outline"
             onClick={() => {
-              setQuery("")
+              onQueryChange("")
               setFilter("all")
             }}
           >
@@ -176,17 +193,19 @@ export function TasksCatalog() {
         </div>
       )}
 
-    </main>
+    </div>
   )
 }
 
 export function TasksApp() {
+  const [query, setQuery] = useState("")
+
   return (
     <SidebarProvider>
       <AppShell1Sidebar />
       <SidebarInset>
-        <CatalogHeader />
-        <TasksCatalog />
+        <CatalogHeader query={query} onQueryChange={setQuery} />
+        <TasksCatalog query={query} onQueryChange={setQuery} />
       </SidebarInset>
     </SidebarProvider>
   )
