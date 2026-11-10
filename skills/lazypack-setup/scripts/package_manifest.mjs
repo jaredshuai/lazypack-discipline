@@ -159,7 +159,7 @@ function proseLines(text) {
   const out = [];
   let fence = null;
   text.split(/\r?\n/).forEach((line, i) => {
-    const m = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    const m = line.match(/^[ \t]*(?:>[ \t]*)*(`{3,}|~{3,})(.*)$/);
     if (fence) {
       if (m && m[1][0] === fence.ch && m[1].length >= fence.len && m[2].trim() === '') fence = null;
       return;
@@ -268,7 +268,7 @@ function checkSources(root, failures) {
       }
     });
     for (const { line, no } of proseLines(lines.join('\n'))) {
-      for (const p of sourcePathsIn(line).filter((c) => c.startsWith('assets/'))) add(p, no);
+      for (const p of sourcePathsIn(line.replace(/\\`/g, '')).filter((c) => /^(\.\/)?assets\//.test(c))) add(p, no);
     }
     for (const { p, line } of found) {
       const abs = path.resolve(root, p);

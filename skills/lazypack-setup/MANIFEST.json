@@ -271,7 +271,7 @@
     },
     {
       "path": "scripts/package_manifest.mjs",
-      "sha256": "5b4e98962c85ce667b4ba1fb3a7a253bed43d7fd04ce1323fba03437cf88d42b"
+      "sha256": "696da446da053611ecf55a1f6db0dbcb24f653b00eecae95caf95f608b71f27f"
     },
     {
       "path": "scripts/verify_hook_install.mjs",

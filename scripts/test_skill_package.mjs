@@ -185,6 +185,45 @@ test('an assets path outside tables and lists is checked too', (t) => {
   assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：assets\/react-vite-app-shell-1\/nope\.txt/);
 });
 
+test('fences nested in lists or block quotes hide their content, and the closing fence is matched', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}
+- 列表项
+
+    \`\`\`
+    [a](nope-a.md) \`assets/missing-a.txt\`
+    \`\`\`
+
+> \`\`\`
+> [b](nope-b.md) \`assets/missing-b.txt\`
+> \`\`\`
+
+[after](nope-after.md)
+`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /链接目标不存在：nope-after\.md/);
+  assert.doesNotMatch(r.out, /nope-a\.md|nope-b\.md|missing-a|missing-b/);
+});
+
+test('an escaped backtick does not open an inline code span for assets paths', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}\n字面反引号 \\\`assets/missing-esc.txt\\\` 不是代码。\n`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 0, r.out);
+});
+
+test('a ./assets path in recipe prose is checked', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}\n另见 \`./assets/missing-dot.txt\`。\n`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：\.\/assets\/missing-dot\.txt/);
+});
+
 test('a bare path into the maintainer repository fails', (t) => {
   const root = copySkill(t);
   edit(root, 'references/agent-pipeline-models.md', (s) => `${s}\n见 \`docs/quality-gates/mutation-testing.md\`。\n`);
