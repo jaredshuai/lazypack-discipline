@@ -112,7 +112,7 @@ assets/index-9epFD1Ok.js   9fe19f2148027f250992a9e2c37397b3779c2ec0f86e9b9ffe5f1
 assets/index-nBr7hMrt.css  c7ddb4035c356cb6513b9ad77f1ba0b548e3c486524f5bf87c17faef77023b20
 ```
 
-随后在 Windows 11 专业版 / Windows PowerShell 5.1 / Node 24.21.0 / npm 12.1.0 上，按配方 §5.1 的脚本复制到空目录后执行同样五条命令，退出码全为 0（`npm ci` 370 packages；lint 26 files，0 warnings / 0 errors），构建产物哈希与上面三行逐字一致。Edge 157 headless 宽屏截图正常；窄屏检查须用视口模拟，详见配方 §11.2。搜索与状态筛选的浏览器交互检查本轮没有重跑。
+随后在 Windows 11 专业版 / Windows PowerShell 5.1 / Node 24.21.0 / npm 12.1.0 上，按配方 §5.1 的脚本复制到空目录后执行同样五条命令，退出码全为 0（第一次 `npm ci` 在 10 分钟内无输出被终止，删除半成品 `node_modules` 后原样重跑才通过，原因未查明；`npm ci` 370 packages；lint 26 files，0 warnings / 0 errors），构建产物哈希与上面三行逐字一致。Edge 157 headless 宽屏截图正常；窄屏检查须用视口模拟，详见配方 §11.2。搜索与状态筛选的浏览器交互检查本轮没有重跑。
 
 ## 许可
 
