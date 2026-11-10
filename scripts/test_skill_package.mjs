@@ -3,7 +3,7 @@
  *
  * skills/lazypack-setup/scripts/package_manifest.mjs 的回归测试（#108）。
  * 每个用例把 skill 目录拷到临时位置再改动，验证包检查在「只有 skill 目录」时
- * 仍能通过，并且对清单漂移、断链、配方源路径缺失、裸写本仓路径都会失败。
+ * 仍能通过，并且对清单漂移、断链、配方源路径缺失、裸写本仓路径、须保持 LF 的文件含 CR 都会失败。
  * 经 scripts/run_tests.mjs 随 .github/workflows/tests.yml 运行。
  */
 
@@ -58,6 +58,36 @@ test('CRLF checkout of text files still matches the manifest', (t) => {
   edit(root, 'SKILL.md', (s) => s.replace(/\n/g, '\r\n'));
   const r = run(root);
   assert.equal(r.code, 0, r.out);
+});
+
+test('CRLF in a shell script fails the eol check even after regenerating', (t) => {
+  const root = copySkill(t);
+  edit(root, 'assets/mutation/scripts/nightly-mutation-runner.sh', (s) => s.replace(/\n/g, '\r\n'));
+  let r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /FAIL \[eol\] 须保持 LF 的文件含 CR：assets\/mutation\/scripts\/nightly-mutation-runner\.sh/);
+  run(root, 'generate');
+  r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[eol\] .*nightly-mutation-runner\.sh/);
+});
+
+test('CRLF in a file under assets/mutation/config/ fails the eol check', (t) => {
+  const root = copySkill(t);
+  edit(root, 'assets/mutation/config/crontab.example', (s) => s.replace(/\n/g, '\r\n'));
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[eol\] 须保持 LF 的文件含 CR：assets\/mutation\/config\/crontab\.example/);
+});
+
+test('CRLF in Markdown still passes after regenerating', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/mutation-testing.md', (s) => s.replace(/\n/g, '\r\n'));
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 0, r.out);
+  assert.doesNotMatch(r.out, /\[eol\]/);
 });
 
 test('changing a file without regenerating the manifest fails', (t) => {
@@ -133,6 +163,26 @@ test('a recipe source path missing from the package fails', (t) => {
   const r = run(root);
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /\[sources\] recipes\/mutation-testing\.md:\d+ 源路径在包内不存在：assets\/mutation\/config\/mutation-testing\.timer/);
+});
+
+test('an assets path in a recipe fails even when the source table is not recognised', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/mutation-testing.md', (s) => s
+    .replace('| 触发面 | 源模板 | 目标位置 |', '| 触发面 | 模板文件 | 目标位置 |')
+    .replace('| `assets/mutation/config/crontab.example` |', '| `assets/mutation/config/crontab.missing` |'));
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[sources\] recipes\/mutation-testing\.md:\d+ 源路径在包内不存在：assets\/mutation\/config\/crontab\.missing/);
+});
+
+test('an assets path outside tables and lists is checked too', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}\n另见 \`assets/react-vite-app-shell-1/nope.txt\`。\n`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：assets\/react-vite-app-shell-1\/nope\.txt/);
 });
 
 test('a bare path into the maintainer repository fails', (t) => {
