@@ -51,10 +51,11 @@ const __dirname = path.dirname(__filename);
 
 const FIXTURE_TS = path.join(__dirname, 'fixtures', 'sample-ts');
 const FIXTURE_PY = path.join(__dirname, 'fixtures', 'sample-py');
-const PARSE_STRYKER = path.join(__dirname, 'parse-stryker-report.mjs');
-const PARSE_MUTMUT = path.join(__dirname, 'parse_mutmut_report.py');
-const BASELINE_CLI = path.join(__dirname, 'mutation-baseline.mjs');
-const ISSUES_CLI = path.join(__dirname, 'create-mutation-issues.mjs');
+const TOOL_DIR = path.join(__dirname, '..', 'skills', 'lazypack-setup', 'assets', 'mutation', 'scripts');
+const PARSE_STRYKER = path.join(TOOL_DIR, 'parse-stryker-report.mjs');
+const PARSE_MUTMUT = path.join(TOOL_DIR, 'parse_mutmut_report.py');
+const BASELINE_CLI = path.join(TOOL_DIR, 'mutation-baseline.mjs');
+const ISSUES_CLI = path.join(TOOL_DIR, 'create-mutation-issues.mjs');
 const STRYKER_BIN = path.join(
   FIXTURE_TS, 'node_modules', '@stryker-mutator', 'core', 'bin', 'stryker'
 );

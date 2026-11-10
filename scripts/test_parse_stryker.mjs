@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const CLI = path.join(__dirname, 'parse-stryker-report.mjs');
+const CLI = path.join(__dirname, '..', 'skills', 'lazypack-setup', 'assets', 'mutation', 'scripts', 'parse-stryker-report.mjs');
 
 /**
  * 断言条件成立，失败时抛出带场景信息的错误。

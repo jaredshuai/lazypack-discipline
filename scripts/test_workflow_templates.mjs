@@ -69,8 +69,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 
-const TEMPLATE_TS = path.join(REPO_ROOT, 'templates', '.github', 'workflows', 'nightly-mutation-ts.yml');
-const TEMPLATE_PY = path.join(REPO_ROOT, 'templates', '.github', 'workflows', 'nightly-mutation-py.yml');
+// 分发资源在 skill 包内（#108）；workflow 里的 scripts/... 是目标仓路径，对应包内 assets/mutation/scripts/...
+const MUTATION_ROOT = path.join(REPO_ROOT, 'skills', 'lazypack-setup', 'assets', 'mutation');
+const TEMPLATE_TS = path.join(MUTATION_ROOT, 'workflows', 'nightly-mutation-ts.yml');
+const TEMPLATE_PY = path.join(MUTATION_ROOT, 'workflows', 'nightly-mutation-py.yml');
 const FIXTURE_TS = path.join(__dirname, 'fixtures', 'sample-ts');
 const FIXTURE_PY = path.join(__dirname, 'fixtures', 'sample-py');
 
@@ -438,8 +440,8 @@ function copyToolScripts(sandbox, scriptNames, wfName) {
   const destDir = path.join(sandbox, 'scripts');
   fs.mkdirSync(destDir, { recursive: true });
   for (const name of scriptNames) {
-    const source = path.join(__dirname, name);
-    assertCase(fs.existsSync(source), `${wfName}: 随迁脚本在本仓不存在：scripts/${name}`);
+    const source = path.join(MUTATION_ROOT, 'scripts', name);
+    assertCase(fs.existsSync(source), `${wfName}: 随迁脚本在 skill 包内不存在：assets/mutation/scripts/${name}`);
     fs.copyFileSync(source, path.join(destDir, name));
   }
 }
@@ -695,7 +697,7 @@ function caseScriptReferences(results, state) {
       const refs = collectScriptRefs(doc, wfName);
       assertCase(refs.length > 0, `${wfName}: run 块未引用任何 scripts/ 脚本`);
       for (const ref of refs) {
-        assertCase(fs.existsSync(path.join(REPO_ROOT, ref)), `${wfName}: 引用的脚本不存在：${ref}`);
+        assertCase(fs.existsSync(path.join(MUTATION_ROOT, ref)), `${wfName}: 引用的脚本不存在：${ref}`);
       }
       const refSet = new Set(refs);
       const listSet = new Set(expected.get(lang));

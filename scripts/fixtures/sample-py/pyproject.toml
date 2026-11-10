@@ -12,7 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 # mutmut 固定 2.x：3.x 不再写夜跑闭环工具链读取的 .mutmut-cache
-# （见 templates/.github/workflows/nightly-mutation-py.yml 头注）。
+# （见 skills/lazypack-setup/assets/mutation/workflows/nightly-mutation-py.yml 头注）。
 dev = [
   "pytest>=7.0,<9",
   "mutmut>=2.4,<3",

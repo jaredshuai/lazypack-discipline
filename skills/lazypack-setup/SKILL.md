@@ -31,6 +31,8 @@ description: >-
 
 ### 第 1 步：前置双检 (Pre-flight Double Check)
 
+**包完整性（先于双检）**：在本 skill 目录运行 `node scripts/package_manifest.mjs check`，核对 [MANIFEST.json](MANIFEST.json) 登记的每个文件存在且内容一致、包内文档的相对链接与配方源路径都在包内。退出码非 0 时**立即停止，不写入任何文件**，把输出的 `FAIL` 行原样告诉用户，并说明 skill 安装不完整、需要重新安装；不得从网络、本仓克隆或其他目录补取缺失资源后继续装配。
+
 执行前置只读检查，规则遵循 [references/verification.md](references/verification.md) §1：
 
 1. **Issue Tracker**：核验 `docs/agents/issue-tracker.md` 是否存在、非空且包含实质性 tracker 说明正文（除标题行外必须包含正文描述，纯中文实质说明有效，仅有标题或空模板视为无效）。
@@ -197,7 +199,7 @@ description: >-
     * Python 项目（满足优先级 3 条件）：推荐 `uv` + `ruff` + `ty` + `pytest` 配方（按项补缺提问：用户可按门禁槽位独立选择采纳或拒绝）；
     * TS/JS 项目（满足优先级 3 或优先级 6 新仓 TS 分支）：推荐 `ts-biome-vitest` 配方（包含 Biome、tsc 与 Vitest；按项补缺提问：用户可按 format, lint, type, test 槽位独立选择采纳或拒绝；CLI 产物询问是否需要 bin/parseArgs，询问是否启用 MCP 服务；配置所有权遵循 `tool-or-user` 原则，setup 实行零工具私有配置写入；单包 `pnpm-workspace.yaml` 仅用于自安装保护，不等同授权 monorepo）；
     * **Recipe 4: 变异测试配方**（多语言优先级 0，可与基础配方并存的补充质检层）：
-      - **适用条件探测**（遵循 [presets/mutation-testing.md](presets/mutation-testing.md) §2）：
+      - **适用条件探测**（遵循 [recipes/mutation-testing.md](recipes/mutation-testing.md) §2）：
         · TypeScript 路径：探测到 `package.json` 且依赖中包含测试框架（vitest / jest / mocha / karma）；
         · Python 路径：探测到 `pyproject.toml` 或 `requirements.txt`；
         · 可同时支持 TypeScript 与 Python（混合项目）。
@@ -205,7 +207,7 @@ description: >-
       - **推荐内容**：
         · TypeScript：安装 `@stryker-mutator/{runner}`（根据探测到的测试框架选择 vitest-runner / jest-runner / mocha-runner / karma-runner）；
         · Python：安装 `mutmut<3`（固定 2.x 以兼容工具链）；
-        · 分发 4 个核心工具脚本到 `scripts/`（mutation-baseline.mjs, parse-stryker-report.mjs, parse_mutmut_report.py, create-mutation-issues.mjs）；
+        · 分发 4 个核心工具脚本到 `scripts/`（mutation-baseline.mjs, parse-stryker-report.mjs, parse_mutmut_report.py, create-mutation-issues.mjs；源在包内 `assets/mutation/scripts/`）；
         · 多选触发面配置（GitHub Actions / 本地 cron/systemd / VS Code tasks）。
       - **未探测到测试框架处理**：若 TypeScript 项目未探测到支持的测试框架，给出信息性警告并跳过 Stryker 安装，但**仍分发工具脚本**（框架无关，可用于手动配置）；
       - **退出处理**：用户可选择退出变异测试配方；退出后不自动删除工具脚本与触发面文件（保护用户修改），再次 setup 时将其作为未接线的环境既有工具展示，需用户显式选择是否重新启用；
@@ -248,7 +250,7 @@ description: >-
   - 目标为空目录或干净前端目录，Node 24 + npm 可用（**首轮唯一保证路径**）；
   - 已有 Ant Design/ProComponents、其他 shadcn style、Next.js/Vue、非 npm 包管理器，或 Node 主版本不是 24：退出，说明冲突项，不混装、不迁移、不换源。
 - **与语言门禁的关系**：不是"与语言门禁配方并存"。UI 配方不复制 TS 门禁规则，也不把起始副本的 npm + oxlint 脚本当成目标门禁政策；npm 项目即使采纳 TS 配方也只走 `alternative-manager` 受限分支（保留现有命令、不迁 pnpm）。
-- **配方正文**：[recipes/react-vite-app-shell.md](recipes/react-vite-app-shell.md)；起始副本在本仓根目录的 [../../templates/react-vite-app-shell-1/](../../templates/react-vite-app-shell-1/)（ShadcnStore 免费 Block + shadcn/ui Base Nova，MIT，合成数据），不在本 skill 的 `templates/` 下。目前须有本仓完整克隆才能取得；只安装 skill 目录时起始副本缺失，按配方 §5.1 报错停止，不从别处补取。
+- **配方正文**：[recipes/react-vite-app-shell.md](recipes/react-vite-app-shell.md)；起始副本随包分发，在 [assets/react-vite-app-shell-1/](assets/react-vite-app-shell-1/)（ShadcnStore 免费 Block + shadcn/ui Base Nova，MIT，合成数据）；缺失或包检查失败时按配方 §5.1 报错停止，不从别处补取。
 - **边界**：L2 App Shell + L1 控件，不是 L3 业务页；不覆盖已存在文件（首轮只支持干净/空目标，任一目标路径已存在即零写入退出）；`New task` / `Open task`、侧栏移动端搜索框是未接线占位。
 - **不采纳时**：记录 `ui-recipe-declined`，不展示模板产物、不产生任何写入；重跑 setup 时作为按需项再次询问，但不自动套用。
 
@@ -475,7 +477,9 @@ description: >-
 - [references/DECISIONS.md](references/DECISIONS.md)：本包固定层的派生快照（只读事实源；版本以本文件 frontmatter 的 `fixed layer (x.y.z)` 为准）。
 - [presets/python-uv-ruff.md](presets/python-uv-ruff.md)：首发 Python 质量门禁配方数据卡（只读源）。
 - [presets/ts-biome-vitest.md](presets/ts-biome-vitest.md)：TypeScript/JavaScript 质量门禁配方数据卡（只读源）。
-- [presets/mutation-testing.md](presets/mutation-testing.md)：变异测试配方数据卡（只读源，多语言优先级 0 补充质检层）。
+- [recipes/mutation-testing.md](recipes/mutation-testing.md)：变异测试配方数据卡（只读源，多语言优先级 0 补充质检层）；分发资源在 [assets/mutation/](assets/mutation/)。
+- [assets/react-vite-app-shell-1/](assets/react-vite-app-shell-1/)：App Shell 1 起始副本（随包分发，`SHA256SUMS` 固定关键文件）。
+- [MANIFEST.json](MANIFEST.json) 与 [scripts/package_manifest.mjs](scripts/package_manifest.mjs)：本包分发清单（每个文件的路径与 sha256、工具脚本版本）与包检查；装配前的资源完整性核验见第 1 步开头。
 - [references/retention-sections.md](references/retention-sections.md)：规划者访谈与碎片想法留存指引正文库（单一事实源）。
 - [references/document-routing.md](references/document-routing.md)：既有文档归属与 8 大知识区路由规范（原位保留与安全登记），并含子项目根发现、逐区探测覆盖记录与本地 CI/脚本路径失效信号只读核对（§2.1 第 5 项、§2.3、§2.4）。
 - [references/managed-blocks.md](references/managed-blocks.md)：标记语法、换行/编码规范、指纹与输入摘要算法、重跑决策树。

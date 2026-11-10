@@ -7,7 +7,7 @@
 #
 # 使用方式（复制到目标项目，本仓自身不运行该闭环）：
 #   1. 把本文件复制为目标项目的 .github/workflows/nightly-mutation-py.yml；
-#   2. 把本仓 scripts/ 的工具脚本一并复制到目标项目 scripts/：
+#   2. 把lazypack-setup 包 assets/mutation/scripts/ 的工具脚本一并复制到目标项目 scripts/：
 #      parse_mutmut_report.py、mutation-baseline.mjs、create-mutation-issues.mjs；
 #   3. 配置 mutmut（setup.cfg 的 [mutmut] 段或命令行参数）：
 #      paths_to_mutate、runner 等，见 mutmut 文档；

@@ -1,5 +1,6 @@
 /**
  * scripts/mutation-baseline.mjs
+ * @version 1.0.0
  *
  * 变异分数基线管理工具：从原始变异测试报告提取统计值（score/killed/survived/total），
  * 管理目标项目根目录下的 .mutation-baseline.json（格式契约见

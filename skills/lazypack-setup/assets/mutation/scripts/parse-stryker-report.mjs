@@ -1,5 +1,6 @@
 /**
  * scripts/parse-stryker-report.mjs
+ * @version 1.0.0
  *
  * Stryker JSON 报告解析器（夜跑闭环 M2）：读取 StrykerJS 的 JSON 报告
  * （默认产物 reports/mutation/mutation.json，接受 v6/v7 形态，见 --help），

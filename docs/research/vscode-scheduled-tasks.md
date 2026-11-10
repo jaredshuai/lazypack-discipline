@@ -98,8 +98,8 @@ Marketplace 描述为周期性运行任务的扩展。本轮未做深入能力�
 
 无人值守定时不在 VS Code 里解决：
 
-- **GitHub Actions**：`on.schedule.cron`，模板由 `templates/.github/workflows/`（integration 里程碑 nightly-mutation-ts/py 任务）提供；
-- **本地调度器**：cron / systemd timer / Windows 任务计划，包装脚本与配置示例由 `templates/config/` 与 `templates/scripts/nightly-mutation-runner.sh`（integration 里程碑 local-cron-config 任务）提供。
+- **GitHub Actions**：`on.schedule.cron`，模板由 `skills/lazypack-setup/assets/mutation/workflows/`（integration 里程碑 nightly-mutation-ts/py 任务）提供；
+- **本地调度器**：cron / systemd timer / Windows 任务计划，包装脚本与配置示例由 `skills/lazypack-setup/assets/mutation/config/` 与 `skills/lazypack-setup/assets/mutation/scripts/nightly-mutation-runner.sh`（integration 里程碑 local-cron-config 任务）提供。
 
 以上路径在本轮时尚未由对应施工票交付，故不设 Markdown 链接；交付后以各自登记行为准。
 

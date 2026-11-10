@@ -75,7 +75,7 @@ VS Code 任务模板不在 `templates/` 下：它是本仓根目录的 [`.vscode
 1. **复制模板到项目**：
 
 ```bash
-cp templates/.github/workflows/nightly-mutation-ts.yml \
+cp skills/lazypack-setup/assets/mutation/workflows/nightly-mutation-ts.yml \
    your-project/.github/workflows/nightly-mutation-ts.yml
 ```
 
@@ -135,7 +135,7 @@ git push
 1. **复制模板**：
 
 ```bash
-cp templates/.github/workflows/nightly-mutation-py.yml \
+cp skills/lazypack-setup/assets/mutation/workflows/nightly-mutation-py.yml \
    your-project/.github/workflows/nightly-mutation-py.yml
 ```
 
@@ -225,14 +225,14 @@ git commit -m "chore: initialize mutation testing baseline"
 1. **复制运行器与工具脚本**：
 
 ```bash
-cp templates/scripts/nightly-mutation-runner.sh your-project/scripts/
+cp skills/lazypack-setup/assets/mutation/scripts/nightly-mutation-runner.sh your-project/scripts/
 chmod +x your-project/scripts/nightly-mutation-runner.sh
 
 # 工具脚本一并复制到目标项目 scripts/（runner 逐步调用它们）：
 # TypeScript：parse-stryker-report.mjs；Python：parse_mutmut_report.py
 # 两种语言共用：mutation-baseline.mjs、create-mutation-issues.mjs
-cp scripts/parse-stryker-report.mjs scripts/parse_mutmut_report.py \
-   scripts/mutation-baseline.mjs scripts/create-mutation-issues.mjs \
+cp skills/lazypack-setup/assets/mutation/scripts/parse-stryker-report.mjs skills/lazypack-setup/assets/mutation/scripts/parse_mutmut_report.py \
+   skills/lazypack-setup/assets/mutation/scripts/mutation-baseline.mjs skills/lazypack-setup/assets/mutation/scripts/create-mutation-issues.mjs \
    your-project/scripts/
 ```
 
@@ -279,7 +279,7 @@ crontab -e
 0 2 * * * /path/to/your/project/scripts/nightly-mutation-runner.sh --lang ts --project-dir /path/to/your/project >/dev/null 2>&1
 ```
 
-注意 cron 的三个常见坑：PATH 很短（node/npx/mutmut/gh 装在 nvm、homebrew、`~/.local` 等位置时必须在 crontab 顶部补 `PATH=`）；cron 不加载 `.bashrc`/`.profile`，环境靠显式声明；时间按本机时区解释（GitHub Actions 的 cron 按 UTC）。完整示例（含 py 03:30 错峰与 flock 防重叠）见 `templates/config/crontab.example`。
+注意 cron 的三个常见坑：PATH 很短（node/npx/mutmut/gh 装在 nvm、homebrew、`~/.local` 等位置时必须在 crontab 顶部补 `PATH=`）；cron 不加载 `.bashrc`/`.profile`，环境靠显式声明；时间按本机时区解释（GitHub Actions 的 cron 按 UTC）。完整示例（含 py 03:30 错峰与 flock 防重叠）见 `skills/lazypack-setup/assets/mutation/config/crontab.example`。
 
 5. **配置 Windows Task Scheduler**：
 
@@ -297,8 +297,8 @@ crontab -e
 
 ```bash
 mkdir -p ~/.config/systemd/user
-cp templates/config/mutation-testing.service ~/.config/systemd/user/
-cp templates/config/mutation-testing.timer ~/.config/systemd/user/
+cp skills/lazypack-setup/assets/mutation/config/mutation-testing.service ~/.config/systemd/user/
+cp skills/lazypack-setup/assets/mutation/config/mutation-testing.timer ~/.config/systemd/user/
 ```
 
 2. **编辑 service 文件**（把 ExecStart 里的 `YOUR_USER_HERE` / `YOUR_REPO_HERE` 占位换成实际值）：
@@ -969,7 +969,7 @@ on:
 which node npx mutmut gh
 ```
 
-2. **crontab 顶部显式补 PATH**（完整示例见 `templates/config/crontab.example`）：
+2. **crontab 顶部显式补 PATH**（完整示例见 `skills/lazypack-setup/assets/mutation/config/crontab.example`）：
 
 ```bash
 PATH=/usr/local/bin:/usr/bin:/bin:/home/YOUR_USER_HERE/.local/bin
@@ -1010,8 +1010,8 @@ pip install "mutmut<3"
 - [质检分层节奏工单 #37](https://github.com/jaredshuai/lazypack-discipline/issues/37) - 白天秒级门禁 + 夜间重型质检的分层节奏，夜跑闭环对应其中的夜间档位
 - [变异测试运营手册](mutation-testing.md) (#42) - 门槛冻结策略、等价变异豁免、胶水代码边界
 - [工具用法文档](../../README.md) - 所有工具的详细 CLI 参数
-- [Stryker 报告解析器](../../scripts/parse-stryker-report.mjs) - 源码与 CLI 说明
-- [mutmut 报告解析器](../../scripts/parse_mutmut_report.py) - 源码与 CLI 说明
+- [Stryker 报告解析器](../../skills/lazypack-setup/assets/mutation/scripts/parse-stryker-report.mjs) - 源码与 CLI 说明
+- [mutmut 报告解析器](../../skills/lazypack-setup/assets/mutation/scripts/parse_mutmut_report.py) - 源码与 CLI 说明
 - [等价变异体文件格式](../formats/equivalent-mutants.md) - 豁免文件详细规范
 - [统一变异报告格式](../formats/unified-mutation-report.md) - 解析器输出格式
 - [基线文件格式](../formats/mutation-baseline.md) - 基线文件详细规范

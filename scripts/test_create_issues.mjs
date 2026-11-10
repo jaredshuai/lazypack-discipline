@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const CLI = path.join(__dirname, 'create-mutation-issues.mjs');
+const CLI = path.join(__dirname, '..', 'skills', 'lazypack-setup', 'assets', 'mutation', 'scripts', 'create-mutation-issues.mjs');
 
 const REPORT_TS = '2026-10-05T18:30:00Z';
 

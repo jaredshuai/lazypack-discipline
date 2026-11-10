@@ -6,7 +6,7 @@
 #       --log-keep 自动清理）。
 #
 # 安装：
-#   1. 把本仓 scripts/ 工具与 templates/scripts/nightly-mutation-runner.sh
+#   1. 把lazypack-setup 包 assets/mutation/scripts/ 下的工具与 nightly-mutation-runner.sh
 #      复制到目标项目 scripts/（见脚本头注），手动跑通一次；
 #   2. crontab -e 粘贴下面内容，把 YOUR_USER_HERE / YOUR_REPO_HERE 改成
 #      实际值；

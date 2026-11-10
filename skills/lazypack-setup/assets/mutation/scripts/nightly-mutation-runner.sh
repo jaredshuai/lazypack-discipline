@@ -11,7 +11,7 @@
 # 使用方式（复制到目标项目后使用；本仓自身不运行该闭环）：
 #   1. 把本文件复制为目标项目的 scripts/nightly-mutation-runner.sh 并
 #      chmod +x；
-#   2. 把本仓 scripts/ 的工具脚本一并复制到目标项目 scripts/：
+#   2. 把lazypack-setup 包 assets/mutation/scripts/ 的工具脚本一并复制到目标项目 scripts/：
 #      - TypeScript：parse-stryker-report.mjs、mutation-baseline.mjs、
 #        create-mutation-issues.mjs；
 #      - Python：parse_mutmut_report.py、mutation-baseline.mjs、
@@ -19,7 +19,7 @@
 #   3. gh CLI 认证（gh auth login 的持久凭据，或导出 GH_TOKEN）；未认证时
 #      先用 --dry-run 验证链路（零 gh 调用）；
 #   4. 手动跑通后再挂定时：crontab 示例与 systemd service/timer 模板见
-#      本仓 templates/config/。
+#      lazypack-setup 包 assets/mutation/config/。
 #
 # 用法：
 #   scripts/nightly-mutation-runner.sh [选项]
@@ -35,7 +35,7 @@
 #                       .mutation-queue/ 队列文件与 body 预览
 #   -h, --help          显示本帮助并退出
 #
-# 流程与前置条件（与 templates/.github/workflows/ 同一口径）：
+# 流程与前置条件（与 assets/mutation/workflows/ 同一口径）：
 #   步骤 1  运行变异测试   ts: npx stryker run（要求 reporters 含 "json"，
 #                          建议不配 thresholds.break，门槛由 baseline 承担）
 #                          py: mutmut run（固定 2.x；存活/超时/可疑变异体

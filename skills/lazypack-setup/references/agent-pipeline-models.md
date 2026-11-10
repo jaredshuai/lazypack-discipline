@@ -60,7 +60,7 @@ specifier → coder → cleaner → hardener → QA
 - **职责**：变异测试，100% 覆盖，毫不留情。
 - **输入**：cleaner 重构后的代码与测试。
 - **输出**：变异分数达标的测试套件（原始模型要求 100% 杀伤）。
-- **工作方式**：跑变异测试（mutation testing，工具如 Stryker 或 mutmut）：往代码里注入微小变异，凡有变异体存活，就补断言把它杀死。「毫不留情」指不放过任何一个存活变异体——存活一个就是未完成。工具接入方法见本仓 `docs/quality-gates/mutation-testing.md`。
+- **工作方式**：跑变异测试（mutation testing，工具如 Stryker 或 mutmut）：往代码里注入微小变异，凡有变异体存活，就补断言把它杀死。「毫不留情」指不放过任何一个存活变异体——存活一个就是未完成。工具接入方法见 lazypack-discipline 仓 `docs/quality-gates/mutation-testing.md`。
 - **不做什么**：不改产品代码逻辑；发现测不动的坏设计时，退回上一段处理，不自己顺手改。
 
 ### 2.5 QA（质检者）
@@ -138,5 +138,5 @@ specifier → coder → cleaner → hardener → QA
 ## 参考来源
 
 - issue #39：五段式流水线模型的原始描述与实测数据。
-- `docs/quality-gates/mutation-testing.md`：lazypack-discipline 本仓的变异测试运营手册（hardener 段的工具接入）。
-- `scripts/calculate_crap.mjs`：lazypack-discipline 本仓的 CRAP 分数计算工具（cleaner 段的配套工具）。
+- lazypack-discipline 仓 `docs/quality-gates/mutation-testing.md`：该仓的变异测试运营手册（hardener 段的工具接入）。
+- lazypack-discipline 仓 `scripts/calculate_crap.mjs`：该仓的 CRAP 分数计算工具（cleaner 段的配套工具）。

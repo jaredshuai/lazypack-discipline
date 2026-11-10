@@ -313,8 +313,8 @@ mutmut --version
 #### 6.3.1 GitHub Actions Workflows
 
 **源模板位置**：
-- TypeScript: `templates/.github/workflows/nightly-mutation-ts.yml`
-- Python: `templates/.github/workflows/nightly-mutation-py.yml`
+- TypeScript: `assets/mutation/workflows/nightly-mutation-ts.yml`
+- Python: `assets/mutation/workflows/nightly-mutation-py.yml`
 
 **目标位置**：
 - TypeScript: `.github/workflows/nightly-mutation-ts.yml`
@@ -334,16 +334,16 @@ mutmut --version
 ```
 ✓ 文件已创建：.github/workflows/nightly-mutation-ts.yml
 ⚠️  需要配置 GitHub Personal Access Token（用于创建 issue）
-📖 参考文档：docs/quality-gates/nightly-mutation-loop.md 的 GitHub Actions 部分
+📖 参考文档：lazypack-discipline 仓 docs/quality-gates/nightly-mutation-loop.md 的 GitHub Actions 部分
 ```
 
 #### 6.3.2 本地 cron/systemd
 
 **源模板位置**：
-- `templates/scripts/nightly-mutation-runner.sh`
-- `templates/config/crontab.example`
-- `templates/config/mutation-testing.service`
-- `templates/config/mutation-testing.timer`
+- `assets/mutation/scripts/nightly-mutation-runner.sh`
+- `assets/mutation/config/crontab.example`
+- `assets/mutation/config/mutation-testing.service`
+- `assets/mutation/config/mutation-testing.timer`
 
 **目标位置**：
 - `scripts/nightly-mutation-runner.sh`
@@ -404,10 +404,10 @@ mutmut --version
 
 | 触发面 | 源模板 | 目标位置 |
 |--------|--------|----------|
-| GitHub Actions | `templates/.github/workflows/nightly-mutation-{ts,py}.yml` | `.github/workflows/nightly-mutation-{ts,py}.yml` |
-| 本地 cron | `templates/scripts/nightly-mutation-runner.sh` | `scripts/nightly-mutation-runner.sh` |
-| 本地 cron | `templates/config/crontab.example` | `docs/setup/crontab.example` |
-| 本地 cron | `templates/config/mutation-testing.{service,timer}` | `docs/setup/mutation-testing.{service,timer}` |
+| GitHub Actions | `assets/mutation/workflows/nightly-mutation-{ts,py}.yml` | `.github/workflows/nightly-mutation-{ts,py}.yml` |
+| 本地 cron | `assets/mutation/scripts/nightly-mutation-runner.sh` | `scripts/nightly-mutation-runner.sh` |
+| 本地 cron | `assets/mutation/config/crontab.example` | `docs/setup/crontab.example` |
+| 本地 cron | `assets/mutation/config/mutation-testing.{service,timer}` | `docs/setup/mutation-testing.{service,timer}` |
 | VS Code tasks | （代码生成，无模板） | `.vscode/tasks.json`（合并） |
 
 ---
@@ -496,7 +496,7 @@ mutmut --version
 - 夜间运行全量变异，配合基线棘轮策略与 issue 创建
 - 夜间失败项通过 GitHub issues 追踪，晨会处置
 
-**夜跑闭环完整流程**（参考 `docs/quality-gates/nightly-mutation-loop.md`）：
+**夜跑闭环完整流程**（参考 lazypack-discipline 仓 `docs/quality-gates/nightly-mutation-loop.md`）：
 1. 定时触发（cron / GitHub Actions / 手动）
 2. 运行变异测试（Stryker / mutmut）
 3. 解析报告 → 统一格式
@@ -593,14 +593,14 @@ mutmut --version
 
 - 本配方仅提供 GitHub Actions workflow 模板
 - GitLab CI / Jenkins / CircleCI 等需用户手动配置
-- 参考 `docs/quality-gates/nightly-mutation-loop.md` 的 CI 配置指引
+- 参考 lazypack-discipline 仓 `docs/quality-gates/nightly-mutation-loop.md` 的 CI 配置指引
 
 ### 11.4 不自动处理的等价变异体
 
 - 等价变异体识别与豁免是**人工流程**
 - `.equivalent-mutants.json` 由用户经代码评审写入
 - `create-mutation-issues.mjs` 读取豁免文件并过滤
-- 详细流程见 `docs/quality-gates/mutation-testing.md` §2
+- 详细流程见 lazypack-discipline 仓 `docs/quality-gates/mutation-testing.md` §2
 
 ### 11.5 不保证的环境兼容性
 
@@ -621,12 +621,12 @@ mutmut --version
 
 ## 12. 交叉引用 (Cross References)
 
-- **变异测试运营手册** (`docs/quality-gates/mutation-testing.md`) - 门槛冻结策略、等价变异豁免、胶水代码边界
-- **夜跑闭环运营指引** (`docs/quality-gates/nightly-mutation-loop.md`) - 完整的夜跑自动化流程
+- **变异测试运营手册** (lazypack-discipline 仓 `docs/quality-gates/mutation-testing.md`) - 门槛冻结策略、等价变异豁免、胶水代码边界
+- **夜跑闭环运营指引** (lazypack-discipline 仓 `docs/quality-gates/nightly-mutation-loop.md`) - 完整的夜跑自动化流程
 - **工具脚本源码** (`scripts/`) - 所有工具的详细 CLI 参数与实现
-- **等价变异体文件格式** (`docs/formats/equivalent-mutants.md`) - 豁免文件详细规范
-- **统一变异报告格式** (`docs/formats/unified-mutation-report.md`) - 解析器输出格式
-- **基线文件格式** (`docs/formats/mutation-baseline.md`) - 基线文件详细规范
+- **等价变异体文件格式** (lazypack-discipline 仓 `docs/formats/equivalent-mutants.md`) - 豁免文件详细规范
+- **统一变异报告格式** (lazypack-discipline 仓 `docs/formats/unified-mutation-report.md`) - 解析器输出格式
+- **基线文件格式** (lazypack-discipline 仓 `docs/formats/mutation-baseline.md`) - 基线文件详细规范
 - **质检分层节奏工单** (#37) - 白天秒级门禁 + 夜间重型质检的分层节奏
 
 ---
