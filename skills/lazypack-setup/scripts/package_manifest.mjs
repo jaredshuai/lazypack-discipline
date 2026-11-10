@@ -245,9 +245,13 @@ function checkSources(root, failures) {
       const key = `${p}\0${line}`;
       if (!seen.has(key)) { seen.add(key); found.push({ p, line }); }
     };
+    const prose = proseLines(lines.join('\n'));
+    const outsideFence = new Set(prose.map((l) => l.no));
     let srcCol = -1;
     let inList = false;
     lines.forEach((line, i) => {
+      // 围栏内的示例表格/列表不是源路径声明：围栏打断表格，但不结束外层列表
+      if (!outsideFence.has(i + 1)) { srcCol = -1; return; }
       if (/^\|/.test(line)) {
         const cells = line.split('|').slice(1, -1).map((c) => c.trim());
         const header = cells.findIndex((c) => /^源(模板|路径)?$/.test(c));
@@ -267,7 +271,7 @@ function checkSources(root, failures) {
         }
       }
     });
-    for (const { line, no } of proseLines(lines.join('\n'))) {
+    for (const { line, no } of prose) {
       for (const p of sourcePathsIn(line.replace(/\\`/g, '')).filter((c) => /^(\.\/)?assets\//.test(c))) add(p, no);
     }
     for (const { p, line } of found) {

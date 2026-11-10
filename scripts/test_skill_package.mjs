@@ -224,6 +224,63 @@ test('a ./assets path in recipe prose is checked', (t) => {
   assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：\.\/assets\/missing-dot\.txt/);
 });
 
+test('example source tables and lists inside fences are not source declarations', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}
+\`\`\`md
+| 触发面 | 源模板 | 目标位置 |
+| --- | --- | --- |
+| 示例 | \`assets/fenced-table-missing.txt\` | x |
+
+**源模板位置**：
+- \`assets/fenced-list-missing.txt\`
+\`\`\`
+`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 0, r.out);
+});
+
+test('a real source table or list after a fence is still checked', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}
+\`\`\`md
+| 触发面 | 源模板 | 目标位置 |
+| --- | --- | --- |
+| 示例 | \`assets/fenced-table-missing.txt\` | x |
+\`\`\`
+
+| 触发面 | 源模板 | 目标位置 |
+| --- | --- | --- |
+| 真实 | \`assets/real-table-missing.txt\` | x |
+
+**源模板位置**：
+- \`assets/real-list-missing.txt\`
+`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：assets\/real-table-missing\.txt/);
+  assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：assets\/real-list-missing\.txt/);
+  assert.doesNotMatch(r.out, /fenced-table-missing/);
+});
+
+test('a fence nested inside a source list does not end the list', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}
+**源模板位置**：
+- \`assets/react-vite-app-shell-1/README.md\`
+  \`\`\`
+  示例
+  \`\`\`
+- \`assets/after-fence-missing.txt\`
+`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /源路径在包内不存在：assets\/after-fence-missing\.txt/);
+});
+
 test('a bare path into the maintainer repository fails', (t) => {
   const root = copySkill(t);
   edit(root, 'references/agent-pipeline-models.md', (s) => `${s}\n见 \`docs/quality-gates/mutation-testing.md\`。\n`);
