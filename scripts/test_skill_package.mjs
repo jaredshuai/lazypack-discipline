@@ -273,12 +273,40 @@ test('a fence nested inside a source list does not end the list', (t) => {
   \`\`\`
   示例
   \`\`\`
-- \`assets/after-fence-missing.txt\`
+- \`recipes/after-fence-missing.txt\`
 `);
   run(root, 'generate');
   const r = run(root);
   assert.equal(r.code, 1, r.out);
-  assert.match(r.out, /源路径在包内不存在：assets\/after-fence-missing\.txt/);
+  assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：recipes\/after-fence-missing\.txt/);
+});
+
+test('an unclosed fence in a recipe fails and reports its opening line', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s.replace(/\r?\n$/, '')}
+
+\`\`\`md
+未闭合的围栏
+**源模板位置**：
+- \`recipes/after-unclosed-missing.txt\`
+[gone](nope-after-unclosed.md)
+`);
+  run(root, 'generate');
+  const r = run(root);
+  const lines = fs.readFileSync(path.join(root, 'recipes/react-vite-app-shell.md'), 'utf8').split(/\r?\n/);
+  const open = lines.findIndex((l) => l === '```md') + 1;
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, new RegExp(`\\[links\\] recipes/react-vite-app-shell\\.md:${open} 代码围栏未闭合，其后内容未被检查`));
+  assert.equal(r.out.match(/代码围栏未闭合/g).length, 1, r.out);
+});
+
+test('an unclosed fence in a non-recipe Markdown file fails too', (t) => {
+  const root = copySkill(t);
+  edit(root, 'references/agent-pipeline-models.md', (s) => `${s}\n~~~\n没有闭合\n`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[links\] references\/agent-pipeline-models\.md:\d+ 代码围栏未闭合/);
 });
 
 test('a bare path into the maintainer repository fails', (t) => {

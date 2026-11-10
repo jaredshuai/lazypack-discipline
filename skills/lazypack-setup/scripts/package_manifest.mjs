@@ -13,7 +13,8 @@
  *   1. manifest：MANIFEST.json 与包内文件逐一一致（路径、sha256、工具版本）。
  *   2. links：SKILL.md、assets/、presets/、recipes/、references/ 下 Markdown 的
  *      行内链接与引用式链接都解析到包内存在的文件，不允许跳出包根目录
- *      （含经符号链接跳出）；引用式链接的标签必须有定义。
+ *      （含经符号链接跳出）；引用式链接的标签必须有定义；代码围栏必须闭合
+ *      （未闭合的围栏会让其后的链接与源路径都不被检查，按失败处理）。
  *   3. sources：配方「源模板 → 目标位置」表格与「源模板位置」列表里的源路径在包内存在。
  *   4. external：指向 lazypack-discipline 本仓的路径（docs/formats/、docs/quality-gates/、
  *      scripts/calculate_crap.mjs）所在行须写明「lazypack-discipline 仓」，
@@ -165,11 +166,13 @@ function proseLines(text) {
       return;
     }
     if (m && !(m[1][0] === '`' && m[2].includes('`'))) {
-      fence = { ch: m[1][0], len: m[1].length };
+      fence = { ch: m[1][0], len: m[1].length, no: i + 1 };
       return;
     }
     out.push({ line, no: i + 1 });
   });
+  // 文档结束时围栏仍未闭合：按 CommonMark 其后全是代码，但检查器因此看不到那些内容，调用方须报失败
+  out.unclosedFence = fence ? fence.no : null;
   return out;
 }
 
@@ -197,6 +200,9 @@ function checkLinks(rootReal, docs, failures) {
   const normLabel = (s) => s.trim().replace(/\s+/g, ' ').toLowerCase();
   for (const rel of docs) {
     const lines = proseLines(fs.readFileSync(path.join(rootReal, rel), 'utf8'));
+    if (lines.unclosedFence) {
+      failures.push({ check: 'links', detail: `${rel}:${lines.unclosedFence} 代码围栏未闭合，其后内容未被检查` });
+    }
     const defs = new Set();
     const uses = [];
     for (const { line, no } of lines) {
