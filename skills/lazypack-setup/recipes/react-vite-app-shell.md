@@ -1,11 +1,11 @@
 ---
 id: react-vite-app-shell
-version: 1.0.0
+version: 1.0.1
 name: "React Vite App Shell 1 (ShadcnStore free block)"
 description: "L2 application shell plus L1 shadcn primitives for product-style React clients, pinned to verified versions and shipped with a synthetic task catalog page."
 config_owner: project
 ui_layers: "L2 + L1"
-verified_on: "2026-10-29"
+verified_on: "2026-10-29"  # v1.0.0 的 Windows 11 实测；v1.0.1 的 Windows 复验待补，见 §11
 ---
 
 # React + Vite App Shell 1 配方
@@ -13,9 +13,9 @@ verified_on: "2026-10-29"
 本文件是 `/lazypack-setup` 按需消费的 UI 装配配方数据卡（只读源）。它只声明一条标准路径：用 ShadcnStore 免费 App Shell 1 加 shadcn Base Nova 基础控件，装出产品型 Web 客户端的外壳与一个示例列表页。
 
 - **ID**: `react-vite-app-shell`
-- **Version**: `1.0.0`
-- **来源起始副本**: [templates/react-vite-app-shell-1/](../../../templates/react-vite-app-shell-1/)
-- **入口**: setup 在 `SKILL.md` §3.B 的配方推荐中按需列出本卡；不读本卡时不产生任何写入。
+- **Version**: `1.0.1`
+- **来源起始副本**: [templates/react-vite-app-shell-1/](../../../templates/react-vite-app-shell-1/)，位于本仓根目录，不在本 skill 的 `templates/` 下。目前须有本仓完整克隆才能取得；只安装 skill 目录时起始副本缺失，§5.1 的脚本会报错停止。
+- **入口**: setup 在 `SKILL.md` 第 3 步的 3.C（项目层 UI 装配）中按需列出本卡；不读本卡时不产生任何写入。
 
 本卡只证明一条已声明的装配路径。它不承诺所有 React 项目、其他 UI 体系、其他包管理器或 Windows 桌面打包都能用同一份代码。
 
@@ -57,7 +57,7 @@ verified_on: "2026-10-29"
 | 组件 | 版本 |
 |---|---|
 | React / React DOM | 19.2.8 |
-| Vite | 8.3.0 |
+| Vite | 8.3.7 |
 | TypeScript | 6.0.2 |
 | Tailwind CSS / @tailwindcss/vite | 4.3.3 |
 | shadcn CLI | 4.21.5 |
@@ -74,6 +74,7 @@ verified_on: "2026-10-29"
 - `cn@0.5.0` 是 Base Nova 注册表项自身声明的依赖（注册表 JSON 的 `dependencies: ["cn"]`），生成文件用 `import { cn } from "cn"` 直接引用；来源是 npm 上的 `cn` 包，仓库 `github.com/shadcn-ui/cn`，MIT，自述为 clsx + tailwind-merge 的替代实现。它不是本仓自建模块，也**不要**改写成 `src/lib/utils.ts`：起始副本里没有 `src/lib/utils.ts`，`components.json` 的 utils 别名只是留给后续 `shadcn add` 的默认值。
 - 起始副本内 `SHA256SUMS` 覆盖 App Shell 1 三个文件、14 个 `src/components/ui/*.tsx`、`src/hooks/use-mobile.ts` 与 `package-lock.json`，共 19 条；哈希按仓库字节（LF）计算，起始副本自带 `.gitattributes`（`* text=auto eol=lf`）统一换行，Windows 检出后仍是同一字节序列。复制后先核对，再决定是否采用。
 - 起始副本的 `components.json` **不配置**第三方 registry：本模板只带已锁定的本地副本，升级必须按 §7 的载荷哈希重新核对，不允许执行未核验的 `shadcn add @shadcnstore/...` 直接拉取。
+- 已知依赖安全公告（2026-11-10 对本卡 lockfile 执行 `npm audit --package-lock-only`，使用 npm 官方源）：Vite 从 8.3.0 升到 8.3.7 后，Vite 与 launch-editor 的公告已不再命中。剩余 7 个受影响的包（npm 汇总为 1 low / 3 moderate / 3 high），都来自 shadcn CLI 的传递依赖：`zod`（high，GHSA-mrhx-c7xc-m3w5）、`deepmerge`（GHSA-gcqx-w48m-w2h4）、`minimatch`（moderate，GHSA-g3hv-75wg-m249），以及因此被标记的 `@shadcn/registry`、`shadcn`、`ts-morph`、`@ts-morph/common`。npm 给出的修复是换成 `shadcn@1.0.0`，属破坏性改动，本卡不采用。这些包都是 devDependency，`src/` 不引用它们，只在执行 `shadcn` 命令时加载，不进入构建产物。
 
 ---
 
@@ -94,7 +95,7 @@ setup 执行时必须按顺序完成，任一步失败即停：
 1. **探测**：读目标仓 `package.json`、`components.json`、`tailwindcss` 版本与 Node 主版本；逐条列出起始副本中 40 个目标文件的相对路径，并逐个检查目标是否已存在。
 2. **零覆盖判定（写前，不可跳过）**：只要有任意一个目标路径已存在（文件或目录），**立即停止，不写入任何文件**，把冲突清单交给用户。本轮只支持干净/空目标，不存在"逐项确认后覆盖"的分支。
 3. **确认**：用户确认的必须是第 1 步列出的完整文件清单（不是"整目录复制"这种模糊授权）。确认后只复制这份清单。
-4. **安装**：在新的起始副本目录执行 `npm ci`（起始副本自带 lockfile）。目标项目已有自己的 lockfile 时，不改写它，也不拿本卡 lockfile 覆盖；先说明新增依赖，再由项目按自身门禁安装。
+4. **安装**：在目标目录执行 `npm ci`，使用随起始副本复制过去的 `package-lock.json`。`package-lock.json` 本身在第 1 步的复制清单内，目标已有 lockfile 时第 2 步已整单退出，因此这一步不会改写或覆盖目标原有的 lockfile。
 5. **复验**：依次运行下节命令。日志留在目标项目或临时目录，不写回本仓。
 6. **可选渲染检查**：需要确认视觉或窄屏行为时，构建后用本机 Edge/Chromium 打开 `dist/index.html` 做渲染与搜索/筛选检查；这不是门禁，也不替代人工审美验收。
 
@@ -103,12 +104,20 @@ setup 执行时必须按顺序完成，任一步失败即停：
 目标环境是 Windows 11 原生，命令用 PowerShell 5.1+（Windows 11 自带）。它先在内存里算出全部目标路径，有一个已存在就抛错退出，此时**尚未写入任何文件**；全部通过后才逐个复制。
 
 ```powershell
+$ErrorActionPreference = 'Stop'
 $src = 'C:\path\to\lazypack-discipline\templates\react-vite-app-shell-1'
 $dst = 'C:\path\to\target'
 
-$files = Get-ChildItem -LiteralPath $src -Recurse -File -Force |
-  Where-Object { $_.FullName -notmatch '\\(node_modules|dist|\.git)\\' }
-$root = $src.TrimEnd('\')
+if (-not (Test-Path -LiteralPath (Join-Path $src 'SHA256SUMS') -PathType Leaf)) {
+  throw "找不到起始副本：$src 下没有 SHA256SUMS。未写入任何文件。"
+}
+
+$files = @(Get-ChildItem -LiteralPath $src -Recurse -File -Force -ErrorAction Stop |
+  Where-Object { $_.FullName -notmatch '\\(node_modules|dist|\.git)\\' })
+if ($files.Count -eq 0) {
+  throw "起始副本 $src 中没有可复制的文件。未写入任何文件。"
+}
+$root = (Resolve-Path -LiteralPath $src).Path.TrimEnd('\')
 $plan = foreach ($f in $files) {
   [pscustomobject]@{
     Source   = $f.FullName
@@ -116,25 +125,25 @@ $plan = foreach ($f in $files) {
   }
 }
 
-$conflicts = $plan | Where-Object { Test-Path -LiteralPath (Join-Path $dst $_.Relative) }
-if ($conflicts) {
+$conflicts = @($plan | Where-Object { Test-Path -LiteralPath (Join-Path $dst $_.Relative) })
+if ($conflicts.Count -gt 0) {
   $conflicts.Relative
   throw '目标已存在上述文件：未写入任何文件。请改用空目录。'
 }
 
-$created = @()
 foreach ($item in $plan) {
   $target = Join-Path $dst $item.Relative
   New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
   Copy-Item -LiteralPath $item.Source -Destination $target -ErrorAction Stop
-  $created += $item.Relative
+  Write-Output "已写入 $($item.Relative)"
 }
-$created
+Write-Output "共写入 $($plan.Count) 个文件"
 ```
 
 边界说明，必须如实转述：
 
-- 这个脚本**不是事务**。复制中途失败时，它已输出的 `$created` 就是已写入的相对路径清单，需要人工删除后重跑；不得声称"已完整回滚"。
+- 找不到起始副本（`$src` 写错、只安装了 skill 目录、目录不可读）或副本里没有文件时，脚本在任何写入前报错退出，不会以“零复制”的形式正常结束。
+- 这个脚本**不是事务**。复制中途失败时，此前每写入一个文件都已输出一行 `已写入 <相对路径>`，这些行就是已写入清单，需要人工删除后重跑；不得声称"已完整回滚"。
 - 不使用 `cp -n` / `Copy-Item -ErrorAction SilentlyContinue` 这类"跳过已存在文件"的写法冒充保护：跳过会让用户以为整装成功，实际混入了旧文件。
 - 起始副本自带 `node_modules/`、`dist/` 的忽略规则；这两者不在计划清单内，也不复制进目标仓或本仓。
 
@@ -219,14 +228,29 @@ AI 不得把这些占位描述为已接线，也不得据此宣称 API、桌面�
 
 ## 11. 已验证范围
 
+### 11.1 v1.0.0（Vite 8.3.0），2026-10-29，Windows 11
+
 2026-10-29 在 Windows 11 Pro / Node 24.22.1 / npm 11.19.1 上，对起始副本的干净副本执行：
 
 - `npm ci`（370 packages）、`npm run typecheck`、`npm run lint`（26 files，0 warnings / 0 errors）、`npm run test`（5/5）、`npm run build`：全部退出码 0。
 - Microsoft Edge headless（CDP）渲染与交互：1440×1000 初始 6/6 卡片；在页头 `Search workspace` 输入 `TASK-121` 后 1/6；再点状态 `Open` 后 0/6 并显示空状态标题；点 `Reset filters` 回到 6/6；390×844 下 6 张卡片且 `scrollWidth` 等于视口宽度（无横向溢出）；页面只有 1 个 `<main>`。
 - §5.1 的零覆盖复制脚本在 Windows PowerShell 5.1 实跑：空目标复制 40 个文件；对同一目标重跑时在任何写入前抛错，文件数保持 40→40。§5.2 的哈希核对对复制结果全部匹配（19/19）。起始副本的 `.gitattributes`（`* text=auto eol=lf`）保证 Windows 检出仍是 LF 字节。
 
+以上是 v1.0.0 的记录；§5.1 的脚本此后已改写（见 11.2），这里的实跑结果只对改写前的脚本成立。
+
+### 11.2 v1.0.1（Vite 8.3.7），2026-11-10，仅 Linux
+
+2026-11-10 在 Linux（Node 24.22.2 / npm 11.19.1）上，对起始副本的独立副本执行：
+
+- `npm ci`（npm 官方源）退出码 0，未改写 lockfile；`SHA256SUMS` 19/19 匹配。
+- `npm run typecheck`、`npm run lint`、`npm run test`（5/5）、`npm run build`（2300 modules）：全部退出码 0。
+- `npm audit --package-lock-only`：剩余公告见 §3。
+
+本轮**没有**在 Windows 11 上复验，Edge 渲染检查也没有重跑；§5.1 改写后的复制脚本与 §5.2 的哈希核对脚本都没有在 PowerShell 中实跑过。在补上 Windows 复验之前，v1.0.1 的 Windows 11 路径只有 v1.0.0 的旧记录可依，不得描述为已在 v1.0.1 上验证。
+
 未验证范围：
 
+- v1.0.1 在 Windows 11 上的冷安装、复验、渲染检查，以及 §5.1、§5.2 两个 PowerShell 脚本。
 - 真实移动设备、其他浏览器（Firefox/Safari）、其他 Node 主版本。
 - Windows 桌面运行时（Tauri/Electron/pywebview）与安装包。
 - 真实业务数据、API、路由、权限。

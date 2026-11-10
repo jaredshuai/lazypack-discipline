@@ -34,7 +34,7 @@
 ```text
 MIT License
 
-Copyright (c) ShadcnStore (free blocks)
+Copyright (c) ShadcnStore
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

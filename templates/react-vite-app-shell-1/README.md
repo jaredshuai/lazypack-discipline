@@ -6,6 +6,8 @@
 
 ## 已验证环境
 
+下表是 2026-10-29（Vite 8.3.0）的 Windows 验证环境。Vite 升到 8.3.7 后只在 Linux 上复验过，Windows 复验待补，见文末「复验记录（2026-11-10）」。
+
 | 项 | 值 |
 |---|---|
 | OS | Windows 11 Pro |
@@ -14,7 +16,7 @@
 | 包管理器 | npm（提交 `package-lock.json`，不要求 pnpm） |
 | 浏览器复验 | Microsoft Edge headless（CDP） |
 
-主要固定版本：React 19.2.8 / Vite 8.3.0 / TypeScript 6.0.2 / Tailwind CSS 4.3.3 / shadcn CLI 4.21.5 / @base-ui/react 1.9.0 / Vitest 5.0.5 / cn 0.5.0。完整清单见 `package.json`；传递依赖由 `package-lock.json` 固定。
+主要固定版本：React 19.2.8 / Vite 8.3.7 / TypeScript 6.0.2 / Tailwind CSS 4.3.3 / shadcn CLI 4.21.5 / @base-ui/react 1.9.0 / Vitest 5.0.5 / cn 0.5.0。完整清单见 `package.json`；传递依赖由 `package-lock.json` 固定。
 
 `package.json` 声明 `engines.node` 为 `>=24 <25`，与下方已验证环境一致；其他 Node 主版本不在本轮验证范围。`cn@0.5.0` 是 Base Nova 注册表项自身声明的依赖（注册表 JSON 的 `dependencies: ["cn"]`），组件用 `import { cn } from "cn"` 直接引用，来源为 npm 上的 `cn` 包（`github.com/shadcn-ui/cn`，MIT）。
 
@@ -89,6 +91,28 @@ assets/index-nBr7hMrt.css  c7ddb4035c356cb6513b9ad77f1ba0b548e3c486524f5bf87c17f
 ```
 
 Edge headless（CDP，2026-10-29 复跑）：1440×1000 初始 6/6 卡片；在页头 `Search workspace` 输入 `TASK-121` 后为 1/6 卡片；再点状态 `Open` 后为 0/6 并显示空状态标题；点 `Reset filters` 回到 6/6；切到 390×844 后仍 6 张卡片且 `scrollWidth` 等于视口宽度（无横向溢出）。页头搜索与页内 `Filter tasks` 已绑定同一 `query` 状态；页面只有一个 `<main>`（`SidebarInset`）。
+
+## 复验记录（2026-11-10，Vite 8.3.7，仅 Linux）
+
+Vite 从 8.3.0 升到 8.3.7（避开 Vite 与 launch-editor 的已知安全公告，详见配方 §3）后，在 Linux（Node 24.22.2 / npm 11.19.1）上对本目录的独立副本执行：
+
+| 命令 | 退出码 | 结果 |
+|---|---|---|
+| `npm ci` | 0 | npm 官方源；未改写 lockfile |
+| `npm run typecheck` | 0 | `tsc -b --force` 无输出 |
+| `npm run lint` | 0 | 无输出 |
+| `npm run test` | 0 | 5/5 tests passed |
+| `npm run build` | 0 | 2300 modules；JS 414.97 kB / CSS 72.63 kB |
+
+构建产物哈希（Linux）：
+
+```
+index.html                 4b3ca8356b2e17d2099e071ef9b58d239631ac2e31bf75832a797729853b982b
+assets/index-9epFD1Ok.js   9fe19f2148027f250992a9e2c37397b3779c2ec0f86e9b9ffe5f1f27c7e70b49
+assets/index-nBr7hMrt.css  c7ddb4035c356cb6513b9ad77f1ba0b548e3c486524f5bf87c17faef77023b20
+```
+
+本轮没有在 Windows 11 上复验，Edge 渲染检查也没有重跑；上面 2026-10-29 的 Windows 记录对应 Vite 8.3.0。
 
 ## 许可
 

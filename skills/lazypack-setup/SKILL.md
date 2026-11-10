@@ -248,7 +248,7 @@ description: >-
   - 目标为空目录或干净前端目录，Node 24 + npm 可用（**首轮唯一保证路径**）；
   - 已有 Ant Design/ProComponents、其他 shadcn style、Next.js/Vue、非 npm 包管理器，或 Node 主版本不是 24：退出，说明冲突项，不混装、不迁移、不换源。
 - **与语言门禁的关系**：不是"与语言门禁配方并存"。UI 配方不复制 TS 门禁规则，也不把起始副本的 npm + oxlint 脚本当成目标门禁政策；npm 项目即使采纳 TS 配方也只走 `alternative-manager` 受限分支（保留现有命令、不迁 pnpm）。
-- **配方正文**：[recipes/react-vite-app-shell.md](recipes/react-vite-app-shell.md)；起始副本 `templates/react-vite-app-shell-1/`（ShadcnStore 免费 Block + shadcn/ui Base Nova，MIT，合成数据）。
+- **配方正文**：[recipes/react-vite-app-shell.md](recipes/react-vite-app-shell.md)；起始副本在本仓根目录的 [../../templates/react-vite-app-shell-1/](../../templates/react-vite-app-shell-1/)（ShadcnStore 免费 Block + shadcn/ui Base Nova，MIT，合成数据），不在本 skill 的 `templates/` 下。目前须有本仓完整克隆才能取得；只安装 skill 目录时起始副本缺失，按配方 §5.1 报错停止，不从别处补取。
 - **边界**：L2 App Shell + L1 控件，不是 L3 业务页；不覆盖已存在文件（首轮只支持干净/空目标，任一目标路径已存在即零写入退出）；`New task` / `Open task`、侧栏移动端搜索框是未接线占位。
 - **不采纳时**：记录 `ui-recipe-declined`，不展示模板产物、不产生任何写入；重跑 setup 时作为按需项再次询问，但不自动套用。
 
@@ -324,7 +324,7 @@ description: >-
 #### UI 装配产物（仅当 3.C 采纳 Recipe 5 时展示）
 
 7. **完整复制清单**：逐条列出起始副本 40 个文件的相对路径（不含 `node_modules/`、`dist/`），并声明：任一目标路径已存在即整单零写入退出，首轮不支持覆盖、合并或改名绕过。
-8. **副作用**：`npm ci` 会访问 npm registry 并把约 370 个包写入目标 `node_modules/`（使用目标自带 lockfile；若目标已有自己的 lockfile，不改写、不覆盖）；`npm run build` 写入目标 `dist/`；测试只读内存合成数据、不访问网络；不写全局配置、不安装全局工具、不改目标主题变量。
+8. **副作用**：起始副本的 `package-lock.json` 在第 7 项的复制清单内，目标已有 lockfile 时按零写入判定整单退出，不会改写或覆盖它；复制完成后，`npm ci` 按这份复制过去的 lockfile 访问 npm registry，把约 370 个包写入目标 `node_modules/`；`npm run build` 写入目标 `dist/`；测试只读内存合成数据、不访问网络；不写全局配置、不安装全局工具、不改目标主题变量。
 9. **复验命令**：`npm ci` → `npm run verify`（typecheck / lint / test / build），期望退出码全为 0；任一非零即停并附原始日志。
 10. **哈希核对**：复制后按配方 §5.2 核对 `SHA256SUMS` 的 19 条记录；不匹配即停止采用，不得重算哈希让它通过。
 
