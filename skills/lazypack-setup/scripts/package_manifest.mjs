@@ -9,18 +9,22 @@
  *   node scripts/package_manifest.mjs check      检查包是否完整，失败退出码 1
  * 包根目录固定为本脚本的上一级目录（按真实路径解析，符号链接调用也一样）。
  *
- * check 覆盖四项：
+ * check 覆盖五项：
  *   1. manifest：MANIFEST.json 与包内文件逐一一致（路径、sha256、工具版本）。
  *   2. links：SKILL.md、assets/、presets/、recipes/、references/ 下 Markdown 的
  *      行内链接与引用式链接都解析到包内存在的文件，不允许跳出包根目录
- *      （含经符号链接跳出）；引用式链接的标签必须有定义。
+ *      （含经符号链接跳出）；引用式链接的标签必须有定义；代码围栏必须闭合
+ *      （未闭合的围栏会让其后的链接与源路径都不被检查，按失败处理）。
  *   3. sources：配方「源模板 → 目标位置」表格与「源模板位置」列表里的源路径在包内存在。
  *   4. external：指向 lazypack-discipline 本仓的路径（docs/formats/、docs/quality-gates/、
  *      scripts/calculate_crap.mjs）所在行须写明「lazypack-discipline 仓」，
  *      避免在目标仓里被误读为目标仓自己的文件。
+ *   5. eol：必须保持 LF 的文件（所有 .sh，加 assets/mutation/config/ 下全部文件，与仓库根
+ *      .gitattributes 的 eol=lf 规则一致）不得含 CR 字节；bash 与 cron/systemd 不容忍 CRLF。
  *
  * 哈希按「文本文件把 CRLF 规范为 LF、二进制文件按原字节」计算，Windows 上
- * 开了 autocrlf 的检出也能通过。退出码：0 通过；1 检查失败；2 用法错误。
+ * 开了 autocrlf 的检出也能通过；必须保持 LF 的文件另由第 5 项检查。
+ * 退出码：0 通过；1 检查失败；2 用法错误。
  */
 
 import crypto from 'node:crypto';
@@ -33,6 +37,7 @@ export const SCHEMA = 'lazypack-skill-manifest/1';
 const DOC_DIRS = ['assets', 'presets', 'recipes', 'references'];
 const EXTERNAL_PATTERNS = [/docs\/formats\//, /docs\/quality-gates\//, /scripts\/calculate_crap\.mjs/];
 const EXTERNAL_MARK = 'lazypack-discipline 仓';
+const LF_ONLY = (rel) => rel.endsWith('.sh') || rel.startsWith('assets/mutation/config/');
 const VERSION_RE = /^\s*(?:\*|#)?\s*@version\s+(\d+\.\d+\.\d+)\s*$/m;
 
 function toPosix(p) {
@@ -155,17 +160,19 @@ function proseLines(text) {
   const out = [];
   let fence = null;
   text.split(/\r?\n/).forEach((line, i) => {
-    const m = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    const m = line.match(/^[ \t]*(?:>[ \t]*)*(`{3,}|~{3,})(.*)$/);
     if (fence) {
       if (m && m[1][0] === fence.ch && m[1].length >= fence.len && m[2].trim() === '') fence = null;
       return;
     }
     if (m && !(m[1][0] === '`' && m[2].includes('`'))) {
-      fence = { ch: m[1][0], len: m[1].length };
+      fence = { ch: m[1][0], len: m[1].length, no: i + 1 };
       return;
     }
     out.push({ line, no: i + 1 });
   });
+  // 文档结束时围栏仍未闭合：按 CommonMark 其后全是代码，但检查器因此看不到那些内容，调用方须报失败
+  out.unclosedFence = fence ? fence.no : null;
   return out;
 }
 
@@ -193,6 +200,9 @@ function checkLinks(rootReal, docs, failures) {
   const normLabel = (s) => s.trim().replace(/\s+/g, ' ').toLowerCase();
   for (const rel of docs) {
     const lines = proseLines(fs.readFileSync(path.join(rootReal, rel), 'utf8'));
+    if (lines.unclosedFence) {
+      failures.push({ check: 'links', detail: `${rel}:${lines.unclosedFence} 代码围栏未闭合，其后内容未被检查` });
+    }
     const defs = new Set();
     const uses = [];
     for (const { line, no } of lines) {
@@ -236,15 +246,24 @@ function checkSources(root, failures) {
     const rel = `recipes/${name}`;
     const lines = fs.readFileSync(path.join(dir, name), 'utf8').split(/\r?\n/);
     const found = [];
+    const seen = new Set();
+    const add = (p, line) => {
+      const key = `${p}\0${line}`;
+      if (!seen.has(key)) { seen.add(key); found.push({ p, line }); }
+    };
+    const prose = proseLines(lines.join('\n'));
+    const outsideFence = new Set(prose.map((l) => l.no));
     let srcCol = -1;
     let inList = false;
     lines.forEach((line, i) => {
+      // 围栏内的示例表格/列表不是源路径声明：围栏打断表格，但不结束外层列表
+      if (!outsideFence.has(i + 1)) { srcCol = -1; return; }
       if (/^\|/.test(line)) {
         const cells = line.split('|').slice(1, -1).map((c) => c.trim());
         const header = cells.findIndex((c) => /^源(模板|路径)?$/.test(c));
         if (header >= 0) { srcCol = header; return; }
         if (srcCol >= 0 && !/^[-:\s]+$/.test(cells.join(''))) {
-          for (const p of sourcePathsIn(cells[srcCol] || '')) found.push({ p, line: i + 1 });
+          for (const p of sourcePathsIn(cells[srcCol] || '')) add(p, i + 1);
         }
         return;
       }
@@ -252,12 +271,15 @@ function checkSources(root, failures) {
       if (/^\*\*源模板位置\*\*/.test(line)) { inList = true; return; }
       if (inList) {
         if (/^\s*-\s/.test(line)) {
-          for (const p of sourcePathsIn(line)) found.push({ p, line: i + 1 });
+          for (const p of sourcePathsIn(line)) add(p, i + 1);
         } else if (line.trim() !== '') {
           inList = false;
         }
       }
     });
+    for (const { line, no } of prose) {
+      for (const p of sourcePathsIn(line.replace(/\\`/g, '')).filter((c) => /^(\.\/)?assets\//.test(c))) add(p, no);
+    }
     for (const { p, line } of found) {
       const abs = path.resolve(root, p);
       if (!insideRoot(root, abs)) {
@@ -280,6 +302,14 @@ function checkExternal(root, docs, failures) {
   }
 }
 
+function checkEol(root, failures) {
+  for (const rel of listFiles(root).filter(LF_ONLY)) {
+    if (fs.readFileSync(path.join(root, rel)).includes(13)) {
+      failures.push({ check: 'eol', detail: `须保持 LF 的文件含 CR：${rel}` });
+    }
+  }
+}
+
 export function checkPackage(rootDir) {
   const root = fs.realpathSync(rootDir);
   const failures = [];
@@ -288,6 +318,7 @@ export function checkPackage(rootDir) {
   checkLinks(root, docs, failures);
   checkSources(root, failures);
   checkExternal(root, docs, failures);
+  checkEol(root, failures);
   return failures;
 }
 
@@ -308,7 +339,7 @@ function main(argv) {
       console.error(`包检查失败：${failures.length} 项。资源缺失时 setup 不得继续装配。`);
       return 1;
     }
-    console.log('包检查通过：manifest、links、sources、external 四项均无差异');
+    console.log('包检查通过：manifest、links、sources、external、eol 五项均无差异');
     return 0;
   }
   console.error('用法：node scripts/package_manifest.mjs <generate|check>');

@@ -3,7 +3,7 @@
  *
  * skills/lazypack-setup/scripts/package_manifest.mjs 的回归测试（#108）。
  * 每个用例把 skill 目录拷到临时位置再改动，验证包检查在「只有 skill 目录」时
- * 仍能通过，并且对清单漂移、断链、配方源路径缺失、裸写本仓路径都会失败。
+ * 仍能通过，并且对清单漂移、断链、配方源路径缺失、裸写本仓路径、须保持 LF 的文件含 CR 都会失败。
  * 经 scripts/run_tests.mjs 随 .github/workflows/tests.yml 运行。
  */
 
@@ -55,9 +55,39 @@ test('skill copied alone to a temp directory still passes', (t) => {
 
 test('CRLF checkout of text files still matches the manifest', (t) => {
   const root = copySkill(t);
-  edit(root, 'SKILL.md', (s) => s.replace(/\n/g, '\r\n'));
+  edit(root, 'SKILL.md', (s) => s.replace(/\r?\n/g, '\r\n'));
   const r = run(root);
   assert.equal(r.code, 0, r.out);
+});
+
+test('CRLF in a shell script fails the eol check even after regenerating', (t) => {
+  const root = copySkill(t);
+  edit(root, 'assets/mutation/scripts/nightly-mutation-runner.sh', (s) => s.replace(/\r?\n/g, '\r\n'));
+  let r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /FAIL \[eol\] 须保持 LF 的文件含 CR：assets\/mutation\/scripts\/nightly-mutation-runner\.sh/);
+  run(root, 'generate');
+  r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[eol\] .*nightly-mutation-runner\.sh/);
+});
+
+test('CRLF in a file under assets/mutation/config/ fails the eol check', (t) => {
+  const root = copySkill(t);
+  edit(root, 'assets/mutation/config/crontab.example', (s) => s.replace(/\r?\n/g, '\r\n'));
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[eol\] 须保持 LF 的文件含 CR：assets\/mutation\/config\/crontab\.example/);
+});
+
+test('CRLF in Markdown still passes after regenerating', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/mutation-testing.md', (s) => s.replace(/\r?\n/g, '\r\n'));
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 0, r.out);
+  assert.doesNotMatch(r.out, /\[eol\]/);
 });
 
 test('changing a file without regenerating the manifest fails', (t) => {
@@ -135,6 +165,150 @@ test('a recipe source path missing from the package fails', (t) => {
   assert.match(r.out, /\[sources\] recipes\/mutation-testing\.md:\d+ 源路径在包内不存在：assets\/mutation\/config\/mutation-testing\.timer/);
 });
 
+test('an assets path in a recipe fails even when the source table is not recognised', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/mutation-testing.md', (s) => s
+    .replace('| 触发面 | 源模板 | 目标位置 |', '| 触发面 | 模板文件 | 目标位置 |')
+    .replace('| `assets/mutation/config/crontab.example` |', '| `assets/mutation/config/crontab.missing` |'));
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[sources\] recipes\/mutation-testing\.md:\d+ 源路径在包内不存在：assets\/mutation\/config\/crontab\.missing/);
+});
+
+test('an assets path outside tables and lists is checked too', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}\n另见 \`assets/react-vite-app-shell-1/nope.txt\`。\n`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：assets\/react-vite-app-shell-1\/nope\.txt/);
+});
+
+test('fences nested in lists or block quotes hide their content, and the closing fence is matched', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}
+- 列表项
+
+    \`\`\`
+    [a](nope-a.md) \`assets/missing-a.txt\`
+    \`\`\`
+
+> \`\`\`
+> [b](nope-b.md) \`assets/missing-b.txt\`
+> \`\`\`
+
+[after](nope-after.md)
+`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /链接目标不存在：nope-after\.md/);
+  assert.doesNotMatch(r.out, /nope-a\.md|nope-b\.md|missing-a|missing-b/);
+});
+
+test('an escaped backtick does not open an inline code span for assets paths', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}\n字面反引号 \\\`assets/missing-esc.txt\\\` 不是代码。\n`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 0, r.out);
+});
+
+test('a ./assets path in recipe prose is checked', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}\n另见 \`./assets/missing-dot.txt\`。\n`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：\.\/assets\/missing-dot\.txt/);
+});
+
+test('example source tables and lists inside fences are not source declarations', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}
+\`\`\`md
+| 触发面 | 源模板 | 目标位置 |
+| --- | --- | --- |
+| 示例 | \`assets/fenced-table-missing.txt\` | x |
+
+**源模板位置**：
+- \`assets/fenced-list-missing.txt\`
+\`\`\`
+`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 0, r.out);
+});
+
+test('a real source table or list after a fence is still checked', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}
+\`\`\`md
+| 触发面 | 源模板 | 目标位置 |
+| --- | --- | --- |
+| 示例 | \`assets/fenced-table-missing.txt\` | x |
+\`\`\`
+
+| 触发面 | 源模板 | 目标位置 |
+| --- | --- | --- |
+| 真实 | \`assets/real-table-missing.txt\` | x |
+
+**源模板位置**：
+- \`assets/real-list-missing.txt\`
+`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：assets\/real-table-missing\.txt/);
+  assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：assets\/real-list-missing\.txt/);
+  assert.doesNotMatch(r.out, /fenced-table-missing/);
+});
+
+test('a fence nested inside a source list does not end the list', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s}
+**源模板位置**：
+- \`assets/react-vite-app-shell-1/README.md\`
+  \`\`\`
+  示例
+  \`\`\`
+- \`recipes/after-fence-missing.txt\`
+`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[sources\] recipes\/react-vite-app-shell\.md:\d+ 源路径在包内不存在：recipes\/after-fence-missing\.txt/);
+});
+
+test('an unclosed fence in a recipe fails and reports its opening line', (t) => {
+  const root = copySkill(t);
+  edit(root, 'recipes/react-vite-app-shell.md', (s) => `${s.replace(/\r?\n$/, '')}
+
+\`\`\`md
+未闭合的围栏
+**源模板位置**：
+- \`recipes/after-unclosed-missing.txt\`
+[gone](nope-after-unclosed.md)
+`);
+  run(root, 'generate');
+  const r = run(root);
+  const lines = fs.readFileSync(path.join(root, 'recipes/react-vite-app-shell.md'), 'utf8').split(/\r?\n/);
+  const open = lines.findIndex((l) => l === '```md') + 1;
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, new RegExp(`\\[links\\] recipes/react-vite-app-shell\\.md:${open} 代码围栏未闭合，其后内容未被检查`));
+  assert.equal(r.out.match(/代码围栏未闭合/g).length, 1, r.out);
+});
+
+test('an unclosed fence in a non-recipe Markdown file fails too', (t) => {
+  const root = copySkill(t);
+  edit(root, 'references/agent-pipeline-models.md', (s) => `${s}\n~~~\n没有闭合\n`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[links\] references\/agent-pipeline-models\.md:\d+ 代码围栏未闭合/);
+});
+
 test('a bare path into the maintainer repository fails', (t) => {
   const root = copySkill(t);
   edit(root, 'references/agent-pipeline-models.md', (s) => `${s}\n见 \`docs/quality-gates/mutation-testing.md\`。\n`);
@@ -146,7 +320,8 @@ test('a bare path into the maintainer repository fails', (t) => {
 
 test('generate output is stable', (t) => {
   const root = copySkill(t);
-  const before = fs.readFileSync(path.join(root, 'MANIFEST.json'), 'utf8');
+  // CRLF 检出里已提交的清单是 CRLF，generate 总是写 LF；只规范化 before，输出按原样比较
+  const before = fs.readFileSync(path.join(root, 'MANIFEST.json'), 'utf8').replace(/\r\n/g, '\n');
   run(root, 'generate');
   assert.equal(fs.readFileSync(path.join(root, 'MANIFEST.json'), 'utf8'), before);
 });

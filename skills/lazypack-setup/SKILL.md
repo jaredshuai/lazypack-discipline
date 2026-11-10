@@ -31,7 +31,7 @@ description: >-
 
 ### 第 1 步：前置双检 (Pre-flight Double Check)
 
-**包完整性（先于双检）**：在本 skill 目录运行 `node scripts/package_manifest.mjs check`，核对 [MANIFEST.json](MANIFEST.json) 登记的每个文件存在且内容一致、包内文档的相对链接与配方源路径都在包内。退出码非 0 时**立即停止，不写入任何文件**，把输出的 `FAIL` 行原样告诉用户，并说明 skill 安装不完整、需要重新安装；不得从网络、本仓克隆或其他目录补取缺失资源后继续装配。
+**包完整性（先于双检）**：在本 skill 目录运行 `node scripts/package_manifest.mjs check`，核对 [MANIFEST.json](MANIFEST.json) 登记的每个文件存在且内容一致、包内文档的相对链接与配方引用的 `assets/` 源路径都在包内、必须保持 LF 的脚本与 cron/systemd 配置不含 CR。退出码非 0 时**立即停止，不写入任何文件**，把输出的 `FAIL` 行原样告诉用户，并说明 skill 安装不完整、需要重新安装；不得从网络、本仓克隆或其他目录补取缺失资源后继续装配。
 
 执行前置只读检查，规则遵循 [references/verification.md](references/verification.md) §1：
 
