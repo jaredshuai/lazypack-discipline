@@ -6,20 +6,20 @@
 
 **状态与边界**：本文档覆盖 lazypack-discipline 提供的工具链和模板的使用方法。所有工具均为参考实现（reference implementation），可根据项目需求调整。
 
-**配套工具**（位于 `scripts/`）：
+**配套工具**（随 setup 包分发，源在 `skills/lazypack-setup/assets/mutation/scripts/`，复制到目标仓 `scripts/`）：
 - `parse-stryker-report.mjs` - Stryker JSON 报告解析器
 - `parse_mutmut_report.py` - mutmut 报告解析器
 - `mutation-baseline.mjs` - 基线管理工具（init/check/update）
 - `create-mutation-issues.mjs` - GitHub issue 创建工具
 
-**配套模板**（位于 `templates/`）：
-- `.github/workflows/nightly-mutation-ts.yml` - TypeScript/JavaScript 项目 GitHub Actions 工作流
-- `.github/workflows/nightly-mutation-py.yml` - Python 项目 GitHub Actions 工作流
+**配套模板**（随 setup 包分发，源在 `skills/lazypack-setup/assets/mutation/` 下，路径相对该目录）：
+- `workflows/nightly-mutation-ts.yml` - TypeScript/JavaScript 项目 GitHub Actions 工作流
+- `workflows/nightly-mutation-py.yml` - Python 项目 GitHub Actions 工作流
 - `scripts/nightly-mutation-runner.sh` - 本地 cron / systemd 运行器脚本（CLI 旗标配置）
 - `config/crontab.example` - crontab 示例（含 PATH 补齐、py 错峰与 flock 防重叠说明）
 - `config/mutation-testing.service` / `config/mutation-testing.timer` - Linux systemd **user 级**定时器配置（无需 root）
 
-VS Code 任务模板不在 `templates/` 下：它是本仓根目录的 [`.vscode/tasks.json`](../../.vscode/tasks.json)（触发面调研见 `docs/research/vscode-scheduled-tasks.md`）。
+VS Code 任务模板不在 setup 包内：它是本仓根目录的 [`.vscode/tasks.json`](../../.vscode/tasks.json)（触发面调研见 `docs/research/vscode-scheduled-tasks.md`）。
 
 ---
 

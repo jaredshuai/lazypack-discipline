@@ -151,7 +151,77 @@ test('generate output is stable', (t) => {
   assert.equal(fs.readFileSync(path.join(root, 'MANIFEST.json'), 'utf8'), before);
 });
 
-test('unknown command exits 2', () => {
-  const r = run(SKILL, 'nope');
-  assert.equal(r.code, 2, r.out);
+test('unknown command or extra arguments exit 2', () => {
+  assert.equal(run(SKILL, 'nope').code, 2);
+  const r = spawnSync(process.execPath, [path.join(SKILL, 'scripts', 'package_manifest.mjs'), 'check', '--root', '/tmp'], { encoding: 'utf8' });
+  assert.equal(r.status, 2, `${r.stdout}${r.stderr}`);
+});
+
+test('invoking the checker through a symlinked directory still runs the check', (t) => {
+  const root = copySkill(t);
+  fs.rmSync(path.join(root, 'assets/mutation/config/mutation-testing.timer'));
+  const link = path.join(path.dirname(root), 'linked-skill');
+  fs.symlinkSync(root, link, 'junction');
+  const r = spawnSync(process.execPath, [path.join(link, 'scripts', 'package_manifest.mjs'), 'check'], { encoding: 'utf8' });
+  assert.equal(r.status, 1, `${r.stdout}${r.stderr}`);
+  assert.match(`${r.stdout}${r.stderr}`, /清单记录的文件缺失/);
+});
+
+test('a recipe source path that escapes the package fails even if it exists', (t) => {
+  const root = copySkill(t);
+  fs.writeFileSync(path.join(path.dirname(root), 'outside.txt'), 'x\n');
+  edit(root, 'recipes/mutation-testing.md', (s) => s.replace(
+    '| `assets/mutation/config/crontab.example` |',
+    '| `../outside.txt` |',
+  ));
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[sources\] recipes\/mutation-testing\.md:\d+ 源路径跳出 skill 包：\.\.\/outside\.txt/);
+});
+
+test('structurally malformed manifests fail without crashing', (t) => {
+  for (const body of ['[]', '{"schema":"lazypack-skill-manifest/1","files":{},"tools":[]}', '{"schema":"lazypack-skill-manifest/1","files":[null],"tools":[]}', '{"schema":"lazypack-skill-manifest/1","files":[],"tools":"x"}']) {
+    const root = copySkill(t);
+    fs.writeFileSync(path.join(root, 'MANIFEST.json'), body);
+    const r = run(root);
+    assert.equal(r.code, 1, `${body}\n${r.out}`);
+    assert.match(r.out, /FAIL \[manifest\]/);
+    assert.doesNotMatch(r.out, /TypeError|at checkManifest/);
+  }
+});
+
+test('reference-style links are resolved and labels must be defined', (t) => {
+  const root = copySkill(t);
+  edit(root, 'SKILL.md', (s) => `${s}\n见 [缺失][res]。\n\n[res]: presets/missing.md\n`);
+  run(root, 'generate');
+  let r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[links\] SKILL\.md:\d+ 链接目标不存在：presets\/missing\.md/);
+
+  const root2 = copySkill(t);
+  edit(root2, 'SKILL.md', (s) => `${s}\n见 [某处][nowhere]。\n`);
+  run(root2, 'generate');
+  r = run(root2);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /引用式链接的标签没有定义：\[nowhere\]/);
+});
+
+test('a shorter fence line inside a longer fence does not hide later links', (t) => {
+  const root = copySkill(t);
+  edit(root, 'SKILL.md', (s) => `${s}\n\`\`\`\`md\n\`\`\`\n[inner](nope.md)\n\`\`\`\`\n\n[after](presets/missing.md)\n`);
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /链接目标不存在：presets\/missing\.md/);
+  assert.doesNotMatch(r.out, /nope\.md/);
+});
+
+test('Markdown under assets/ is link-checked too', (t) => {
+  const root = copySkill(t);
+  edit(root, 'assets/react-vite-app-shell-1/README.md', (s) => s.replace('](../../recipes/react-vite-app-shell.md)', '](../../skills/lazypack-setup/recipes/react-vite-app-shell.md)'));
+  run(root, 'generate');
+  const r = run(root);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /\[links\] assets\/react-vite-app-shell-1\/README\.md:\d+ 链接目标不存在/);
 });

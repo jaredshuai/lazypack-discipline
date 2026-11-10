@@ -623,7 +623,7 @@ mutmut --version
 
 - **变异测试运营手册** (lazypack-discipline 仓 `docs/quality-gates/mutation-testing.md`) - 门槛冻结策略、等价变异豁免、胶水代码边界
 - **夜跑闭环运营指引** (lazypack-discipline 仓 `docs/quality-gates/nightly-mutation-loop.md`) - 完整的夜跑自动化流程
-- **工具脚本源码** (`scripts/`) - 所有工具的详细 CLI 参数与实现
+- **工具脚本源码**（本包 `assets/mutation/scripts/`，复制到目标仓 `scripts/`）- 所有工具的详细 CLI 参数与实现
 - **等价变异体文件格式** (lazypack-discipline 仓 `docs/formats/equivalent-mutants.md`) - 豁免文件详细规范
 - **统一变异报告格式** (lazypack-discipline 仓 `docs/formats/unified-mutation-report.md`) - 解析器输出格式
 - **基线文件格式** (lazypack-discipline 仓 `docs/formats/mutation-baseline.md`) - 基线文件详细规范

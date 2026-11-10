@@ -7,12 +7,13 @@
  *
  *   node scripts/package_manifest.mjs generate   重写 MANIFEST.json
  *   node scripts/package_manifest.mjs check      检查包是否完整，失败退出码 1
- *   可选 --root <dir>：指定 skill 根目录（默认本脚本的上一级目录）
+ * 包根目录固定为本脚本的上一级目录（按真实路径解析，符号链接调用也一样）。
  *
  * check 覆盖四项：
  *   1. manifest：MANIFEST.json 与包内文件逐一一致（路径、sha256、工具版本）。
- *   2. links：SKILL.md、presets/、recipes/、references/ 下 Markdown 的相对链接
- *      都解析到包内存在的文件，不允许跳出包根目录。
+ *   2. links：SKILL.md、assets/、presets/、recipes/、references/ 下 Markdown 的
+ *      行内链接与引用式链接都解析到包内存在的文件，不允许跳出包根目录
+ *      （含经符号链接跳出）；引用式链接的标签必须有定义。
  *   3. sources：配方「源模板 → 目标位置」表格与「源模板位置」列表里的源路径在包内存在。
  *   4. external：指向 lazypack-discipline 本仓的路径（docs/formats/、docs/quality-gates/、
  *      scripts/calculate_crap.mjs）所在行须写明「lazypack-discipline 仓」，
@@ -29,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 
 export const MANIFEST_NAME = 'MANIFEST.json';
 export const SCHEMA = 'lazypack-skill-manifest/1';
-const DOC_DIRS = ['presets', 'recipes', 'references'];
+const DOC_DIRS = ['assets', 'presets', 'recipes', 'references'];
 const EXTERNAL_PATTERNS = [/docs\/formats\//, /docs\/quality-gates\//, /scripts\/calculate_crap\.mjs/];
 const EXTERNAL_MARK = 'lazypack-discipline 仓';
 const VERSION_RE = /^\s*(?:\*|#)?\s*@version\s+(\d+\.\d+\.\d+)\s*$/m;
@@ -101,11 +102,24 @@ function checkManifest(root, failures) {
     failures.push({ check: 'manifest', detail: `${MANIFEST_NAME} 不是合法 JSON：${err.message}` });
     return;
   }
+  if (!recorded || typeof recorded !== 'object' || Array.isArray(recorded)) {
+    failures.push({ check: 'manifest', detail: `${MANIFEST_NAME} 顶层必须是对象` });
+    return;
+  }
   if (recorded.schema !== SCHEMA) {
     failures.push({ check: 'manifest', detail: `schema 应为 ${SCHEMA}，实际 ${JSON.stringify(recorded.schema)}` });
   }
+  const isEntry = (f, key) => f && typeof f === 'object' && typeof f.path === 'string' && typeof f[key] === 'string';
+  if (!Array.isArray(recorded.files) || !recorded.files.every((f) => isEntry(f, 'sha256'))) {
+    failures.push({ check: 'manifest', detail: `${MANIFEST_NAME} 的 files 必须是 {path, sha256} 字符串字段组成的数组` });
+    return;
+  }
+  if (!Array.isArray(recorded.tools) || !recorded.tools.every((f) => isEntry(f, 'version'))) {
+    failures.push({ check: 'manifest', detail: `${MANIFEST_NAME} 的 tools 必须是 {path, version} 字符串字段组成的数组` });
+    return;
+  }
   const actual = buildManifest(root);
-  const want = new Map((recorded.files || []).map((f) => [f.path, f.sha256]));
+  const want = new Map(recorded.files.map((f) => [f.path, f.sha256]));
   const have = new Map(actual.files.map((f) => [f.path, f.sha256]));
   for (const [p, h] of want) {
     if (!have.has(p)) failures.push({ check: 'manifest', detail: `清单记录的文件缺失：${p}` });
@@ -114,7 +128,7 @@ function checkManifest(root, failures) {
   for (const p of have.keys()) {
     if (!want.has(p)) failures.push({ check: 'manifest', detail: `包内文件未登记到清单：${p}` });
   }
-  const wantTools = JSON.stringify(recorded.tools || []);
+  const wantTools = JSON.stringify(recorded.tools.map((t) => ({ path: t.path, version: t.version })));
   if (wantTools !== JSON.stringify(actual.tools)) {
     failures.push({ check: 'manifest', detail: '工具脚本版本与清单不符；改了 @version 后须重新 generate' });
   }
@@ -133,31 +147,75 @@ function docFiles(root) {
 }
 
 function stripCode(line) {
-  return line.replace(/`[^`]*`/g, '');
+  return line.replace(/(`+)(?:(?!\1)[\s\S])*?\1/g, '');
 }
 
-function checkLinks(root, docs, failures) {
-  const rootAbs = path.resolve(root);
+/** 按 CommonMark 规则剔除围栏代码块：记住开栏字符与长度，同字符且不短于开栏的行才闭合。 */
+function proseLines(text) {
+  const out = [];
+  let fence = null;
+  text.split(/\r?\n/).forEach((line, i) => {
+    const m = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (m && m[1][0] === fence.ch && m[1].length >= fence.len && m[2].trim() === '') fence = null;
+      return;
+    }
+    if (m && !(m[1][0] === '`' && m[2].includes('`'))) {
+      fence = { ch: m[1][0], len: m[1].length };
+      return;
+    }
+    out.push({ line, no: i + 1 });
+  });
+  return out;
+}
+
+/** 解析到真实路径后判断是否仍在包内；不存在的路径按词法判断。 */
+function insideRoot(rootReal, abs) {
+  let real = abs;
+  try { real = fs.realpathSync(abs); } catch { /* 不存在：按词法 */ }
+  return real === rootReal || real.startsWith(rootReal + path.sep);
+}
+
+function checkTarget(rootReal, fromRel, target, where, failures) {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) return;
+  let clean;
+  try { clean = decodeURIComponent(target.replace(/^<|>$/g, '').split('#')[0]); } catch { clean = target; }
+  if (!clean) return;
+  const abs = path.resolve(path.dirname(path.join(rootReal, fromRel)), clean);
+  if (!insideRoot(rootReal, abs)) {
+    failures.push({ check: 'links', detail: `${where} 链接跳出 skill 包：${target}` });
+  } else if (!fs.existsSync(abs)) {
+    failures.push({ check: 'links', detail: `${where} 链接目标不存在：${target}` });
+  }
+}
+
+function checkLinks(rootReal, docs, failures) {
+  const normLabel = (s) => s.trim().replace(/\s+/g, ' ').toLowerCase();
   for (const rel of docs) {
-    const lines = fs.readFileSync(path.join(root, rel), 'utf8').split(/\r?\n/);
-    let fenced = false;
-    lines.forEach((line, i) => {
-      if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
-      if (fenced) return;
-      for (const m of stripCode(line).matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
-        const target = m[1];
-        if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue;
-        const clean = decodeURIComponent(target.split('#')[0]);
-        if (!clean) continue;
-        const abs = path.resolve(path.dirname(path.join(rootAbs, rel)), clean);
-        const where = `${rel}:${i + 1}`;
-        if (abs !== rootAbs && !abs.startsWith(rootAbs + path.sep)) {
-          failures.push({ check: 'links', detail: `${where} 链接跳出 skill 包：${target}` });
-        } else if (!fs.existsSync(abs)) {
-          failures.push({ check: 'links', detail: `${where} 链接目标不存在：${target}` });
-        }
+    const lines = proseLines(fs.readFileSync(path.join(rootReal, rel), 'utf8'));
+    const defs = new Set();
+    const uses = [];
+    for (const { line, no } of lines) {
+      const where = `${rel}:${no}`;
+      const def = line.match(/^ {0,3}\[([^\]]+)\]:\s*(\S+)/);
+      if (def) {
+        defs.add(normLabel(def[1]));
+        checkTarget(rootReal, rel, def[2], where, failures);
+        continue;
       }
-    });
+      const prose = stripCode(line);
+      for (const m of prose.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
+        checkTarget(rootReal, rel, m[1], where, failures);
+      }
+      for (const m of prose.matchAll(/\[([^\]]+)\]\[([^\]]*)\]/g)) {
+        uses.push({ label: normLabel(m[2] || m[1]), where });
+      }
+    }
+    for (const u of uses) {
+      if (!defs.has(u.label)) {
+        failures.push({ check: 'links', detail: `${u.where} 引用式链接的标签没有定义：[${u.label}]` });
+      }
+    }
   }
 }
 
@@ -201,7 +259,10 @@ function checkSources(root, failures) {
       }
     });
     for (const { p, line } of found) {
-      if (!fs.existsSync(path.join(root, p))) {
+      const abs = path.resolve(root, p);
+      if (!insideRoot(root, abs)) {
+        failures.push({ check: 'sources', detail: `${rel}:${line} 源路径跳出 skill 包：${p}` });
+      } else if (!fs.existsSync(abs)) {
         failures.push({ check: 'sources', detail: `${rel}:${line} 源路径在包内不存在：${p}` });
       }
     }
@@ -219,7 +280,8 @@ function checkExternal(root, docs, failures) {
   }
 }
 
-export function checkPackage(root) {
+export function checkPackage(rootDir) {
+  const root = fs.realpathSync(rootDir);
   const failures = [];
   checkManifest(root, failures);
   const docs = docFiles(root);
@@ -231,10 +293,8 @@ export function checkPackage(root) {
 
 function main(argv) {
   const args = argv.slice(2);
-  const cmd = args[0];
-  const rootIdx = args.indexOf('--root');
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const root = path.resolve(rootIdx >= 0 ? args[rootIdx + 1] || '' : path.join(here, '..'));
+  const cmd = args.length === 1 ? args[0] : null;
+  const root = fs.realpathSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..'));
   if (cmd === 'generate') {
     const manifest = buildManifest(root);
     fs.writeFileSync(path.join(root, MANIFEST_NAME), serializeManifest(manifest));
@@ -251,10 +311,19 @@ function main(argv) {
     console.log('包检查通过：manifest、links、sources、external 四项均无差异');
     return 0;
   }
-  console.error('用法：node scripts/package_manifest.mjs <generate|check> [--root <skill 目录>]');
+  console.error('用法：node scripts/package_manifest.mjs <generate|check>');
   return 2;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+function isEntryPoint() {
+  if (!process.argv[1]) return false;
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   process.exit(main(process.argv));
 }

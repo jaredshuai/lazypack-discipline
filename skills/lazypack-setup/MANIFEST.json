@@ -215,7 +215,7 @@
     },
     {
       "path": "recipes/mutation-testing.md",
-      "sha256": "1ea582c69a1087a979d72ffa54ab1631f9201ed7d270cf5005e79d992486c6f5"
+      "sha256": "cb93481968a13803a63690d7e59709718d267b95eed49810cdf4f0a7d2dec570"
     },
     {
       "path": "recipes/react-vite-app-shell.md",
@@ -271,7 +271,7 @@
     },
     {
       "path": "scripts/package_manifest.mjs",
-      "sha256": "23c5e3710713a21d79693f76bc2df988e2fc37c0a5678d490c3b5ff3e87e5076"
+      "sha256": "f42d5f312a9879787289e7bdd4fcb907642c792473b7aa6b1f26996e4da847df"
     },
     {
       "path": "scripts/verify_hook_install.mjs",
