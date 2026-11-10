@@ -1,0 +1,2 @@
+# 起始副本按仓库字节校验：统一 LF 换行，避免 Windows 检出成 CRLF 后 SHA256SUMS 全部失配。
+* text=auto eol=lf
