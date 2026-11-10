@@ -42,14 +42,16 @@
 - **检查方式**：每个模板恰好抽出与 blob 相同的 40 位标识。hook 模板只检查版本戳存在
 - **处理权限**：只读报告。标识或版本戳对不上时记失败。本声明不授权改模板或固定层
 
-### P3 固定层版本字符串四处一致
+### P3 固定层版本字符串各处一致
 
 - **来源**：`docs/DECISIONS.md` 文首 `版本：x.y.z`
 - **目标范围**：
   1. `skills/lazypack-setup/SKILL.md` frontmatter 中的 `fixed layer (x.y.z)`
-  2. `README.md` 中的「当前版本为 x.y.z」
+  2. `README.md` 中的「当前版本为 x.y.z」与「当前版本 x.y.z」，每处都算
   3. P2 所列 5 个 Markdown 模板与 `pre-commit.sh` 的 `src=DECISIONS.md@x.y.z`
-- **检查方式**：四处 SemVer 字符串必须相同
+  4. P2 所列 5 个 Markdown 模板说明行中的 `固定层 DECISIONS.md@x.y.z`
+  - 不含历史记录与示例：`docs/reviews/`、`CHANGELOG.md`、`DECISIONS.md` 版本历史、`references/managed-blocks.md` 中的格式示例、测试夹具
+- **检查方式**：每类目标至少抽出一个 SemVer，且全部与来源相同
 - **处理权限**：只读报告。版本字符串不一致时记失败。本声明不授权改版本号
 
 ### P4 登记册相对链接可解析

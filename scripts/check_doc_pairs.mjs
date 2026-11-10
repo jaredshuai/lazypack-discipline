@@ -674,7 +674,8 @@ function checkP2() {
 }
 
 /**
- * P3：文首版本、SKILL frontmatter、README 版本句与模板 src 戳四处 SemVer 一致。
+ * P3：文首版本与 SKILL frontmatter、README 版本句、模板 src 戳、模板说明行各处 SemVer 一致。
+ * 每类目标至少抽出一个值；任一处不同即记失败，并指出所在文件。
  */
 function checkP3() {
   const decisionsText = readUtf8(DECISIONS_REL);
@@ -685,7 +686,7 @@ function checkP3() {
   const skillVersions = matchAllGroup(skillHead, new RegExp(String.raw`fixed layer \(${SEMVER}\)`));
   const skillVersion = assertAllEqual('SKILL.md frontmatter 版本', skillVersions);
 
-  const readmeVersions = matchAllGroup(readUtf8(README_REL), new RegExp(String.raw`当前版本为 ${SEMVER}`));
+  const readmeVersions = matchAllGroup(readUtf8(README_REL), new RegExp(String.raw`当前版本为? ${SEMVER}`));
   const readmeVersion = assertAllEqual('README.md 版本句', readmeVersions);
 
   const stampRows = [];
@@ -695,11 +696,19 @@ function checkP3() {
     stampRows.push({ path: rel, version: stampVersion });
   }
 
+  const noteRows = [];
+  for (const rel of TEMPLATE_MD_RELS) {
+    const notes = matchAllGroup(readUtf8(rel), new RegExp(String.raw`固定层 DECISIONS\.md@${SEMVER}`));
+    const noteVersion = assertAllEqual(`${rel} 说明行版本`, notes);
+    noteRows.push({ path: rel, version: noteVersion });
+  }
+
   const all = [
     { source: DECISIONS_REL, version },
     { source: SKILL_REL, version: skillVersion },
     { source: README_REL, version: readmeVersion },
-    ...stampRows
+    ...stampRows.map((row) => ({ source: row.path, version: row.version })),
+    ...noteRows.map((row) => ({ source: `${row.path}#说明行`, version: row.version }))
   ];
   const mismatched = all.filter((row) => row.version !== version);
   if (mismatched.length > 0) {
@@ -711,7 +720,8 @@ function checkP3() {
       decisions: DECISIONS_REL,
       skillFrontmatter: SKILL_REL,
       readmeSentence: README_REL,
-      templates: stampRows.map((row) => row.path)
+      templates: stampRows.map((row) => row.path),
+      templateNotes: noteRows.map((row) => row.path)
     }
   });
 }

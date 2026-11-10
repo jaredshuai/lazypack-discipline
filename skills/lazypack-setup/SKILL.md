@@ -472,7 +472,7 @@ description: >-
 
 ## 参考文献与资源
 
-- [references/DECISIONS.md](references/DECISIONS.md)：本包固定层 0.6.0 派生快照（只读事实源）。
+- [references/DECISIONS.md](references/DECISIONS.md)：本包固定层的派生快照（只读事实源；版本以本文件 frontmatter 的 `fixed layer (x.y.z)` 为准）。
 - [presets/python-uv-ruff.md](presets/python-uv-ruff.md)：首发 Python 质量门禁配方数据卡（只读源）。
 - [presets/ts-biome-vitest.md](presets/ts-biome-vitest.md)：TypeScript/JavaScript 质量门禁配方数据卡（只读源）。
 - [presets/mutation-testing.md](presets/mutation-testing.md)：变异测试配方数据卡（只读源，多语言优先级 0 补充质检层）。
