@@ -6,7 +6,7 @@
 
 ## 已验证环境
 
-下表是 2026-10-29（Vite 8.3.0）的 Windows 验证环境。Vite 升到 8.3.7 后只在 Linux 上复验过，Windows 复验待补，见文末「复验记录（2026-11-10）」。
+下表是 2026-10-29（Vite 8.3.0）的 Windows 验证环境。Vite 升到 8.3.7 后的 Linux 与 Windows 11 复验见文末「复验记录（2026-11-10）」。
 
 | 项 | 值 |
 |---|---|
@@ -92,9 +92,9 @@ assets/index-nBr7hMrt.css  c7ddb4035c356cb6513b9ad77f1ba0b548e3c486524f5bf87c17f
 
 Edge headless（CDP，2026-10-29 复跑）：1440×1000 初始 6/6 卡片；在页头 `Search workspace` 输入 `TASK-121` 后为 1/6 卡片；再点状态 `Open` 后为 0/6 并显示空状态标题；点 `Reset filters` 回到 6/6；切到 390×844 后仍 6 张卡片且 `scrollWidth` 等于视口宽度（无横向溢出）。页头搜索与页内 `Filter tasks` 已绑定同一 `query` 状态；页面只有一个 `<main>`（`SidebarInset`）。
 
-## 复验记录（2026-11-10，Vite 8.3.7，仅 Linux）
+## 复验记录（2026-11-10，Vite 8.3.7）
 
-Vite 从 8.3.0 升到 8.3.7（避开 Vite 与 launch-editor 的已知安全公告，详见配方 §3）后，在 Linux（Node 24.22.2 / npm 11.19.1）上对本目录的独立副本执行：
+Vite 从 8.3.0 升到 8.3.7（避开 Vite 与 launch-editor 的已知安全公告，详见配方 §3）后，先在 Linux（Node 24.22.2 / npm 11.19.1）上对本目录的独立副本执行：
 
 | 命令 | 退出码 | 结果 |
 |---|---|---|
@@ -112,7 +112,7 @@ assets/index-9epFD1Ok.js   9fe19f2148027f250992a9e2c37397b3779c2ec0f86e9b9ffe5f1
 assets/index-nBr7hMrt.css  c7ddb4035c356cb6513b9ad77f1ba0b548e3c486524f5bf87c17faef77023b20
 ```
 
-本轮没有在 Windows 11 上复验，Edge 渲染检查也没有重跑；上面 2026-10-29 的 Windows 记录对应 Vite 8.3.0。
+随后在 Windows 11 专业版 / Windows PowerShell 5.1 / Node 24.21.0 / npm 12.1.0 上，按配方 §5.1 的脚本复制到空目录后执行同样五条命令，退出码全为 0（`npm ci` 370 packages；lint 26 files，0 warnings / 0 errors），构建产物哈希与上面三行逐字一致。Edge 157 headless 宽屏截图正常；窄屏检查须用视口模拟，详见配方 §11.2。搜索与状态筛选的浏览器交互检查本轮没有重跑。
 
 ## 许可
 

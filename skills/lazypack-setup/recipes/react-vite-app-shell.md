@@ -5,7 +5,7 @@ name: "React Vite App Shell 1 (ShadcnStore free block)"
 description: "L2 application shell plus L1 shadcn primitives for product-style React clients, pinned to verified versions and shipped with a synthetic task catalog page."
 config_owner: project
 ui_layers: "L2 + L1"
-verified_on: "2026-10-29"  # v1.0.0 的 Windows 11 实测；v1.0.1 的 Windows 复验待补，见 §11
+verified_on: "2026-11-10"
 ---
 
 # React + Vite App Shell 1 配方
@@ -238,19 +238,30 @@ AI 不得把这些占位描述为已接线，也不得据此宣称 API、桌面�
 
 以上是 v1.0.0 的记录；§5.1 的脚本此后已改写（见 11.2），这里的实跑结果只对改写前的脚本成立。
 
-### 11.2 v1.0.1（Vite 8.3.7），2026-11-10，仅 Linux
+### 11.2 v1.0.1（Vite 8.3.7），2026-11-10，Linux 与 Windows 11
 
-2026-11-10 在 Linux（Node 24.22.2 / npm 11.19.1）上，对起始副本的独立副本执行：
+**Linux。** 2026-11-10 在 Linux（Node 24.22.2 / npm 11.19.1）上，对起始副本的独立副本执行：
 
 - `npm ci`（npm 官方源）退出码 0，未改写 lockfile；`SHA256SUMS` 19/19 匹配。
 - `npm run typecheck`、`npm run lint`、`npm run test`（5/5）、`npm run build`（2300 modules）：全部退出码 0。
 - `npm audit --package-lock-only`：剩余公告见 §3。
 
-本轮**没有**在 Windows 11 上复验，Edge 渲染检查也没有重跑；§5.1 改写后的复制脚本与 §5.2 的哈希核对脚本都没有在 PowerShell 中实跑过。在补上 Windows 复验之前，v1.0.1 的 Windows 11 路径只有 v1.0.0 的旧记录可依，不得描述为已在 v1.0.1 上验证。
+**Windows 11。** 2026-11-10 在 Windows 11 专业版（10.0.26200）/ Windows PowerShell 5.1.26100 / Node 24.21.0 / npm 12.1.0、`core.autocrlf=true` 上，从提交 `00b364b` 检出后执行（Multica 任务 JAR-90，执行者为 JaredAI 上的 Codebuddy agent）：
+
+- 检出后 `SHA256SUMS` 19/19 匹配。
+- §5.1 脚本（只把 `$src`、`$dst` 改为参数，其余原样）在 Windows PowerShell 5.1 实跑三条路径：空目标写入 40 个文件并逐条输出；对同一目标重跑时列出 40 条冲突后抛错，未写入任何文件，文件数保持 40；源目录不存在时抛错「找不到起始副本」，未写入任何文件。
+- §5.2 的哈希核对对复制结果 19/19 匹配。
+- `npm ci`（370 packages）、`npm run typecheck`、`npm run lint`（26 files，0 warnings / 0 errors）、`npm run test`（5/5）、`npm run build`（2300 modules）全部退出码 0；lockfile 前后哈希不变；安装的 Vite 为 8.3.7。第一次 `npm ci` 在 10 分钟内无输出被执行环境终止，删除半成品 `node_modules` 后原样重跑通过，原因未查明。
+- 构建产物的 SHA-256 与上面 Linux 构建逐文件一致（`index.html`、`index-9epFD1Ok.js`、`index-nBr7hMrt.css` 与 5 个字体文件）。
+- Edge 157 headless 宽屏 1440×1000 截图：侧栏、面包屑页头与 6 张卡片（3 列 × 2 行）正常显示。
+
+**窄屏。** JAR-90 用 `--window-size=390,844` 截图时看到右侧内容被切掉。复核发现这是检查方法的问题：Chromium 的桌面窗口最小宽度为 500，只设窗口尺寸时页面实际按 500 宽排版（本机 Chrome 156 实测 `innerWidth` 为 500），而截图只截 390 宽。改用视口模拟（`Emulation.setDeviceMetricsOverride` 390×844，即 v1.0.0 所用方法）在 Linux 的 Chrome 156 上复测：`innerWidth` 390、`scrollWidth` 375、6 张卡片、超出视口的元素 0 个。窄屏检查应使用视口模拟，不要用 `--window-size`。
+
+v1.0.1 没有重跑搜索与状态筛选的浏览器交互检查（v1.0.0 已做，见 11.1）；本轮这部分只由 Vitest 的 5 个用例覆盖。
 
 未验证范围：
 
-- v1.0.1 在 Windows 11 上的冷安装、复验、渲染检查，以及 §5.1、§5.2 两个 PowerShell 脚本。
+- v1.0.1 在浏览器中的搜索与状态筛选交互，以及 Windows 上 Edge 的窄屏视口模拟。
 - 真实移动设备、其他浏览器（Firefox/Safari）、其他 Node 主版本。
 - Windows 桌面运行时（Tauri/Electron/pywebview）与安装包。
 - 真实业务数据、API、路由、权限。
