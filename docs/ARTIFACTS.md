@@ -125,6 +125,14 @@
 
 ## 4. 本次补齐的范围
 
+### 2026-11-10 #106 固定层版本号检查补漏
+
+- 检查范围：P1–P5、P8–P11（本轮改了声明文件与检查器，按规程列入全部编号）；人工全仓搜索「固定层 / fixed layer / DECISIONS.md」附近的 SemVer，区分当前版本声明与历史记录、格式示例、测试夹具。
+- 依据版本：开工 `323fd1a4d6f98d16ab1613a51748d010205e08cb`，收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
+- 处理结果：`SKILL.md` 参考文献一节原写「固定层 0.6.0 派生快照」，与 frontmatter 的 0.7.0 不符，已同步为不写版本号、指向 frontmatter。P3 目标范围扩大到 README 目录表的「当前版本 x.y.z」和 5 个 Markdown 模板说明行的「固定层 DECISIONS.md@x.y.z」，并修正检查器失败摘要对模板 `src` 戳只打印 `undefined` 的问题；先改声明，再改实现。文档关系检查未发现差异（9/9 PASS，退出码 0）。在仓库副本中逐一篡改 README 两处、模板说明行、模板与 hook 的 `src` 戳、SKILL frontmatter，以及删除一条说明行版本，P3 均为 FAIL 并指出所在文件。
+- 未覆盖范围：`references/managed-blocks.md` 的 `DECISIONS.md@0.2.0` / `@0.3.0` 是格式示例，`scripts/test_managed_blocks.mjs` 的 `@0.7.0` 是测试夹具，`docs/proposals/issue-71-acceptance-oracle.md` 的 0.7.0 是历史先例，均不属当前版本声明，不纳入 P3；`docs/reviews/`、`CHANGELOG.md` 与 `DECISIONS.md` 版本历史同理。固定层版本号本身未改。
+- 未决事项：无。
+
 ### 2026-11-10 #103 合并前修正（App Shell 1 配方 v1.0.1）
 
 - 检查范围：P1–P5、P8–P11（即本次声明的全部九条）；人工核对起始副本路径在 skill 内的解析、复制脚本的失败分支、lockfile 副作用描述、剩余依赖公告与各处验证记录是否把 Linux 复验写成了 Windows 复验。
