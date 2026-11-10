@@ -5,7 +5,7 @@
 （surviving mutants），供下游解析、基线检查和补测 issue 流程做端到端验证。
 
 运行手册见 [../../../docs/quality-gates/mutation-testing.md](../../../docs/quality-gates/mutation-testing.md)；
-闭环的定时触发配置模板见 [../../../templates/.github/workflows/nightly-mutation-ts.yml](../../../templates/.github/workflows/nightly-mutation-ts.yml)。
+闭环的定时触发配置模板见 [../../../skills/lazypack-setup/assets/mutation/workflows/nightly-mutation-ts.yml](../../../skills/lazypack-setup/assets/mutation/workflows/nightly-mutation-ts.yml)。
 
 ## 目录结构
 
@@ -71,14 +71,14 @@ npx stryker run     # 变异测试，几秒跑完
 
 ```bash
 # 1. 解析存活变异体为统一报告
-node ../../parse-stryker-report.mjs --input reports/mutation/mutation.json --output unified-mutation-report.json
+node ../../../skills/lazypack-setup/assets/mutation/scripts/parse-stryker-report.mjs --input reports/mutation/mutation.json --output unified-mutation-report.json
 
 # 2. 冻结 / 检查基线（回归退出码 2）
-node ../../mutation-baseline.mjs init   --input reports/mutation/mutation.json --lang ts
-node ../../mutation-baseline.mjs check  --input reports/mutation/mutation.json --lang ts
+node ../../../skills/lazypack-setup/assets/mutation/scripts/mutation-baseline.mjs init   --input reports/mutation/mutation.json --lang ts
+node ../../../skills/lazypack-setup/assets/mutation/scripts/mutation-baseline.mjs check  --input reports/mutation/mutation.json --lang ts
 
 # 3. 预览补测 issue（--dry-run 零 gh 调用，只写 .mutation-queue/）
-node ../../create-mutation-issues.mjs --input unified-mutation-report.json --dry-run
+node ../../../skills/lazypack-setup/assets/mutation/scripts/create-mutation-issues.mjs --input unified-mutation-report.json --dry-run
 ```
 
 ## 版本说明

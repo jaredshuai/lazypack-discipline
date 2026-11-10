@@ -14,7 +14,7 @@ verified_on: "2026-11-10"
 
 - **ID**: `react-vite-app-shell`
 - **Version**: `1.0.1`
-- **来源起始副本**: [templates/react-vite-app-shell-1/](../../../templates/react-vite-app-shell-1/)，位于本仓根目录，不在本 skill 的 `templates/` 下。目前须有本仓完整克隆才能取得；只安装 skill 目录时起始副本缺失，§5.1 的脚本会报错停止。
+- **来源起始副本**: [assets/react-vite-app-shell-1/](../assets/react-vite-app-shell-1/)，随本 skill 分发；缺失时 §5.1 的脚本会报错停止。
 - **入口**: setup 在 `SKILL.md` 第 3 步的 3.C（项目层 UI 装配）中按需列出本卡；不读本卡时不产生任何写入。
 
 本卡只证明一条已声明的装配路径。它不承诺所有 React 项目、其他 UI 体系、其他包管理器或 Windows 桌面打包都能用同一份代码。
@@ -39,14 +39,14 @@ verified_on: "2026-11-10"
 
 | 优先级 | 条件 | 行为 |
 |---|---|---|
-| 1 | 新建或空的前端目录；目标是文件/任务/消息/设置型 Web 客户端；可用 Node 24 与 npm | **完全支持（本轮唯一保证路径）**：按 §5 的零覆盖复制方案落地 `templates/react-vite-app-shell-1/` |
+| 1 | 新建或空的前端目录；目标是文件/任务/消息/设置型 Web 客户端；可用 Node 24 与 npm | **完全支持（本轮唯一保证路径）**：按 §5 的零覆盖复制方案落地 `assets/react-vite-app-shell-1/` |
 | 2 | 已有 React 19 + Vite 8 + Tailwind 4 + `components.json` 的 `style` 为 `base-nova` | **UNVERIFIED，不在本轮保证内**：本轮未在真实存量仓实跑，也没有为它提供复制命令；不得把它描述成已验证或"已获确认"的路径 |
 | 3 | 同一仓库已有 Ant Design / ProComponents、其他 shadcn style、Next.js、Vue、非 npm 包管理器，或 Node 主版本不是 24 | **退出**：说明冲突项，不混装、不迁移、不换源 |
 | 4 | 只需要静态营销页或没有列表/表单的产品官网 | **退出**：本配方解决的是应用外壳与列表页，不是落地页 |
 
 已验证的只有"干净/空目标整装"这一条路径（见 §11）。存量 React 项目若要复用，只能由维护者另行实测后升级本卡，不得由 Agent 现场推断。
 
-上述条件之外的需求属于扩展，按 [VISION.md](../../../docs/VISION.md) 的判定顺序交回维护者，不自行扩大支持范围。
+上述条件之外的需求属于扩展，按 lazypack-discipline 仓 `docs/VISION.md` 的判定顺序交回维护者，不自行扩大支持范围。
 
 ---
 
@@ -105,7 +105,7 @@ setup 执行时必须按顺序完成，任一步失败即停：
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$src = 'C:\path\to\lazypack-discipline\templates\react-vite-app-shell-1'
+$src = 'C:\path\to\lazypack-setup\assets\react-vite-app-shell-1'
 $dst = 'C:\path\to\target'
 
 if (-not (Test-Path -LiteralPath (Join-Path $src 'SHA256SUMS') -PathType Leaf)) {

@@ -1,5 +1,6 @@
 /**
  * scripts/create-mutation-issues.mjs
+ * @version 1.0.0
  *
  * 补测 issue 创建脚本（夜跑闭环 M2）：读取统一变异体报告
  * （docs/formats/unified-mutation-report.md，契约 v1.1），按消费者约定

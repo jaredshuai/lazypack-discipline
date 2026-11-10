@@ -8,7 +8,7 @@
 #
 # 使用方式（复制到目标项目，本仓自身不运行该闭环）：
 #   1. 把本文件复制为目标项目的 .github/workflows/nightly-mutation-ts.yml；
-#   2. 把本仓 scripts/ 的工具脚本一并复制到目标项目 scripts/：
+#   2. 把lazypack-setup 包 assets/mutation/scripts/ 的工具脚本一并复制到目标项目 scripts/：
 #      parse-stryker-report.mjs、mutation-baseline.mjs、create-mutation-issues.mjs；
 #   3. 目标项目配置 stryker.conf.json，reporters 必须含 "json"
 #      （原生 JSON 报告默认落 reports/mutation/mutation.json）；
@@ -16,7 +16,7 @@
 #      .mutation-baseline.json 按契约应提交进版本库，否则每轮都会重新 init、
 #      棘轮检查形同虚设；
 #   5. 可选豁免文件 .equivalent-mutants.json：存在即自动应用（等价变异体
-#      不再建 issue），格式契约见本仓 docs/formats/equivalent-mutants.md。
+#      不再建 issue），格式契约见 lazypack-discipline 仓 docs/formats/equivalent-mutants.md。
 #
 # 前置条件：
 #   - 目标项目 npm 依赖可安装（npm ci 需要 package-lock.json）；

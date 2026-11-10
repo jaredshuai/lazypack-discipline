@@ -10,7 +10,7 @@
 
 1. **VS Code 原生不支持 scheduled tasks。** 任务自动运行只有一种形式：`runOptions.runOn: "folderOpen"`（打开文件夹时）。`runOn` 的全部取值是 `default`（只能通过 Run Task 手动执行）和 `folderOpen`，没有 cron、interval 或任何时间驱动触发器（依据见 §2）。
 2. **扩展市场存在调度方案**（Cron Tasks、Cron Jobs 等，见 §3），可以把 cron 表达式映射到任意 VS Code 命令（含运行 tasks.json 任务）。但调度器寄生在 VS Code 进程里：要求 VS Code 常开、机器不睡眠关机、错过的时间点不补跑。夜跑是无人值守场景，这些前提通常不成立。
-3. **因此本仓交付手动触发的 `.vscode/tasks.json` 模板**：四个核心任务 `run-mutation-tests`、`parse-results`、`check-baseline`、`create-issues`，外加三个 Python 变体（`-py` 后缀）。真正的夜跑定时触发走 GitHub Actions `schedule` 或本地 cron/systemd/Windows 任务计划（由 integration 里程碑其余任务在 `templates/` 下交付）。
+3. **因此本仓交付手动触发的 `.vscode/tasks.json` 模板**：四个核心任务 `run-mutation-tests`、`parse-results`、`check-baseline`、`create-issues`，外加三个 Python 变体（`-py` 后缀）。真正的夜跑定时触发走 GitHub Actions `schedule` 或本地 cron/systemd/Windows 任务计划（由 integration 里程碑其余任务交付，现随 setup 包分发，源在 `skills/lazypack-setup/assets/mutation/`）。
 
 ## 1. 调研范围与方法
 
@@ -98,8 +98,8 @@ Marketplace 描述为周期性运行任务的扩展。本轮未做深入能力�
 
 无人值守定时不在 VS Code 里解决：
 
-- **GitHub Actions**：`on.schedule.cron`，模板由 `templates/.github/workflows/`（integration 里程碑 nightly-mutation-ts/py 任务）提供；
-- **本地调度器**：cron / systemd timer / Windows 任务计划，包装脚本与配置示例由 `templates/config/` 与 `templates/scripts/nightly-mutation-runner.sh`（integration 里程碑 local-cron-config 任务）提供。
+- **GitHub Actions**：`on.schedule.cron`，模板由 `skills/lazypack-setup/assets/mutation/workflows/`（integration 里程碑 nightly-mutation-ts/py 任务）提供；
+- **本地调度器**：cron / systemd timer / Windows 任务计划，包装脚本与配置示例由 `skills/lazypack-setup/assets/mutation/config/` 与 `skills/lazypack-setup/assets/mutation/scripts/nightly-mutation-runner.sh`（integration 里程碑 local-cron-config 任务）提供。
 
 以上路径在本轮时尚未由对应施工票交付，故不设 Markdown 链接；交付后以各自登记行为准。
 

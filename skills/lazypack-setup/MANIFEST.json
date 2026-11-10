@@ -1,0 +1,339 @@
+{
+  "schema": "lazypack-skill-manifest/1",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "a442f8c30e75fea0320434584a3dfd9e873e5803d79d0a9d5356eb974797276b"
+    },
+    {
+      "path": "assets/mutation/config/crontab.example",
+      "sha256": "19bd72ff3e25c2e9d6baf6e3f16385d3aa913583acfd8c4931fb2b43d2ea863f"
+    },
+    {
+      "path": "assets/mutation/config/mutation-testing.service",
+      "sha256": "d86b5d0173c50768717a86d59e5aa7c55401ef82a4289693079b3be7b6d94f82"
+    },
+    {
+      "path": "assets/mutation/config/mutation-testing.timer",
+      "sha256": "5d8cb18c2acb2b592e5afda3798aad4c51415065ce0225d735bcbdfd130e2454"
+    },
+    {
+      "path": "assets/mutation/scripts/create-mutation-issues.mjs",
+      "sha256": "8b3972f23896ebf95d2076bef65461df21ee52b879ef2043f0151d821f51dd2b"
+    },
+    {
+      "path": "assets/mutation/scripts/mutation-baseline.mjs",
+      "sha256": "7594dbca3161a222c57e07569492e90cd7bdd869dd985865ff7bef49850082c6"
+    },
+    {
+      "path": "assets/mutation/scripts/nightly-mutation-runner.sh",
+      "sha256": "9a1bb2000b363604f7b7d63c92984905123d0fc9162fb4502f6939ffd7a1b4eb"
+    },
+    {
+      "path": "assets/mutation/scripts/parse-stryker-report.mjs",
+      "sha256": "4b365736def9fbf4f1a09434f6f40e17578bc50a6a3b983b1975b86e53819974"
+    },
+    {
+      "path": "assets/mutation/scripts/parse_mutmut_report.py",
+      "sha256": "09522874d0a088f5dc3e1e0abd65afd3d98e84d3b162bb31bb6eb36df7217a1e"
+    },
+    {
+      "path": "assets/mutation/workflows/nightly-mutation-py.yml",
+      "sha256": "97689184cf28b7bb3f6c18379a0b22bb9c36c279dbfad49f7241a0dd7089a45b"
+    },
+    {
+      "path": "assets/mutation/workflows/nightly-mutation-ts.yml",
+      "sha256": "b08beff3d5bc60674ca8fe09266bb0d0bdd2f76f9e71cf92f504c4f05f0e32b6"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/.gitattributes",
+      "sha256": "7283b7525e653cdb79dd2f145df9e9c085bc66f39e0d85bf319c59b224dc424c"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/.gitignore",
+      "sha256": "c5316a2847c82279e03b3fd3937cad785ca927da042e390c40424b7c6d2fc262"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/.oxlintrc.json",
+      "sha256": "f01668718a4743e9f301c76acc2addfb6fc3e0424c01b63cfb76f952d428b3af"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/NOTICE.md",
+      "sha256": "2e4821d4c02aa46f464bfc61183ce234168e14716c62b09ce6918f4778ecf04e"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/README.md",
+      "sha256": "f170a22d23eb9e81fd77d7eecd21056b570659d69289d7b05c1c12dabae1c0b1"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/SHA256SUMS",
+      "sha256": "fab08caa01cf7ba6de1739bfeecfc763044e64202b533a973ed8d0a0baaab6f7"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/components.json",
+      "sha256": "24eca3e80c1783f714a47158c417b306b5317b6b5e842c70d8c88c4583d582ce"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/index.html",
+      "sha256": "b4547ae2beaf0adde70d9f635d7945fb23630be92ae015609d9b81b7b8608913"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/package-lock.json",
+      "sha256": "503174627c164b9374a15d98238faea26d1aa26e39fa1c29135ad0b88e79be72"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/package.json",
+      "sha256": "a0a14235e48f4bf0378d2e88aedf0ab3fef10065779d0dec2b8b7df4c67132cd"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/App.tsx",
+      "sha256": "e4bdceffadbe6bed16b6d0f43273c009e0f01d73eecf0d4843938dac8a2b1baa"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/app-shell-1-sidebar.tsx",
+      "sha256": "49540adc0bd5256c2324c5676f83e70ae4a21c4e0be88e4be7f3d887ca083a05"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/app-shell-1.tsx",
+      "sha256": "d6c395e39b6889fab6342483cce492c113e175bbacce84dc30bb567e18be69d6"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/data/app-shell-1-nav.ts",
+      "sha256": "2dca1a85db6aef13aeb0a7ace394240bb2dc059bd907ec8de16b3dc4056ca1ed"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/data/filter-tasks.test.ts",
+      "sha256": "e8058524b742eea374ddb18cd2cb01309ec46dfe7204e76b0b888b394f6f0766"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/data/filter-tasks.ts",
+      "sha256": "09fcbe1332d1ca3921cccfbdb92d3ab98ab1afe801f264871244c51e2f73c09e"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/data/tasks.ts",
+      "sha256": "4f736ad9073b9fb8554d3c3203e010346f2ba1c933c6755d073bd894390f3a3f"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/tasks-catalog.tsx",
+      "sha256": "8a31f021e206d5a3b90369db04b08a50f953a9254ec9d596d9e7fd14c93962bb"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/avatar.tsx",
+      "sha256": "782659d874d45f3c886a7243353f8635f6a87991988947a1e37fe9a0f3483b42"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/breadcrumb.tsx",
+      "sha256": "cbd2b85e7a0097438855ff1bba8ac0cc3d1229e4c94bda3d52176fd22ea2ac62"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/button.tsx",
+      "sha256": "313353436d0fcc8e44ab470adb614b9fd013d28626f624328ea0d66d41a6c81b"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/card.tsx",
+      "sha256": "7620e0f122bb5aa0a422254909bd11d5b088bb368eb60e6ba28010c332163cc0"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/dropdown-menu.tsx",
+      "sha256": "ffd69006ed9c79e16ffefffbf8a9ebbf1c34ca38f40cb9939c946a71943127d7"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/empty.tsx",
+      "sha256": "e339e4d7659e7225968edc5c2cea047eb6946e723ea0591cde93877000bc1808"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/field.tsx",
+      "sha256": "d7c372e8df76de0b4714c02497fefba29299e6baefb7c12fba289a2a374362bb"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/input.tsx",
+      "sha256": "dab990dfefa0ba78854ab6602ad074270dba9d7d1262184d9bfbb62bd990903b"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/label.tsx",
+      "sha256": "86232709f634da7f357a8aaec0e815f3f562604bb67202c88997fae97659b450"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/separator.tsx",
+      "sha256": "8a1d9397433ccf70631104f377b0e778754582a74c93a57cf13a2f2dcba778bf"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/sheet.tsx",
+      "sha256": "0bc113277c4c1e2be0ed94a9bb2ba305fa6df38bdf3205575e932978f5b0d129"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/sidebar.tsx",
+      "sha256": "29f85b8b5997eeab0ee5efe54f853a7acfdd22a7f64f0e86cb384b2668786e71"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/skeleton.tsx",
+      "sha256": "4c2af7fa9c645358a0fb188779deab6f0b981733b62befc25e18aaebea1350dc"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/components/ui/tooltip.tsx",
+      "sha256": "f83d5f511812573f4ac98b866d397a46fda0f27eeb0af0ea89af01969eefbc5a"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/hooks/use-mobile.ts",
+      "sha256": "ad0936f84f1df79d3697bfbff9c18f8ad58431c1cbaf2359c6a853b0fcc9f28b"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/index.css",
+      "sha256": "bca28547d72294e3ec735aa99e4198e85b3a0fd797e0dce563f0289302ad0c23"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/main.tsx",
+      "sha256": "5c642e6c3717b35e8cb253f3f33a6fcae147cacf4b333198086f0adaa3a61128"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/src/vite-env.d.ts",
+      "sha256": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/tsconfig.app.json",
+      "sha256": "99b3643ca665a2cc5fdac9d106100c1d38da5cab430c68c4e10ef3590631e180"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/tsconfig.json",
+      "sha256": "3a11d1d758b82ceae1687b3b3b673d98febb16b81305239be576b6aa30148fed"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/tsconfig.node.json",
+      "sha256": "db9bcc9d3fe6188cbdd3aa6c62591d474d2f874a9be31ab11aa5b40d0ce22cce"
+    },
+    {
+      "path": "assets/react-vite-app-shell-1/vite.config.ts",
+      "sha256": "6a0d8672f04edf2e5ce83f99ab8ab6ff9e074db043ea906c1a824893bdd65c1b"
+    },
+    {
+      "path": "presets/python-uv-ruff.md",
+      "sha256": "f5a7a785849ad11210da0fe564581feac97cc9b66e95ef7475f8e87a01cc436d"
+    },
+    {
+      "path": "presets/ts-biome-vitest.md",
+      "sha256": "429a30221f91e647ecf16ee70f358beb4853701ab863a12ed5b3304e0b8ff6d2"
+    },
+    {
+      "path": "recipes/mutation-testing.md",
+      "sha256": "cb93481968a13803a63690d7e59709718d267b95eed49810cdf4f0a7d2dec570"
+    },
+    {
+      "path": "recipes/react-vite-app-shell.md",
+      "sha256": "c85574ed854bcefabaa7338692fe6c2da69ade6e13d10f8383641f17e45cf8ad"
+    },
+    {
+      "path": "references/DECISIONS.md",
+      "sha256": "123389203c1c02a842380d4490c71921e125e39a62bed9289371b622ba64f60e"
+    },
+    {
+      "path": "references/agent-pipeline-models.md",
+      "sha256": "e7086e173204de3a8fa0e799cbee5e3f7948f9500c8adf61176d2660d7ac5b51"
+    },
+    {
+      "path": "references/document-routing.md",
+      "sha256": "5ae7a7facb1075bf3d8b2d180047ad47977d31e297935de661858ba4da7418a8"
+    },
+    {
+      "path": "references/managed-blocks.md",
+      "sha256": "1ec6aa6589d515391d962491592cf9e4b4787b746a4de1da5632c0eab2b20ae2"
+    },
+    {
+      "path": "references/retention-sections.md",
+      "sha256": "3a4169441cf937168452c413a327af6c3b7b43143b9bdeaa3ba91969e9e90e6e"
+    },
+    {
+      "path": "references/verification.md",
+      "sha256": "d1f9999153ae7cd7c061b0e1d82a9ca88acd28e997c3f3462963adc50be64884"
+    },
+    {
+      "path": "scripts/doc_executor.mjs",
+      "sha256": "02437411bf61f64b44809959d0a0d2cd090531a1523f989d60c211fcb3afa17f"
+    },
+    {
+      "path": "scripts/doc_helper.mjs",
+      "sha256": "c062a50eb02f7923bc9cd0cfaa9e0b569d287b8a721c1e2ab01fd2115a28a709"
+    },
+    {
+      "path": "scripts/doc_plan.mjs",
+      "sha256": "b7286c0afdff6ae6b4ab0a5db9801c939dd8c67ca8ab9908eda7871f41e06598"
+    },
+    {
+      "path": "scripts/doc_retention_policy.mjs",
+      "sha256": "58ca1c3e4dae0caf644cf05661f5395d4680d1980b89973dcd9a6ab017225fe2"
+    },
+    {
+      "path": "scripts/doc_scanner.mjs",
+      "sha256": "744a59696bbc021816c295e173e90c5753cc5dc98b72f96fcbbdf6efd80ce08d"
+    },
+    {
+      "path": "scripts/managed_blocks.mjs",
+      "sha256": "f15250771d26b6f6232e3818df7e85489727d8381c9497512b65701651a7e19c"
+    },
+    {
+      "path": "scripts/package_manifest.mjs",
+      "sha256": "f42d5f312a9879787289e7bdd4fcb907642c792473b7aa6b1f26996e4da847df"
+    },
+    {
+      "path": "scripts/verify_hook_install.mjs",
+      "sha256": "d0fecc4b148c7c607ed09726d1a1cd1c4b87819ad960cd36f0c4dd9fc3d6808a"
+    },
+    {
+      "path": "templates/ARTIFACTS.md",
+      "sha256": "2f39b0a3d68b2f04a5d0f578ff4f646e3d8859f8845dde4a8cb93b19c42298d2"
+    },
+    {
+      "path": "templates/CODING_STANDARDS.md",
+      "sha256": "a4b6a90ef2da377188102fdf0b213f41d4b2d0e621e2bd68ce0517cf6b10ce08"
+    },
+    {
+      "path": "templates/RELEASE.md",
+      "sha256": "b3566577d8a11abf2c33d9471a1671f2496938b482ca4de7d0b2a3befd0eaee0"
+    },
+    {
+      "path": "templates/changelog.mjs",
+      "sha256": "5aec68bfee64f555339cd237e04488aa493c7139e9de33b06b80fa7fb647f92f"
+    },
+    {
+      "path": "templates/check_report_layers.mjs",
+      "sha256": "6d28b859a8b863cddcf800c69e7b3e45f333ed74bfc773f8487ed9f69abb0b9b"
+    },
+    {
+      "path": "templates/ideas-inbox.md",
+      "sha256": "649ab5f69ee253a4b45700674b8083c8371b7e979629b7fd97e85488823ab8b3"
+    },
+    {
+      "path": "templates/pre-commit.sh",
+      "sha256": "101ce9f0605660c47c796cb956c96f7b46ad6010b8f9e09ae69814a9f3e31884"
+    },
+    {
+      "path": "templates/resident-entry.md",
+      "sha256": "09735e766b1390de50c812affa48b6531d88deaaafa8843cae85e403ee46994c"
+    },
+    {
+      "path": "templates/roles.md",
+      "sha256": "2caa93573bd7ef3e8081c8b4d435be2a2e25a081b09e15cb68ee65f6e0832606"
+    },
+    {
+      "path": "templates/section9-discussion-protocol.md",
+      "sha256": "cfd2f1d227626200c9a5d823f1a052db23170423dc8d98409f790e617ef24bdb"
+    }
+  ],
+  "tools": [
+    {
+      "path": "assets/mutation/scripts/create-mutation-issues.mjs",
+      "version": "1.0.0"
+    },
+    {
+      "path": "assets/mutation/scripts/mutation-baseline.mjs",
+      "version": "1.0.0"
+    },
+    {
+      "path": "assets/mutation/scripts/parse-stryker-report.mjs",
+      "version": "1.0.0"
+    },
+    {
+      "path": "assets/mutation/scripts/parse_mutmut_report.py",
+      "version": "1.0.0"
+    }
+  ]
+}

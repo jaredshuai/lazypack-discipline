@@ -5,7 +5,7 @@
 （surviving mutants），供下游解析、基线检查和补测 issue 流程做端到端验证。
 
 运行手册见 [../../../docs/quality-gates/mutation-testing.md](../../../docs/quality-gates/mutation-testing.md)；
-闭环的定时触发配置模板见 [../../../templates/.github/workflows/nightly-mutation-py.yml](../../../templates/.github/workflows/nightly-mutation-py.yml)。
+闭环的定时触发配置模板见 [../../../skills/lazypack-setup/assets/mutation/workflows/nightly-mutation-py.yml](../../../skills/lazypack-setup/assets/mutation/workflows/nightly-mutation-py.yml)。
 
 ## 目录结构
 
@@ -103,14 +103,14 @@ python run_mutmut.py        # 等价 mutmut run；本夹具的存活变异体位
 
 ```bash
 # 1. 解析存活变异体（缓存不含替换片段，必须配 --show 的 diff 文本）
-python ../../parse_mutmut_report.py --input .mutmut-cache --show .mutmut-show-all.txt --output unified-mutation-report.json
+python ../../../skills/lazypack-setup/assets/mutation/scripts/parse_mutmut_report.py --input .mutmut-cache --show .mutmut-show-all.txt --output unified-mutation-report.json
 
 # 2. 冻结 / 检查基线（mutmut 没有一键 JSON 导出，用 result-ids 组装，见 workflow 模板步骤 6）
-node ../../mutation-baseline.mjs init  --input mutmut-results-export.json --lang py
-node ../../mutation-baseline.mjs check --input mutmut-results-export.json --lang py
+node ../../../skills/lazypack-setup/assets/mutation/scripts/mutation-baseline.mjs init  --input mutmut-results-export.json --lang py
+node ../../../skills/lazypack-setup/assets/mutation/scripts/mutation-baseline.mjs check --input mutmut-results-export.json --lang py
 
 # 3. 预览补测 issue（--dry-run 零 gh 调用，只写 .mutation-queue/）
-node ../../create-mutation-issues.mjs --input unified-mutation-report.json --dry-run
+node ../../../skills/lazypack-setup/assets/mutation/scripts/create-mutation-issues.mjs --input unified-mutation-report.json --dry-run
 ```
 
 `mutmut show all` 的捕获（`.mutmut-show-all.txt`）要和当前 `.mutmut-cache`

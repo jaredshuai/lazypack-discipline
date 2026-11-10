@@ -22,7 +22,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CLI = os.path.join(HERE, 'parse_mutmut_report.py')
+CLI = os.path.join(HERE, '..', 'skills', 'lazypack-setup', 'assets', 'mutation', 'scripts', 'parse_mutmut_report.py')
 
 MUTATION_TYPE_ENUM = frozenset([
     'ArithmeticOperator', 'ArrayDeclaration', 'ArrowFunction', 'Block',

@@ -2,7 +2,7 @@
 
 这是 #72 首个可复现 UI 标准装配的起始源：**L2 App Shell + L1 基础控件**，不是 L3 完整业务页。页面保持维护者已认可的 Task catalog 外观（侧栏 + 面包屑页头 + 搜索/状态筛选 + 6 张任务卡片），数据全部为合成数据。
 
-配方正文：[skills/lazypack-setup/recipes/react-vite-app-shell.md](../../skills/lazypack-setup/recipes/react-vite-app-shell.md)。
+配方正文：[lazypack-setup 包 recipes/react-vite-app-shell.md](../../recipes/react-vite-app-shell.md)。
 
 ## 已验证环境
 

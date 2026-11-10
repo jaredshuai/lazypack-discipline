@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 scripts/parse_mutmut_report.py
+@version 1.0.0
 
 mutmut 结果解析器（夜跑闭环 M2）：读取 mutmut 的运行输出文本捕获、结果导出
 JSON 或原生 .mutmut-cache（SQLite），提取 Survived / Suspicious 两类变异体，

@@ -1,9 +1,9 @@
 /**
  * Stryker 配置 —— sample-ts 夹具。
  *
- * 与 templates/.github/workflows/nightly-mutation-ts.yml 的约定保持一致：
+ * 与 skills/lazypack-setup/assets/mutation/workflows/nightly-mutation-ts.yml 的约定保持一致：
  * - reporters 必须含 "json"，报告落在 reports/mutation/mutation.json，
- *   供 scripts/parse-stryker-report.mjs 读取；
+ *   供 skills/lazypack-setup/assets/mutation/scripts/parse-stryker-report.mjs 读取；
  * - 不要配置 thresholds.break：夜跑闭环的分数门槛由 baseline check 承担
  *   （mutation-baseline.mjs），配了 break 分数低时 Stryker 以非零码退出，
  *   后续解析 / 建 issue 步骤不会执行；

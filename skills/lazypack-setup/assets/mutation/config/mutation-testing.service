@@ -5,7 +5,7 @@
 #       scripts/nightly-mutation-runner.sh（完整闭环与前置条件见该脚本头注）。
 #
 # 安装（与 mutation-testing.timer 配套）：
-#   1. 把本仓 scripts/ 工具与 templates/scripts/nightly-mutation-runner.sh
+#   1. 把lazypack-setup 包 assets/mutation/scripts/ 下的工具与 nightly-mutation-runner.sh
 #      复制到目标项目 scripts/（见脚本头注），手动跑通一次；
 #   2. 把本文件与 mutation-testing.timer 复制到 ~/.config/systemd/user/；
 #   3. 把下面 ExecStart 里的 YOUR_USER_HERE / YOUR_REPO_HERE 改成实际值
