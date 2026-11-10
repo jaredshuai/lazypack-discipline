@@ -12,7 +12,7 @@
  *  - doc_helper scan 以真实 Node 子进程验证无 exclude、尾斜杠与重复 --exclude 行为。
  * 真实链接能力不支持时只将对应能力用例记为 SKIP 并单列计数，不当作 PASS；其他断言错误一律 FAIL。
  * 用法: node scripts/test_doc_scanner.mjs
- * 全过退出码 0；任一断言失败退出码 1。未接 hook/CI。
+ * 全过退出码 0；任一断言失败退出码 1。由 scripts/run_tests.mjs 汇总运行，PR 与 main 上经 .github/workflows/tests.yml 执行。
  */
 
 import fs from 'node:fs';

@@ -7,7 +7,7 @@
  * 覆盖 §5.1 节子条款词表定位（issue #75）：固定层 0.7.0 把 type
  * 词表挪到 `5.1.1` 行后，默认模式必须仍能抽出词表。
  * 用法: node scripts/test_check_commit_msg.mjs
- * 全过退出码 0；任一断言失败退出码 1。未接 hook/CI。
+ * 全过退出码 0；任一断言失败退出码 1。由 scripts/run_tests.mjs 汇总运行，PR 与 main 上经 .github/workflows/tests.yml 执行。
  */
 
 import { spawnSync } from 'node:child_process';

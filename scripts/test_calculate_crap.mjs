@@ -5,7 +5,7 @@
  * 在系统临时目录生成夹具，以子进程方式调用 calculate_crap.mjs，
  * 校验文本摘要、JSON 报告与退出码，不修改本仓库。
  * 用法: node scripts/test_calculate_crap.mjs
- * 全过退出码 0；任一断言失败退出码 1。未接 hook/CI。
+ * 全过退出码 0；任一断言失败退出码 1。由 scripts/run_tests.mjs 汇总运行，PR 与 main 上经 .github/workflows/tests.yml 执行。
  */
 
 import { spawnSync } from 'node:child_process';

@@ -9,7 +9,7 @@
  * 里的假 gh 脚本离线验证（不发任何 GitHub 请求），覆盖标签确保、去重跳过、
  * issue 创建与 gh 失败路径。不修改本仓库，不创建真实 issue。
  * 用法: node scripts/test_create_issues.mjs
- * 全过退出码 0；任一断言失败退出码 1。未接 hook/CI。
+ * 全过退出码 0；任一断言失败退出码 1。由 scripts/run_tests.mjs 汇总运行，PR 与 main 上经 .github/workflows/tests.yml 执行。
  */
 
 import { spawnSync } from 'node:child_process';

@@ -1,0 +1,68 @@
+name: Tests
+
+# 在 PR 与 main 上运行本仓测试（#105）。入口命令是 scripts/run_tests.mjs。
+# fast：不需要夹具依赖的单元与契约测试，每次都跑。
+# integration：夜跑闭环的两个集成测试，需要 TS 夹具 node_modules、
+#   Python 夹具 venv（测试自动装配 mutmut 2.x）和 PyYAML。
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast:
+    name: fast (unit and contract tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run fast tests
+        run: node scripts/run_tests.mjs --fast
+
+  integration:
+    name: integration (nightly mutation loop)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML
+        run: python -m pip install "pyyaml>=6,<7"
+
+      - name: Install TS fixture dependencies
+        working-directory: scripts/fixtures/sample-ts
+        run: npm ci
+
+      - name: Run integration tests
+        run: node scripts/run_tests.mjs test_nightly_loop test_workflow_templates
