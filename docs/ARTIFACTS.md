@@ -136,6 +136,7 @@
 - 依据版本：开工 `13b5c66`，收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs` 与 `node skills/lazypack-setup/scripts/package_manifest.mjs check`。
 - 处理结果：`package_manifest.mjs` 新增第五项 `eol`：所有 `.sh` 与 `assets/mutation/config/` 下文件含 CR 字节即失败，其余文本文件的 CRLF 容忍不变。`sources` 改为除表格与「源模板位置」列表外，还检查配方正文（围栏之外）所有以行内代码写出的 `assets/` 路径是否存在，不再依赖表头写法；未采用「有 assets 引用但解析出 0 条源路径就报错」的规则，因为 `react-vite-app-shell.md` 以目录复制脚本装配、本就没有源模板表，该规则会误报。`skills/lazypack-setup/templates/` 未改，`gen` 不变。重新生成 `MANIFEST.json`，`SKILL.md` 第 1 步与本登记册相应行同步，测试共新增 8 个用例（登记册该行现为 29 个用例）。PR #122 评审后补修：`proseLines()` 的围栏识别容许任意前导空白与 `>` 引用标记（列表缩进、引用块里的围栏不再被当正文，影响 links 与 sources 两项）；正文 `assets/` 路径扫描先去掉转义反引号，并同时接受 `assets/` 与 `./assets/` 前缀。
 - 检查结果（`node scripts/check_doc_pairs.mjs`，补修后实际运行，9/9 PASS，退出码 0，各行均无 `declaration=`，按 §3 逐项判定）：P1 未发现差异（sha256 `123389203c19…`）；P2 未发现差异（blob `6f537b1ef390…`）；P3 未发现差异（version=0.7.0）；P4 未发现差异（links=131 failures=0）；P5 未发现差异（agents=7 readme=10 failures=0）；P8 未发现差异（commands=generate,verify）；P9 未发现差异（checks=5）；P10 未发现差异（checks=5）；P11 未发现差异（sha256 `cfd2f1d227626200…`）。包检查 `package_manifest.mjs check` 通过（五项均无差异）。
+- Win11 复验（`core.autocrlf` 开启的克隆）发现 `CRLF checkout of text files still matches the manifest` 与 `generate output is stable` 两个测试用例在 CRLF 检出下失败：前者造 CRLF 的写法在已是 CRLF 的文件上产生 `\r\r\n`，后者按字节比较 CRLF 的已提交清单与 LF 的 generate 输出。已修测试（造 CRLF 一律用 `/\r?\n/`，比较前只规范化已提交清单）；检查器本身在两种检出下都通过。
 - 未覆盖范围：未在 Windows 真实检出上复验；配方若把源路径写成不以 `assets/` 开头的形式不会被检查；`eol` 只管 CR 字节，不检查其他换行异常。
 - 未决事项：无新增。
 

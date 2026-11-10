@@ -55,14 +55,14 @@ test('skill copied alone to a temp directory still passes', (t) => {
 
 test('CRLF checkout of text files still matches the manifest', (t) => {
   const root = copySkill(t);
-  edit(root, 'SKILL.md', (s) => s.replace(/\n/g, '\r\n'));
+  edit(root, 'SKILL.md', (s) => s.replace(/\r?\n/g, '\r\n'));
   const r = run(root);
   assert.equal(r.code, 0, r.out);
 });
 
 test('CRLF in a shell script fails the eol check even after regenerating', (t) => {
   const root = copySkill(t);
-  edit(root, 'assets/mutation/scripts/nightly-mutation-runner.sh', (s) => s.replace(/\n/g, '\r\n'));
+  edit(root, 'assets/mutation/scripts/nightly-mutation-runner.sh', (s) => s.replace(/\r?\n/g, '\r\n'));
   let r = run(root);
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /FAIL \[eol\] 须保持 LF 的文件含 CR：assets\/mutation\/scripts\/nightly-mutation-runner\.sh/);
@@ -74,7 +74,7 @@ test('CRLF in a shell script fails the eol check even after regenerating', (t) =
 
 test('CRLF in a file under assets/mutation/config/ fails the eol check', (t) => {
   const root = copySkill(t);
-  edit(root, 'assets/mutation/config/crontab.example', (s) => s.replace(/\n/g, '\r\n'));
+  edit(root, 'assets/mutation/config/crontab.example', (s) => s.replace(/\r?\n/g, '\r\n'));
   run(root, 'generate');
   const r = run(root);
   assert.equal(r.code, 1, r.out);
@@ -83,7 +83,7 @@ test('CRLF in a file under assets/mutation/config/ fails the eol check', (t) => 
 
 test('CRLF in Markdown still passes after regenerating', (t) => {
   const root = copySkill(t);
-  edit(root, 'recipes/mutation-testing.md', (s) => s.replace(/\n/g, '\r\n'));
+  edit(root, 'recipes/mutation-testing.md', (s) => s.replace(/\r?\n/g, '\r\n'));
   run(root, 'generate');
   const r = run(root);
   assert.equal(r.code, 0, r.out);
@@ -235,7 +235,8 @@ test('a bare path into the maintainer repository fails', (t) => {
 
 test('generate output is stable', (t) => {
   const root = copySkill(t);
-  const before = fs.readFileSync(path.join(root, 'MANIFEST.json'), 'utf8');
+  // CRLF 检出里已提交的清单是 CRLF，generate 总是写 LF；只规范化 before，输出按原样比较
+  const before = fs.readFileSync(path.join(root, 'MANIFEST.json'), 'utf8').replace(/\r\n/g, '\n');
   run(root, 'generate');
   assert.equal(fs.readFileSync(path.join(root, 'MANIFEST.json'), 'utf8'), before);
 });
