@@ -27,7 +27,8 @@
  *     （node_modules 已随夹具就位，脚本通过 junction 复用，不复制）；
  *   - Python 夹具的 mutmut 2.x：优先用 fixtures/sample-py/.venv（见夹具
  *     README 的安装步骤）；缺失时按同一份 dev 依赖清单自动创建 venv 并
- *     安装（需访问 PyPI，一次即可）。
+ *     安装（需访问 PyPI，一次即可）；创建 venv 用的 Python 命令依次尝试
+ *     环境变量 LAZYPACK_PYTHON、python、python3。
  *
  * 用法:
  *   node scripts/test_nightly_loop.mjs [--lang ts|py|all] [--keep]
@@ -225,6 +226,27 @@ function runStryker(args, cwd) {
   });
 }
 
+let PYTHON_CMD = null;
+
+/**
+ * 解析可用的 Python 命令：LAZYPACK_PYTHON、python、python3 依次尝试。
+ * Windows 安装器通常只提供 python，多数 Linux 发行版只提供 python3。
+ */
+function resolvePythonCommand() {
+  if (PYTHON_CMD) {
+    return PYTHON_CMD;
+  }
+  const candidates = [process.env.LAZYPACK_PYTHON, 'python', 'python3'].filter(Boolean);
+  for (const candidate of candidates) {
+    const probe = spawnSync(candidate, ['--version'], { encoding: 'utf8', windowsHide: true, timeout: SPAWN_TIMEOUT_MS.quick });
+    if (probe.status === 0) {
+      PYTHON_CMD = candidate;
+      return PYTHON_CMD;
+    }
+  }
+  throw new Error(`找不到可用的 Python 命令（已尝试 ${candidates.join('、')}）`);
+}
+
 /**
  * 定位（必要时装配）Python 夹具的 venv，返回 venv 相关路径。
  * mutmut 不在预期位置时按夹具 README 的依赖清单自动装配一次。
@@ -238,7 +260,7 @@ function ensurePythonVenv() {
   if (fs.existsSync(mutmutExe)) {
     return { venvPython, mutmutExe, binDir, provisioned: false };
   }
-  const created = spawnSync('python', ['-m', 'venv', path.join(FIXTURE_PY, '.venv')], {
+  const created = spawnSync(resolvePythonCommand(), ['-m', 'venv', path.join(FIXTURE_PY, '.venv')], {
     encoding: 'utf8', windowsHide: true, maxBuffer: SPAWN_MAX_BUFFER,
     timeout: SPAWN_TIMEOUT_MS.provision
   });

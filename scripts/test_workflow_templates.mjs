@@ -43,7 +43,9 @@
  *   - Node.js 24（工具脚本与自身）；TS 夹具已 npm install（node_modules
  *     经 junction 复用，不复制）；
  *   - Python + PyYAML（YAML 语法解析；缺失时 pip install pyyaml）；
- *   - Git for Windows 的 bash.exe（system32 下的 bash 是 WSL，会被拒绝）；
+ *   - bash：Windows 上用 Git for Windows 的 bash.exe（system32 下的 bash 是
+ *     WSL，会被拒绝）；Linux/macOS 上用 PATH 中的 bash（与 ubuntu runner 同源）；
+ *   - Python 命令：依次尝试环境变量 LAZYPACK_PYTHON、python、python3；
  *   - py 路径优先复用夹具 .venv（mutmut 2.x），缺失时按 dev 依赖清单自动
  *     装配（需访问 PyPI 一次）。
  *
@@ -196,9 +198,18 @@ function assertBashOk(run, label) {
 }
 
 /**
- * 定位 Git for Windows 的 bash.exe；system32 的 bash 是 WSL，必须拒绝。
+ * 定位执行 workflow run 块的 bash。
+ * Windows：只认 Git for Windows 的 bash.exe（system32 的 bash 是 WSL，必须拒绝）。
+ * 其他平台：用 PATH 中的 bash，即 ubuntu runner 执行 run 块的同一种 shell。
  */
 function resolveGitBash() {
+  if (process.platform !== 'win32') {
+    const probe = spawnSync('bash', ['--version'], { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS.quick });
+    if (probe.status === 0) {
+      return 'bash';
+    }
+    throw new Error('PATH 中找不到可执行的 bash');
+  }
   const candidates = [
     'C:/Program Files/Git/bin/bash.exe',
     'C:/Program Files (x86)/Git/bin/bash.exe',
@@ -213,6 +224,27 @@ function resolveGitBash() {
     '未找到 Git for Windows 的 bash.exe（C:/Program Files/Git/bin/bash.exe）。' +
     'system32 下的 bash 是 WSL 入口，不能用于执行 workflow run 块'
   );
+}
+
+let PYTHON_CMD = null;
+
+/**
+ * 解析可用的 Python 命令：LAZYPACK_PYTHON、python、python3 依次尝试。
+ * Windows 安装器通常只提供 python，多数 Linux 发行版只提供 python3。
+ */
+function resolvePythonCommand() {
+  if (PYTHON_CMD) {
+    return PYTHON_CMD;
+  }
+  const candidates = [process.env.LAZYPACK_PYTHON, 'python', 'python3'].filter(Boolean);
+  for (const candidate of candidates) {
+    const probe = spawnSync(candidate, ['--version'], { encoding: 'utf8', windowsHide: true, timeout: SPAWN_TIMEOUT_MS.quick });
+    if (probe.status === 0) {
+      PYTHON_CMD = candidate;
+      return PYTHON_CMD;
+    }
+  }
+  throw new Error(`找不到可用的 Python 命令（已尝试 ${candidates.join('、')}）`);
 }
 
 /** YAML 语法解析片段：PyYAML safe_load，YAML 错误退出 3，缺 PyYAML 退出 4。 */
@@ -237,7 +269,7 @@ const PY_YAML_SNIPPET = [
  * json.dump 默认 ensure_ascii=True，中文以 \uXXXX 转义，规避控制台编码差。
  */
 function parseWorkflowYaml(filePath) {
-  const run = spawnSync('python', ['-c', PY_YAML_SNIPPET, filePath], {
+  const run = spawnSync(resolvePythonCommand(), ['-c', PY_YAML_SNIPPET, filePath], {
     encoding: 'utf8',
     windowsHide: true,
     maxBuffer: SPAWN_MAX_BUFFER,
@@ -265,7 +297,7 @@ function ensurePythonVenv() {
   if (fs.existsSync(mutmutExe)) {
     return { binDir, provisioned: false };
   }
-  const created = spawnSync('python', ['-m', 'venv', path.join(FIXTURE_PY, '.venv')], {
+  const created = spawnSync(resolvePythonCommand(), ['-m', 'venv', path.join(FIXTURE_PY, '.venv')], {
     encoding: 'utf8', windowsHide: true, maxBuffer: SPAWN_MAX_BUFFER,
     timeout: SPAWN_TIMEOUT_MS.provision
   });

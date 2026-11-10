@@ -6,7 +6,7 @@
  * 以子进程方式调用 parse-stryker-report.mjs，校验 stdout/stderr、
  * --output 文件内容与退出码，不修改本仓库。
  * 用法: node scripts/test_parse_stryker.mjs
- * 全过退出码 0；任一断言失败退出码 1。未接 hook/CI。
+ * 全过退出码 0；任一断言失败退出码 1。由 scripts/run_tests.mjs 汇总运行，PR 与 main 上经 .github/workflows/tests.yml 执行。
  */
 
 import { spawnSync } from 'node:child_process';

@@ -8,7 +8,7 @@ mutmut 报告解析器断言驱动回归（仿 test_parse_stryker.mjs 模式）�
 结果导出 JSON 夹具，以子进程方式调用 parse_mutmut_report.py，校验
 stdout/stderr、--output 文件内容与退出码，不修改本仓库。
 用法: python scripts/test_parse_mutmut.py
-全过退出码 0；任一断言失败退出码 1。未接 hook/CI。
+全过退出码 0；任一断言失败退出码 1。由 scripts/run_tests.mjs 汇总运行，PR 与 main 上经 .github/workflows/tests.yml 执行。
 """
 
 import json
