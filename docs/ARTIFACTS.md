@@ -63,7 +63,7 @@
 | [../scripts/test_check_commit_msg.mjs](../scripts/test_check_commit_msg.mjs) | 本仓执行辅助 | current | 提交说明格式检查器的测试，临时夹具加子进程运行；经 tests.yml 在 PR 与 main 上运行 |
 | [../.github/workflows/droid.yml](../.github/workflows/droid.yml) | 本仓执行辅助 | current | Factory Droid 点名审查（#78）：PR 普通评论可触发，行内评论与审查限本仓分支 PR。需仓库 secret；不是门禁，结果只作参考 |
 | [../.github/workflows/droid-review.yml](../.github/workflows/droid-review.yml) | 本仓执行辅助 | current | Factory Droid 自动审查（#78）：本仓分支的非 draft PR 打开或转为可评审时触发。需仓库 secret；不是门禁，结果只作参考 |
-| [../.github/workflows/tests.yml](../.github/workflows/tests.yml) | 本仓执行辅助 | current | 本仓测试 CI（#105）：PR、推送 main 与手动触发，跑 fast 与 integration 两个作业。只跑测试不跑检查器；未设为必需检查 |
+| [../.github/workflows/tests.yml](../.github/workflows/tests.yml) | 本仓执行辅助 | current | 本仓测试 CI（#105）：PR、推送 main 与手动触发，跑 fast、integration 和三个操作系统上的 clean-room（#109）。只跑测试不跑检查器；未设为必需检查 |
 | [../scripts/run_tests.mjs](../scripts/run_tests.mjs) | 本仓执行辅助 | current | 本仓测试单一入口（#105）：依次运行各测试文件并汇总退出码。`--fast` 跳过两个需夹具依赖的集成测试并列为 SKIP |
 | [../.github/workflows/qodercn-review.yml](../.github/workflows/qodercn-review.yml) | 本仓执行辅助 | current | Qoder CN 自动审查：直接运行国内版 CLI，禁用工具且环境内无 GitHub 令牌，仅本仓分支非 draft PR。不是门禁，结果只作参考 |
 | [../.github/workflows/multica-issue-pilot.yml](../.github/workflows/multica-issue-pilot.yml) | 本仓事件触发辅助 | current | Issue 评论 `/multica pilot` 转发到 Multica 的冒烟入口，仅维护者可触发，Runner 无仓库写权限。不是门禁 |
@@ -86,6 +86,7 @@
 | [../scripts/calculate_crap.mjs](../scripts/calculate_crap.mjs) | 本仓执行辅助 | current | CRAP 计算器 CLI（#42）：读覆盖率与圈复杂度报告，输出文本摘要与 JSON，默认阈值 6，支持 TypeScript 与 Python |
 | [../scripts/test_calculate_crap.mjs](../scripts/test_calculate_crap.mjs) | 本仓执行辅助 | current | CRAP 计算器的测试，临时夹具加子进程运行；经 tests.yml 在 PR 与 main 上运行 |
 | [../scripts/test_skill_package.mjs](../scripts/test_skill_package.mjs) | 本仓执行辅助 | current | #108 包检查的回归测试：单独拷出 skill 目录仍通过，清单漂移、断链、源路径缺失、含 CR 等情形失败；经 tests.yml 运行 |
+| [../scripts/test_clean_room_install.mjs](../scripts/test_clean_room_install.mjs) | 本仓执行辅助 | current | #109 净室安装测试：只拷出 skill 目录，对两份全新夹具装配，断言产物并确认重跑不改文件。经 tests.yml 的 clean-room 作业在三个系统运行；不执行 AI 环节 |
 | [../skills/lazypack-setup/assets/mutation/scripts/mutation-baseline.mjs](../skills/lazypack-setup/assets/mutation/scripts/mutation-baseline.mjs) | setup 派发工具 | current | 变异分数基线 CLI（夜跑闭环 M1）：init 冻结、check 比较、update 只涨不跌，读写基线文件。零 npm 依赖 |
 | [../scripts/test_mutation_baseline.mjs](../scripts/test_mutation_baseline.mjs) | 本仓执行辅助 | current | 变异基线工具的测试，临时夹具加子进程运行；经 tests.yml 在 PR 与 main 上运行 |
 | [../skills/lazypack-setup/assets/mutation/scripts/parse-stryker-report.mjs](../skills/lazypack-setup/assets/mutation/scripts/parse-stryker-report.mjs) | setup 派发工具 | current | Stryker JSON 报告解析器（夜跑闭环 M2）：提取存活变异体并转成统一变异体报告 v1.1。零 npm 依赖 |
@@ -99,6 +100,7 @@
 | [../scripts/test_nightly_loop_validators.mjs](../scripts/test_nightly_loop_validators.mjs) | 本仓执行辅助 | current | 端到端脚本内联校验器的离线单测，复用其导出的校验器；经 tests.yml 在 PR 与 main 上运行 |
 | [../scripts/fixtures/sample-ts/](../scripts/fixtures/sample-ts/) | 本仓执行辅助 | current | 夜跑闭环的 TypeScript/Stryker 端到端夹具：故意欠测试的微型项目，价值在存活变异体。依赖与运行产物不入库 |
 | [../scripts/fixtures/sample-py/](../scripts/fixtures/sample-py/) | 本仓执行辅助 | current | 夜跑闭环的 Python/mutmut 2.x 端到端夹具：故意欠测试的微型项目，价值在存活变异体。venv 与运行产物不入库 |
+| [../scripts/fixtures/clean-room/](../scripts/fixtures/clean-room/) | 本仓执行辅助 | current | 净室安装测试的夹具：全新 TypeScript、全新 Python 各一份目标仓和预置回答文件 answers.json。不含依赖，不是存量仓样本 |
 | [../.vscode/tasks.json](../.vscode/tasks.json) | 本仓执行辅助 | current | 夜跑闭环的 VS Code 手动触发任务模板。VS Code 原生不支持定时任务，只能手动触发；依据见同表的定时任务调研报告 |
 | [research/vscode-scheduled-tasks.md](research/vscode-scheduled-tasks.md) | 给 agent 的按需说明 | current | VS Code 定时任务调研报告（2026-10-06 快照）：原生没有时间触发器。官方文档与扩展状态会过时，复用前重新核对 |
 | [research/recipe-interaction-patterns.md](research/recipe-interaction-patterns.md) | 给 agent 的按需说明 | current | setup 配方交互模式对照研究笔记，横向比对两个随包 preset（v0.1.0 快照）。随附研究材料，正文未声明交付票 |
@@ -118,6 +120,7 @@
 | [formats/mutation-issue-template.md](formats/mutation-issue-template.md) | 给 agent 的按需说明 | current | 补测 issue 模板契约 v1.0：按文件分组，产出 GitHub issue 与机读队列文件两路输出，是建 issue 工具的输出契约 |
 | [../CHANGELOG.md](../CHANGELOG.md) | 本仓对外变更记录 | current | 本仓对外变更记录，非受管文件。版本区段由 `changelog.mjs release` 从提交历史编译；手动运行，文件存在不等于后续区段会自动生成 |
 | [agents/changelog-tool.md](agents/changelog-tool.md) | 给 agent 的按需说明 | current | `templates/changelog.mjs` 的唯一判定口径：子命令、退出码、check 结构、release 的提交映射与 setup 播种边界 |
+| [agents/clean-room-install.md](agents/clean-room-install.md) | 给 agent 的按需说明 | current | 净室安装测试（#109）的范围与步骤覆盖表：SKILL.md 各步哪些有确定性入口、哪些由测试代做、哪些未覆盖。步骤编号由测试核对；是 #113 的输入 |
 | [../skills/lazypack-setup/templates/changelog.mjs](../skills/lazypack-setup/templates/changelog.mjs) | setup 派发工具 | current | CHANGELOG 播种、结构校验与发版编译的实现。setup 原样复制到目标仓，已存在则保留。结构合规不等于条目由提交真实生成 |
 | [agents/report-layers.md](agents/report-layers.md) | 给 agent 的按需说明 | current | 交付报告「用户体验与证据分层」段落的唯一判定口径：何时必填、层标签、状态词与字段规则。源于 #32、#33 |
 | [../skills/lazypack-setup/templates/check_report_layers.mjs](../skills/lazypack-setup/templates/check_report_layers.mjs) | setup 派发工具 | current | 分层段落播种与结构校验的实现。setup 原样复制到目标仓，已存在则保留。结构合规不等于报告陈述真实 |

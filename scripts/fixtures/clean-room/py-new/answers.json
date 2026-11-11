@@ -1,0 +1,39 @@
+{
+  "fixture": "py-new",
+  "description": "全新 Python 项目：已有 pyproject.toml 和一个包目录，没有任何门禁工具，也没有存量文档。",
+  "step3_answers": {
+    "_note": "SKILL.md 第 3 步会向用户提出的问题，以及这份夹具预置的回答。测试只读取这一段来决定留存策略和门禁槽位的取舍。",
+    "3.A.retention": {
+      "question": "要留存哪些材料？",
+      "selected": ["decisions-only"]
+    },
+    "3.A.document_homes": {
+      "asked": false,
+      "reason": "夹具没有存量文档和同主题冲突，按默认 preserve-existing，不提问"
+    },
+    "3.B.preset": {
+      "id": "python-uv-ruff",
+      "slots": { "format": "accept", "lint": "accept", "test": "accept", "type": "accept" }
+    },
+    "3.B.mutation_recipe": { "answer": "declined" },
+    "3.C.ui_recipe": { "answer": "declined" }
+  },
+  "assumed": {
+    "_note": "这一段不是第 3 步的回答。它替代真实装配中由探测、安装和 AI 撰写得到的结果；测试没有执行这些环节，直接采用这里的值。",
+    "resident_entry": "AGENTS.md",
+    "hook_mode": "new",
+    "repo_visibility": "public-repo",
+    "slot_results": {
+      "_note": "假定 PATH 上有 uv，且第 5 步的依赖安装、可调用核验和基线校验全部成功。测试不安装任何依赖。命令取自配方卡的门禁命令表。",
+      "format": { "state": "wired", "command": "uv run --no-sync ruff format --check" },
+      "lint": { "state": "wired", "command": "uv run --no-sync ruff check --no-fix" },
+      "test": { "state": "wired", "command": "uv run --no-sync pytest" },
+      "type": { "state": "wired", "command": "uv run --no-sync ty check" }
+    },
+    "resident_pointers": {
+      "_note": "包内只规定了角色指针行的文字（SKILL.md 第 4 步）。编码标准和发版两行没有规定文字，真实装配中由 AI 撰写；这里是测试用的替身文字。登记册没有确定性入口，测试不写它，所以登记册指针行整行省略。",
+      "standards": "- **编码标准**：查阅 [CODING_STANDARDS.md](CODING_STANDARDS.md)。",
+      "release": "- **发版纪律**：查阅 [RELEASE.md](RELEASE.md)。"
+    }
+  }
+}
