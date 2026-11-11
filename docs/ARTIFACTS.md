@@ -14,6 +14,7 @@
 | 每轮检查记录与登记册的历史说明 | [ARTIFACTS-log.md](ARTIFACTS-log.md) | 每轮收尾由本轮执行者在最上面追加一个条目；已有条目保持当时的记录，不改写 |
 | setup / harvest 实际执行流程 | 对应 [skill 入口](../skills/) 及其直接引用的 references | 实现行为变化时同步改动并验证；愿景变更不等于 skill 已更新 |
 | 技术组合的适用条件与候选默认值 | 对应 skill 的 presets | 配方实施时更新，工具与版本事实须核实，不把案例写成强制选型规则 |
+| setup 各单元在各操作系统上的验证记录 | 各单元契约（`*.unit.json`）的 `evidence`，规则见 [agents/unit-contracts.md](agents/unit-contracts.md) | 有新的验收或测试记录时改契约并重新生成矩阵；其他文档只链接矩阵，不另写验证状态。没有发生过的验收不写 |
 | 访谈的来源、背景、当时的意见 | [interviews/](interviews/) | 经授权保留的去敏整理稿；现行结论链接到权威正文，历史原文不改成今天的决定 |
 | 多 AI 提案、互评与主持结论 | [proposals/](proposals/) 放提案原文，[reviews/](reviews/) 按议题归档 | 提案新增时登记其议题与关联 issue；讨论收束时登记具体入口与采纳状态；集合中的一份报告不自动获得现行权威 |
 | 跨 Agent 交付与核验的操作指引 | [agents/handoff-verification.md](agents/handoff-verification.md) | 交接机制变动时维护；每轮临时报告仍按固定层放系统临时目录 |
@@ -76,8 +77,11 @@
 | [../skills/lazypack-setup/scripts/doc_executor.mjs](../skills/lazypack-setup/scripts/doc_executor.mjs) | setup 执行辅助 | current | 双指纹绑定的受控迁移执行器，执行前复核计划完整性与排除集合，含补偿回滚。不宣称系统级抗崩溃原子性，只在隔离沙箱验证 |
 | [../skills/lazypack-setup/scripts/doc_helper.mjs](../skills/lazypack-setup/scripts/doc_helper.mjs) | setup 执行辅助 | current | scan/plan/exec 的调度入口。只在 Windows/AGY 隔离沙箱验证，不代表目标仓生产级自动迁移 |
 | [../skills/lazypack-setup/scripts/doc_retention_policy.mjs](../skills/lazypack-setup/scripts/doc_retention_policy.mjs) | setup 执行辅助 | current | #84 留存策略载体的只读快照与结构验证，供计划器和执行器共用。不把正文解析成 retention JSON，不读 raw_qa 内容 |
-| [../skills/lazypack-setup/scripts/package_manifest.mjs](../skills/lazypack-setup/scripts/package_manifest.mjs) | setup 执行辅助 | current | #108 包清单生成与包检查（清单、链接、源路径、本仓引用、LF 五项），只读 skill 目录。装配前运行，失败即停止 |
+| [../skills/lazypack-setup/scripts/package_manifest.mjs](../skills/lazypack-setup/scripts/package_manifest.mjs) | setup 执行辅助 | current | #108 包清单生成与包检查（清单、链接、源路径、本仓引用、LF、单元契约六项），只读 skill 目录。装配前运行，失败即停止 |
 | [../skills/lazypack-setup/MANIFEST.json](../skills/lazypack-setup/MANIFEST.json) | setup 派发工具 | current | #108 分发清单：包内每个文件的路径与 sha256、工具脚本版本。由包清单脚本的 generate 生成，包内文件改动后须重新生成 |
+| [../skills/lazypack-setup/scripts/unit_contracts.mjs](../skills/lazypack-setup/scripts/unit_contracts.mjs) | setup 执行辅助 | current | #111 单元契约校验与矩阵生成：查字段、包内引用、版本、覆盖和矩阵是否过期。不运行验证命令，不联网核对出处链接 |
+| [../skills/lazypack-setup/lazypack-core.unit.json](../skills/lazypack-setup/lazypack-core.unit.json) | setup 执行辅助 | current | #111 单元契约，共五份：本文件管通用纪律产物，另四份在 presets/、recipes/ 的卡片旁。只放可判定事实，装配口径以卡片正文为准 |
+| [../skills/lazypack-setup/references/unit-matrix.md](../skills/lazypack-setup/references/unit-matrix.md) | setup 执行辅助 | current | #111 「单元 × 操作系统」验证记录表，由契约证据生成，不手改。「未验证」表示没有可公开核对的记录；不含文档迁移引擎 |
 | [../scripts/test_doc_retention.mjs](../scripts/test_doc_retention.mjs) | 本仓执行辅助 | current | #84 留存策略的隔离回归，含 Junction 与硬链接实际夹具；经 tests.yml 在 PR 与 main 上运行。未执行真实 setup 顺序 |
 | [../scripts/test_verify_hook_install.mjs](../scripts/test_verify_hook_install.mjs) | 本仓执行辅助 | current | #85 Hook 静态验收的隔离 Git 回归，只在临时无害夹具执行，不调用真实 Hook；经 tests.yml 运行。完整 Windows 安装仍未验证 |
 | [../scripts/test_aggregate_gates.mjs](../scripts/test_aggregate_gates.mjs) | 本仓执行辅助 | current | #86 原生 Git Hook 聚合门禁的隔离回归，只执行自建无害夹具，不调用真实业务 Hook；经 tests.yml 在 PR 与 main 上运行 |
@@ -87,6 +91,7 @@
 | [../scripts/test_calculate_crap.mjs](../scripts/test_calculate_crap.mjs) | 本仓执行辅助 | current | CRAP 计算器的测试，临时夹具加子进程运行；经 tests.yml 在 PR 与 main 上运行 |
 | [../scripts/test_skill_package.mjs](../scripts/test_skill_package.mjs) | 本仓执行辅助 | current | #108 包检查的回归测试：单独拷出 skill 目录仍通过，清单漂移、断链、源路径缺失、含 CR 等情形失败；经 tests.yml 运行 |
 | [../scripts/test_clean_room_install.mjs](../scripts/test_clean_room_install.mjs) | 本仓执行辅助 | current | #109 净室安装测试：只拷出 skill 目录，对两份全新夹具装配，断言产物并确认重跑不改文件。经 tests.yml 的 clean-room 作业在三个系统运行；不执行 AI 环节 |
+| [../scripts/test_unit_contracts.mjs](../scripts/test_unit_contracts.mjs) | 本仓执行辅助 | current | #111 单元契约的回归测试：删任一必填字段、引用缺失、版本不符、覆盖缺口、矩阵过期等情形都失败；经 tests.yml 运行 |
 | [../skills/lazypack-setup/assets/mutation/scripts/mutation-baseline.mjs](../skills/lazypack-setup/assets/mutation/scripts/mutation-baseline.mjs) | setup 派发工具 | current | 变异分数基线 CLI（夜跑闭环 M1）：init 冻结、check 比较、update 只涨不跌，读写基线文件。零 npm 依赖 |
 | [../scripts/test_mutation_baseline.mjs](../scripts/test_mutation_baseline.mjs) | 本仓执行辅助 | current | 变异基线工具的测试，临时夹具加子进程运行；经 tests.yml 在 PR 与 main 上运行 |
 | [../skills/lazypack-setup/assets/mutation/scripts/parse-stryker-report.mjs](../skills/lazypack-setup/assets/mutation/scripts/parse-stryker-report.mjs) | setup 派发工具 | current | Stryker JSON 报告解析器（夜跑闭环 M2）：提取存活变异体并转成统一变异体报告 v1.1。零 npm 依赖 |
@@ -121,6 +126,7 @@
 | [../CHANGELOG.md](../CHANGELOG.md) | 本仓对外变更记录 | current | 本仓对外变更记录，非受管文件。版本区段由 `changelog.mjs release` 从提交历史编译；手动运行，文件存在不等于后续区段会自动生成 |
 | [agents/changelog-tool.md](agents/changelog-tool.md) | 给 agent 的按需说明 | current | `templates/changelog.mjs` 的唯一判定口径：子命令、退出码、check 结构、release 的提交映射与 setup 播种边界 |
 | [agents/clean-room-install.md](agents/clean-room-install.md) | 给 agent 的按需说明 | current | 净室安装测试（#109）的范围与步骤覆盖表：SKILL.md 各步哪些有确定性入口、哪些由测试代做、哪些未覆盖。步骤编号由测试核对；是 #113 的输入 |
+| [agents/unit-contracts.md](agents/unit-contracts.md) | 给 agent 的按需说明 | current | 单元契约（#110、#111）的字段、校验项、证据收录规则与已知局限，以及没有收进矩阵的历史记录和原因 |
 | [../skills/lazypack-setup/templates/changelog.mjs](../skills/lazypack-setup/templates/changelog.mjs) | setup 派发工具 | current | CHANGELOG 播种、结构校验与发版编译的实现。setup 原样复制到目标仓，已存在则保留。结构合规不等于条目由提交真实生成 |
 | [agents/report-layers.md](agents/report-layers.md) | 给 agent 的按需说明 | current | 交付报告「用户体验与证据分层」段落的唯一判定口径：何时必填、层标签、状态词与字段规则。源于 #32、#33 |
 | [../skills/lazypack-setup/templates/check_report_layers.mjs](../skills/lazypack-setup/templates/check_report_layers.mjs) | setup 派发工具 | current | 分层段落播种与结构校验的实现。setup 原样复制到目标仓，已存在则保留。结构合规不等于报告陈述真实 |

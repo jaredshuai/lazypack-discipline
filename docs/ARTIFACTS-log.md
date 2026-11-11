@@ -9,6 +9,14 @@
 
 ## 每轮记录
 
+### 2026-11-11 #111 单元契约与验证矩阵：五份契约、校验器和生成的矩阵
+
+- 检查范围：P4、P5（本轮改了登记册和 README）；另跑了其余全部编号确认未受影响。本轮改了 `skills/lazypack-setup/SKILL.md` 两处说明文字，没有改声明、固定层和 `templates/` 下任何文件。人工核对：七条证据的出处逐条打开过，Actions 运行 42965978337 的五个作业结论都是 success；[agents/unit-contracts.md](agents/unit-contracts.md) 里引用的卡片条件与校验器行为对照源文件核过。
+- 依据版本：开工 `54ec0e1`，收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
+- 处理结果：P1–P5、P8–P11 均未发现差异（9/9 PASS，退出码 0，各行均无 `declaration=`），P4 输出 register=123 log=124 failures=0，P5 输出 agents=7 readme=12 failures=0。新增五份 `*.unit.json`、校验与生成脚本 `unit_contracts.mjs`、生成的 `references/unit-matrix.md`、测试 `scripts/test_unit_contracts.mjs` 和说明文档；包检查加第六项 `units`；README 两处手写的验证状态改为指向矩阵；登记册第 1 节加一行、第 3 节加五行并更新包检查一行。`node scripts/run_tests.mjs --fast`：16 passed, 0 failed, 2 skipped。
+- 未覆盖范围：校验器不运行契约里的验证命令，不联网核对出处链接能否打开、内容是否支持「范围」的说法；`applies_when` 只是卡片适用条件的子集，与卡片正文是否一致没有机器核对。两个门禁配方没有合格记录，矩阵里三列都是「未验证」。没有新增任何验收。
+- 未决事项：本轮代为裁定了三点，可由维护者推翻：证据加必填字段 `platform`、矩阵按操作系统分列；证据须实跑过该单元且有公开出处；`lazypack-core` 的版本取固定层版本。README 说的文档迁移引擎「AGY / Windows 限定沙箱验证」没有公开出处，仍保留原话，只注明不在矩阵内。`tests.yml` 仍未设为必需检查。
+
 ### 2026-11-10 #109 净室安装测试：只拷出 skill 目录装配两份全新夹具
 
 - 检查范围：P4（本轮改了登记册）；另跑了其余全部编号确认未受影响。本轮没有改 `skills/lazypack-setup/` 下任何文件，也没有改声明和固定层。人工核对：新测试 4 个用例本机通过；真改源模板去掉 shebang（不重生成清单、重生成清单各一次）时两个正向用例都失败，之后已还原；用 `core.autocrlf=true` 的克隆模拟 Windows 检出，4 个用例通过。PR #125 评审后修订了测试与说明文档：包检查失败即停止装配，反例拆成两段；出处行整行核对；覆盖表逐行核对第一列；重跑的不变断言加上 `.git/config` 的字节。修订后把出处行的一个槽位写错、给覆盖表加一行不合法编号各试一次，对应用例都失败，之后已还原。

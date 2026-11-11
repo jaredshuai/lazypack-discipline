@@ -1,0 +1,90 @@
+{
+  "schema": "lazypack-unit/1",
+  "id": "react-vite-app-shell",
+  "version": "1.0.1",
+  "kind": "recipe",
+  "card": "react-vite-app-shell.md",
+  "applies_when": [
+    { "probe": "command-exists", "command": "node" },
+    { "probe": "command-exists", "command": "npm" },
+    { "probe": "path-absent", "path": "package.json" },
+    { "probe": "path-absent", "path": "components.json" }
+  ],
+  "provides": [
+    "ui-shell"
+  ],
+  "files": [
+    { "source": "assets/react-vite-app-shell-1/.gitattributes", "target": ".gitattributes", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/.gitignore", "target": ".gitignore", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/.oxlintrc.json", "target": ".oxlintrc.json", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/NOTICE.md", "target": "NOTICE.md", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/README.md", "target": "README.md", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/SHA256SUMS", "target": "SHA256SUMS", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/components.json", "target": "components.json", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/index.html", "target": "index.html", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/package-lock.json", "target": "package-lock.json", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/package.json", "target": "package.json", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/App.tsx", "target": "src/App.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/app-shell-1-sidebar.tsx", "target": "src/components/app-shell-1-sidebar.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/app-shell-1.tsx", "target": "src/components/app-shell-1.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/data/app-shell-1-nav.ts", "target": "src/components/data/app-shell-1-nav.ts", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/data/filter-tasks.test.ts", "target": "src/components/data/filter-tasks.test.ts", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/data/filter-tasks.ts", "target": "src/components/data/filter-tasks.ts", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/data/tasks.ts", "target": "src/components/data/tasks.ts", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/tasks-catalog.tsx", "target": "src/components/tasks-catalog.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/avatar.tsx", "target": "src/components/ui/avatar.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/breadcrumb.tsx", "target": "src/components/ui/breadcrumb.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/button.tsx", "target": "src/components/ui/button.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/card.tsx", "target": "src/components/ui/card.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/dropdown-menu.tsx", "target": "src/components/ui/dropdown-menu.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/empty.tsx", "target": "src/components/ui/empty.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/field.tsx", "target": "src/components/ui/field.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/input.tsx", "target": "src/components/ui/input.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/label.tsx", "target": "src/components/ui/label.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/separator.tsx", "target": "src/components/ui/separator.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/sheet.tsx", "target": "src/components/ui/sheet.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/sidebar.tsx", "target": "src/components/ui/sidebar.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/skeleton.tsx", "target": "src/components/ui/skeleton.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/components/ui/tooltip.tsx", "target": "src/components/ui/tooltip.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/hooks/use-mobile.ts", "target": "src/hooks/use-mobile.ts", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/index.css", "target": "src/index.css", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/main.tsx", "target": "src/main.tsx", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/src/vite-env.d.ts", "target": "src/vite-env.d.ts", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/tsconfig.app.json", "target": "tsconfig.app.json", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/tsconfig.json", "target": "tsconfig.json", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/tsconfig.node.json", "target": "tsconfig.node.json", "mode": "0644", "managed": false },
+    { "source": "assets/react-vite-app-shell-1/vite.config.ts", "target": "vite.config.ts", "mode": "0644", "managed": false }
+  ],
+  "verify": [
+    { "command": "npm ci", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "npm run typecheck", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "npm run lint", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "npm run test", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "npm run build", "expect_exit": 0, "cwd": "target-root" }
+  ],
+  "evidence": [
+    {
+      "kind": "host-acceptance",
+      "platform": "linux",
+      "environment": "Linux / Node 24.22.2 / npm 11.19.1",
+      "date": "2026-11-10",
+      "unit_version": "1.0.1",
+      "scope": "起始副本拷到系统临时目录的独立目录：npm ci 退出 0 且未改写 lockfile，SHA256SUMS 19/19，typecheck、lint、test（5/5）、build 全部退出 0。没有覆盖配方 §5.1 的 PowerShell 复制脚本，也不是经 /lazypack-setup 对话装配。",
+      "source": "https://github.com/jaredshuai/lazypack-discipline/pull/103#issuecomment-6758462755"
+    },
+    {
+      "kind": "host-acceptance",
+      "platform": "windows",
+      "environment": "Windows 11 专业版 10.0.26200 / Windows PowerShell 5.1 / Node 24.21.0 / npm 12.1.0 / core.autocrlf=true，Multica 上的 Codebuddy agent",
+      "date": "2026-11-10",
+      "unit_version": "1.0.1",
+      "scope": "从提交 00b364b 检出：配方 §5.1 复制脚本三条路径（空目标写入 40 个文件、重跑零写入、源目录不存在零写入），§5.2 哈希 19/19，npm ci 与 typecheck、lint、test、build 全部退出 0，Edge 157 宽屏渲染正常。第一次 npm ci 十分钟无输出被终止，重跑通过，原因未查明。没有覆盖浏览器里的搜索与筛选交互、窄屏视口，也不是经 /lazypack-setup 对话装配；当时起始副本在仓库根 templates/，后迁入 skill 的 assets/。",
+      "source": "https://github.com/jaredshuai/lazypack-discipline/pull/103#issuecomment-6760385015"
+    }
+  ],
+  "rules": [
+    "react-vite-app-shell.md §2",
+    "react-vite-app-shell.md §5",
+    "react-vite-app-shell.md §6"
+  ]
+}
