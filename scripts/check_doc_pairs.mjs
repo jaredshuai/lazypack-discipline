@@ -27,6 +27,7 @@ const SKILL_REL = 'skills/lazypack-setup/SKILL.md';
 const README_REL = 'README.md';
 const AGENTS_REL = 'AGENTS.md';
 const ARTIFACTS_REL = 'docs/ARTIFACTS.md';
+const ARTIFACTS_LOG_REL = 'docs/ARTIFACTS-log.md';
 const HANDOFF_DOC_REL = 'docs/agents/handoff-verification.md';
 const HANDOFF_SCRIPT_REL = 'scripts/handoff_manifest.js';
 const DOC_PAIRS_REL = 'docs/agents/doc-pairs.md';
@@ -727,12 +728,14 @@ function checkP3() {
 }
 
 /**
- * P4：ARTIFACTS.md 相对链接目标存在且非空。
+ * P4：ARTIFACTS.md 与其追加日志 ARTIFACTS-log.md 的相对链接目标存在且非空。
  */
 function checkP4() {
-  const report = checkRelativeLinks(ARTIFACTS_REL, true);
-  const status = report.failures.length === 0 ? 'PASS' : 'FAIL';
-  return pairResult('P4', status, report);
+  const register = checkRelativeLinks(ARTIFACTS_REL, true);
+  const log = checkRelativeLinks(ARTIFACTS_LOG_REL, true);
+  const failures = [...register.failures, ...log.failures];
+  const status = failures.length === 0 ? 'PASS' : 'FAIL';
+  return pairResult('P4', status, { register, log });
 }
 
 /**
@@ -906,7 +909,10 @@ function renderPairDetailBody(row) {
     return '';
   }
   if (row.id === 'P4') {
-    return ` links=${ev.checked} failures=${ev.failures.length}`;
+    const registerN = ev.register?.checked ?? 0;
+    const logN = ev.log?.checked ?? 0;
+    const failN = (ev.register?.failures.length ?? 0) + (ev.log?.failures.length ?? 0);
+    return ` register=${registerN} log=${logN} failures=${failN}`;
   }
   if (row.id === 'P5') {
     const agentsN = ev.agents?.checked ?? 0;
