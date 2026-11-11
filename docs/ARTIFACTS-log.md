@@ -9,6 +9,14 @@
 
 ## 每轮记录
 
+### 2026-11-10 #109 净室安装测试：只拷出 skill 目录装配两份全新夹具
+
+- 检查范围：P4（本轮改了登记册）；另跑了其余全部编号确认未受影响。本轮没有改 `skills/lazypack-setup/` 下任何文件，也没有改声明和固定层。人工核对：新测试 4 个用例本机通过；真改源模板去掉 shebang（不重生成清单、重生成清单各一次）时两个正向用例都失败，之后已还原；用 `core.autocrlf=true` 的克隆模拟 Windows 检出，4 个用例通过。
+- 依据版本：开工 `fea9974`，收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
+- 处理结果：P1–P5、P8–P11 均未发现差异（9/9 PASS，退出码 0，各行均无 `declaration=`），P4 输出 register=117 log=123 failures=0。新增 `scripts/test_clean_room_install.mjs`、夹具 `scripts/fixtures/clean-room/`、说明 [agents/clean-room-install.md](agents/clean-room-install.md)，`tests.yml` 新增三系统的 `clean-room` 作业；登记册第 3 节新增三行并更新 `tests.yml` 一行，README 的 `scripts/` 行补一句。`node scripts/run_tests.mjs --fast`：15 passed, 0 failed, 2 skipped。
+- 未覆盖范围：测试不执行任何由 AI 完成的环节，不装依赖，不运行门禁命令和 Hook，不测迁移与存量仓；逐条见说明文档的步骤覆盖表。覆盖表里只有步骤编号由测试核对，「入口／胶水／预置／未覆盖」的归类是人工判断。本条写于推送之前，Windows 与 macOS 的实机结果以 PR 上 `clean-room` 作业的记录为准。
+- 未决事项：说明文档「测试中的发现」五条（槽位状态无实证、三行指针文字包内无规定、想法池与纪要的可见性无判定规则、重跑只验证一条路径、临时目录须取真实路径）交 #113 处理，本轮没有改包内任何文字。`tests.yml` 仍未设为必需检查。
+
 ### 2026-11-10 #117 登记册瘦身：每轮记录移到本文件，第 3 节说明缩短
 
 - 检查范围：P1–P5、P8–P11（本轮改了声明文件和检查脚本，按规程列入全部编号）。人工核对：登记册原第 4 节的全部条目和原第 3 节 92 行说明都逐字节出现在本文件，登记行的路径、类别、状态三列没有变。

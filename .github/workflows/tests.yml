@@ -4,6 +4,8 @@ name: Tests
 # fast：不需要夹具依赖的单元与契约测试，每次都跑。
 # integration：夜跑闭环的两个集成测试，需要 TS 夹具 node_modules、
 #   Python 夹具 venv（测试自动装配 mutmut 2.x）和 PyYAML。
+# clean-room：净室安装测试（#109），在 Linux、Windows、macOS 上各跑一次。
+#   它也在 fast 里跑，这里只为多出两个操作系统。只需要 Node 和 git。
 on:
   pull_request:
   push:
@@ -38,6 +40,26 @@ jobs:
 
       - name: Run fast tests
         run: node scripts/run_tests.mjs --fast
+
+  clean-room:
+    name: clean-room install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Run clean-room install test
+        run: node scripts/run_tests.mjs test_clean_room_install
 
   integration:
     name: integration (nightly mutation loop)
