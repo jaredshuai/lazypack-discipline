@@ -11,8 +11,8 @@
  *
  * skill 里没有确定性入口的环节，由本文件「胶水」一节的函数代做。
  * 哪些环节是胶水、哪些完全没有覆盖，逐条列在
- * docs/agents/clean-room-install.md，本测试同时核对那张表与 SKILL.md 的
- * 步骤编号一一对应。
+ * docs/agents/clean-room-install.md。本测试同时核对那张表：每一行的步骤
+ * 编号都出自 SKILL.md，SKILL.md 的每个步骤编号也都在表里。
  *
  * 用法: node scripts/test_clean_room_install.mjs
  * 由 scripts/run_tests.mjs 汇总运行；.github/workflows/tests.yml 在
@@ -52,6 +52,9 @@ const RESIDENT_DEPENDENCIES = [
   { path: 'docs/ARTIFACTS.md', token: '__ARTIFACTS_POINTER__', answerKey: null },
   { path: 'docs/agents/roles.md', token: '__ROLES_POINTER__', answerKey: null }
 ];
+
+/** 步骤覆盖表里唯一不带 SKILL.md 编号的行：第 5 步末尾的最终产物检查在 SKILL.md 里没有编号。 */
+const UNNUMBERED_COVERAGE_ROW = '5（最终产物检查）';
 
 /** 包内唯一规定了文字的指针行（references/managed-blocks.md §3.1.2 的 P7）。 */
 const ROLES_POINTER =
@@ -268,23 +271,29 @@ function copyIfAbsent(source, target) {
 }
 
 // ---------------------------------------------------------------------------
-// 装配：按 SKILL.md 第 5 步的顺序走一遍，只记录结果，不做断言
+// 装配：先做第 1 步的包检查，再按 SKILL.md 第 5 步的顺序走一遍；只记录结果，不做断言
 // ---------------------------------------------------------------------------
 
 /**
  * 对工作区里的目标仓执行一遍装配。pass 用作 artifacts 子目录名，
  * 每一遍都重新取基线（基线文件不允许覆盖）。
  * 返回各步的结果；快照、写入、留存段落渲染或 CHANGELOG 初始化意外失败时抛错。
+ * 包检查没通过时在写任何文件之前返回，record.stoppedAt 为 'package-check'。
  */
 function install(workspace, pass) {
-  const artifacts = path.join(workspace.artifacts, pass);
-  fs.mkdirSync(artifacts);
   const { assumed } = workspace.answers;
   const residentEntry = assumed.resident_entry;
-  const record = { writes: {}, seeds: {} };
+  const record = { writes: {}, seeds: {}, stoppedAt: null };
 
   // 第 1 步里唯一的确定性入口：包完整性检查，在 skill 目录里运行。
+  // SKILL.md 规定退出码非 0 时立即停止、不写入任何文件，这里照做。
   record.packageCheck = runSkillScript(workspace, 'package_manifest.mjs', ['check'], { cwd: workspace.skill });
+  if (record.packageCheck.status !== 0) {
+    record.stoppedAt = 'package-check';
+    return record;
+  }
+  const artifacts = path.join(workspace.artifacts, pass);
+  fs.mkdirSync(artifacts);
 
   // 写前基线。
   const managedPaths = [...LAYER0.map((item) => item.path), residentEntry];
@@ -405,7 +414,8 @@ function install(workspace, pass) {
   }
   write(residentEntry, residentTemplate, 'resident-discipline', { artifacts: artifactStates }, pointerReplacements);
 
-  // 第 5 步第 8 项：生效副作用。
+  // 第 5 步第 8 项：生效副作用。SKILL.md 写的是直接执行 git config，这里照做，不先读后写；
+  // git 每次都会重写 .git/config，所以重跑的不变断言对它只比字节（见 describeTree）。
   run('git', ['-C', workspace.repo, 'config', 'core.hooksPath', '.githooks'], { expect: [0] });
   if (!IS_WINDOWS) {
     fs.chmodSync(path.join(workspace.repo, '.githooks', 'pre-commit'), 0o755);
@@ -433,10 +443,13 @@ function install(workspace, pass) {
 // ---------------------------------------------------------------------------
 
 /**
- * 目标仓的文件清单（不含 .git）：每个文件记字节摘要和修改时间，
- * POSIX 上再记权限位；目录只记存在。用来判断原样重跑有没有动过任何东西。
+ * 目标仓的文件清单，用来判断原样重跑动过什么。
+ * 工作树里每个文件记字节摘要和修改时间，POSIX 上再记权限位（Windows 上不记）；
+ * 目录只记存在。.git 目录里只记 .git/config 的字节摘要，不记修改时间：
+ * 装配每一遍都执行 git config，git 会用相同内容重写这个文件。
  */
 function describeTree(repo) {
+  const sha256 = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
   const tree = {};
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -450,13 +463,13 @@ function describeTree(repo) {
         walk(abs);
       } else {
         const stat = fs.statSync(abs, { bigint: true });
-        const sha = createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
         const mode = IS_WINDOWS ? '' : ` mode=${(Number(stat.mode) & 0o777).toString(8)}`;
-        tree[rel] = `sha256=${sha} mtime=${stat.mtimeNs}${mode}`;
+        tree[rel] = `sha256=${sha256(abs)} mtime=${stat.mtimeNs}${mode}`;
       }
     }
   };
   walk(repo);
+  tree['.git/config'] = `sha256=${sha256(path.join(repo, '.git', 'config'))}`;
   return tree;
 }
 
@@ -494,7 +507,7 @@ function assertBlocksVerified(record) {
 // ---------------------------------------------------------------------------
 
 for (const fixtureName of ['ts-new', 'py-new']) {
-  test(`${fixtureName}：只用拷出的 skill 完成装配，产物通过核验，原样重跑不改任何文件`, (t) => {
+  test(`${fixtureName}：只用拷出的 skill 完成装配，产物通过核验，原样重跑不改工作树`, (t) => {
     const workspace = makeWorkspace(t, fixtureName);
     const { assumed, step3_answers: answers } = workspace.answers;
     const hookFile = path.join(workspace.repo, '.githooks', 'pre-commit');
@@ -508,6 +521,7 @@ for (const fixtureName of ['ts-new', 'py-new']) {
       0,
       `拷出的 skill 应通过包检查：${first.packageCheck.stdout}${first.packageCheck.stderr}`
     );
+    assert.equal(first.stoppedAt, null);
 
     // pre-commit hook：存在、第一行是 shebang、POSIX 上有可执行位。
     assert.ok(fs.statSync(hookFile).isFile(), 'pre-commit hook 应存在且是普通文件');
@@ -530,7 +544,18 @@ for (const fixtureName of ['ts-new', 'py-new']) {
       assert.ok(hookText.includes(`${slot.toUpperCase()}_STATUS='${state}'\n`), `${slot} 槽位状态应写进 Hook`);
       assert.ok(hookText.includes(`${slot.toUpperCase()}_CMD='${command}'\n`), `${slot} 槽位命令应写进 Hook`);
     }
-    assert.match(hookText, new RegExp(`^# lazypack:preset id=${answers['3.B.preset'].id} version=\\S+ format=`, 'm'));
+    // 出处行整行核对：配方身份取自回答文件与配方卡，四槽出处都是「状态:preset:recommended」。
+    const presetId = answers['3.B.preset'].id;
+    const presetVersion = /^version: (\S+)\s*$/m.exec(readSkillText(workspace, 'presets', `${presetId}.md`))?.[1];
+    assert.ok(presetVersion, '配方卡应带 version');
+    const provenanceLine =
+      `# lazypack:preset id=${presetId} version=${presetVersion} ` +
+      SLOTS.map((slot) => `${slot}=${assumed.slot_results[slot].state}:preset:recommended`).join(' ');
+    assert.deepEqual(
+      hookText.split('\n').filter((line) => line.startsWith('# lazypack:preset')),
+      [provenanceLine],
+      'Hook 应恰有一行出处行，且四个槽位的出处都与回答文件一致'
+    );
 
     // 托管产物：新文件走 create，已有的常驻入口走 append 且块外字节不变。
     const expectedWrites = Object.fromEntries(LAYER0.map((item) => [item.path, 'create']));
@@ -582,7 +607,8 @@ for (const fixtureName of ['ts-new', 'py-new']) {
     assert.equal(first.changelogInit, 'created');
     assert.ok(fs.statSync(path.join(workspace.repo, 'CHANGELOG.md')).size > 0, 'CHANGELOG.md 应非空');
 
-    // 原样重跑：每份托管产物都是 noop，种子不覆盖，文件一个字节都不变。
+    // 原样重跑：每份托管产物都是 noop，种子不覆盖；工作树文件的字节和修改时间不变，
+    // .git/config 的字节不变。
     const treeBefore = describeTree(workspace.repo);
     const second = install(workspace, 'pass-2');
     assert.deepEqual(
@@ -600,16 +626,27 @@ for (const fixtureName of ['ts-new', 'py-new']) {
   });
 }
 
-test('拷出的 skill 里去掉 Hook 模板的 shebang：包检查与 Hook 静态验收都失败', (t) => {
+test('拷出的 skill 里去掉 Hook 模板的 shebang：包检查拦下并中止，清单一并改过时由 Hook 静态验收拦下', (t) => {
   const workspace = makeWorkspace(t, 'ts-new');
   const templateFile = path.join(workspace.skill, 'templates', 'pre-commit.sh');
   const template = fs.readFileSync(templateFile, 'utf8');
   assert.ok(template.startsWith('#!/bin/sh\n'), 'Hook 模板第一行应是 shebang');
   fs.writeFileSync(templateFile, template.slice('#!/bin/sh\n'.length), 'utf8');
 
-  const record = install(workspace, 'pass-1');
+  // 只改模板：清单对不上，包检查失败，装配在写任何文件之前停下。
+  const treeBefore = describeTree(workspace.repo);
+  const stopped = install(workspace, 'pass-1');
+  assert.notEqual(stopped.packageCheck.status, 0, '模板被改后包检查应失败');
+  assert.equal(stopped.stoppedAt, 'package-check');
+  assert.deepEqual(stopped.writes, {});
+  assert.deepEqual(describeTree(workspace.repo), treeBefore, '包检查失败后目标仓不应有任何改动');
+  assert.deepEqual(fs.readdirSync(workspace.artifacts), [], '包检查失败后不应取基线');
 
-  assert.notEqual(record.packageCheck.status, 0, '模板被改后包检查应失败');
+  // 清单也按改过的模板重新生成：包检查不再能发现，装配继续，由 Hook 静态验收拦下。
+  runSkillScript(workspace, 'package_manifest.mjs', ['generate'], { cwd: workspace.skill, expect: [0] });
+  const record = install(workspace, 'pass-2');
+  assert.equal(record.packageCheck.status, 0, '清单重新生成后包检查应通过');
+  assert.equal(record.stoppedAt, null);
   assert.equal(record.writes[HOOK_PATH], 'create');
   assert.notEqual(
     fs.readFileSync(path.join(workspace.repo, '.githooks', 'pre-commit'), 'utf8').split('\n')[0],
@@ -619,7 +656,7 @@ test('拷出的 skill 里去掉 Hook 模板的 shebang：包检查与 Hook 静�
   assert.equal(lastJsonLine(record.hookVerify.stdout)?.code, 'WRONG_NEW_SHEBANG');
 });
 
-test('未覆盖步骤清单的步骤编号与 SKILL.md 一一对应', () => {
+test('步骤覆盖表每一行的编号都出自 SKILL.md，SKILL.md 的每个步骤编号都在表里', () => {
   const skill = fs.readFileSync(path.join(SKILL_SRC, 'SKILL.md'), 'utf8').replace(/\r\n/g, '\n');
   const expected = new Set();
   const withSubItems = new Set();
@@ -641,10 +678,21 @@ test('未覆盖步骤清单的步骤编号与 SKILL.md 一一对应', () => {
 
   const doc = fs.readFileSync(COVERAGE_DOC, 'utf8').replace(/\r\n/g, '\n');
   const table = /^## 步骤覆盖表\n([\s\S]*?)(?=^## )/m.exec(doc)?.[1] ?? '';
+  const firstCells = table
+    .split('\n')
+    .filter((line) => line.startsWith('|'))
+    .map((line) => line.split('|')[1].trim());
+  assert.deepEqual(firstCells.slice(0, 2), ['步骤', '---'], '步骤覆盖表应以表头行和分隔行开头');
   const listed = new Set();
-  for (const match of table.matchAll(/^\| (\d+(?:\.[0-9A-Z]+)?) \|/gm)) {
-    listed.add(match[1]);
+  const unknown = [];
+  for (const cell of firstCells.slice(2)) {
+    if (expected.has(cell)) {
+      listed.add(cell);
+    } else if (cell !== UNNUMBERED_COVERAGE_ROW) {
+      unknown.push(cell);
+    }
   }
+  assert.deepEqual(unknown, [], '步骤覆盖表里有不是 SKILL.md 步骤编号的行');
   const sorted = (set) => [...set].sort();
-  assert.deepEqual(sorted(listed), sorted(expected));
+  assert.deepEqual(sorted(listed), sorted(expected), 'SKILL.md 的每个步骤编号都应在步骤覆盖表里');
 });

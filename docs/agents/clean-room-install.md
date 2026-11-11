@@ -1,23 +1,25 @@
 # 净室安装测试
 
-本文说明 `scripts/test_clean_room_install.mjs`（#109）测了什么、没测什么，并逐步列出 `skills/lazypack-setup/SKILL.md` 的哪些环节有确定性入口。「步骤覆盖表」一节由该测试机器核对：表里的步骤编号必须与 `SKILL.md` 的步骤编号一一对应，多一个或少一个都失败。
+本文说明 `scripts/test_clean_room_install.mjs`（#109）测了什么、没测什么，并逐步列出 `skills/lazypack-setup/SKILL.md` 的哪些环节有确定性入口。「步骤覆盖表」一节由该测试机器核对：表里每一行的第一列必须是 `SKILL.md` 的一个步骤编号，唯一的例外是没有编号的「5（最终产物检查）」；`SKILL.md` 的每个步骤编号也必须在表里出现。测试只核对第一列，不核对各行的「覆盖情况」写得对不对。
 
 测试通过只说明：包里现有的确定性入口，在一个只有 skill 目录的环境里能把两份全新夹具装配到下文列出的程度。它不说明 setup 整体可用，表里标「未覆盖」的环节没有任何证据。
 
 ## 测试做什么
 
 - 把 `skills/lazypack-setup/` 拷到系统临时目录，夹具仓库拷到旁边并 `git init`。装配全程只调用拷出的那份 skill 里的脚本，不调用本仓库其他脚本。
-- 用夹具旁的 `answers.json` 代替用户回答，按 `SKILL.md` 第 5 步的顺序装配一遍，再原样装配一遍。
+- 用夹具旁的 `answers.json` 代替用户回答，先做第 1 步的包完整性检查，再按 `SKILL.md` 第 5 步的顺序装配一遍，然后原样再装配一遍。包检查没通过就在写任何文件之前停下。
 - 第一遍之后断言：
   - 拷出的 skill 通过包完整性检查；
   - `.githooks/pre-commit` 存在，第一行是 `#!/bin/sh`，全文没有 CR，POSIX 上有可执行位，`core.hooksPath` 指向 `.githooks`，并通过 `verify_hook_install.mjs`；
-  - 回答文件里的槽位状态、命令和出处行写进了 Hook；
+  - 回答文件里四个槽位的状态和命令写进了 Hook；Hook 里恰有一行出处行，配方的 id 与 version、四个槽位各自的出处都整行核对；
   - 四份新产物的写入结果是 `create`，已有的常驻入口是 `append`，原有字节保留在托管块之前，五份文件都不残留占位符，并通过 `managed_blocks.mjs verify`；
   - 常驻入口的指针行跟随依赖的真实状态：登记册没写，所以没有它的指针行；
   - 留存段落写进角色文件，想法池种子与纪要目录跟随第 3 步的选择；
   - 三份原样复制的种子与模板逐字节相同，`CHANGELOG.md` 由 `changelog.mjs init` 建出。
-- 第二遍之后断言：五份托管产物全部 `noop`，种子全部原位保留，两项核验仍通过，目标仓里每个文件的字节、修改时间和权限位都没有变化。
-- 反例：在拷出的 skill 里删掉 Hook 模板的 shebang 再装配。包检查与 Hook 静态验收都应失败。
+- 第二遍之后断言：五份托管产物全部 `noop`，种子全部原位保留，两项核验仍通过。工作树里（不含 `.git`）每个文件的字节和修改时间都没有变化，权限位只在 POSIX 上核对，Windows 上不核对。`.git` 目录里只核对 `.git/config` 的字节没有变化：第二遍照样执行 `git config`，git 会重写这个文件，它的修改时间不在核对范围内。
+- 反例分两段，都从「在拷出的 skill 里删掉 Hook 模板的 shebang」开始：
+  - 只改模板：包检查失败，装配停下，目标仓没有任何改动，也没有取基线；
+  - 再用 `package_manifest.mjs generate` 把清单按改过的模板重新生成：包检查通过，装配继续，写出的 Hook 第一行不是 shebang，`verify_hook_install.mjs` 以 `WRONG_NEW_SHEBANG` 失败。
 
 不做的事：
 
@@ -64,7 +66,7 @@ node scripts/run_tests.mjs test_clean_room_install
 
 | 步骤 | 环节 | 覆盖情况 | 说明 |
 |---|---|---|---|
-| 1 | 包完整性检查 | 入口 | `package_manifest.mjs check`，在拷出的 skill 目录里运行 |
+| 1 | 包完整性检查 | 入口 | `package_manifest.mjs check`，在拷出的 skill 目录里运行。退出码非 0 时测试停止装配 |
 | 1 | 前置双检（Issue Tracker、常驻入口） | 预置 | 规则在 `references/verification.md` §1，没有脚本。夹具按通过双检的样子准备 |
 | 1 | `--docs-only` 快速入口 | 未覆盖 | |
 | 2 | 只读探测第 1–6、8–10 项 | 预置 | 结论由夹具形状和 `assumed` 段代替。`doc_helper.mjs scan` / `plan` 有入口，测试没有调用 |
@@ -90,7 +92,7 @@ node scripts/run_tests.mjs test_clean_room_install
 | 5.6 | 登记册 `docs/ARTIFACTS.md` | 未覆盖 | 没有确定性入口，测试不写登记册 |
 | 5.7 | 常驻入口 `AGENTS.md` | 入口 + 胶水 | 写盘走 `write`。依赖状态采样、指针行渲染与整行省略是胶水 |
 | 5.7 | `CLAUDE.md` 入口、既有 Hook 管理器追加调用行 | 未覆盖 | |
-| 5.8 | `core.hooksPath` 与 POSIX 可执行位 | 胶水 | 测试直接执行 `git config` 和 `chmod` |
+| 5.8 | `core.hooksPath` 与 POSIX 可执行位 | 胶水 | 测试直接执行 `git config` 和 `chmod`，每一遍都执行，不先读后写 |
 | 5.8 | Hook 静态验收 | 入口 | `verify_hook_install.mjs --mode new` |
 | 5.8 | Hook 运行时验证 | 未覆盖 | 没有运行 `git hook run pre-commit`，Hook 脚本一次也没有执行 |
 | 5.9 | 会话内三态恢复保护 | 未覆盖 | |
@@ -132,3 +134,4 @@ node scripts/run_tests.mjs test_clean_room_install
 3. **想法池与纪要的可见性取值没有判定规则。** `references/managed-blocks.md` 规定了 `visibility` 的取值范围，`SKILL.md` 只说明了 `raw_qa` 何时取 `private-repo` 或 `private-storage`。`ideas`、`minutes` 该填 `public-repo` 还是 `private-repo` 没有写；这个值进入 `input`，填法不同会让重跑误判为输入变化。
 4. **重跑只验证了一条路径。** 测试覆盖的是输入完全不变时 `write` 返回 `noop` 且不写盘。`references/managed-blocks.md` §5 的升级、漂移、冲突各分支都没有覆盖。
 5. **放基线和 spec 的临时目录必须取真实路径。** `managed_blocks.mjs` 拒绝经由符号链接到达的基线、文件列表与 spec 路径，向上每一级都查，退出码 3。macOS 的系统临时目录在 `/var` 下，而 `/var` 是符号链接；`references/managed-blocks.md` §5.3.1 要求把这些文件放在系统临时目录，没有提要先取真实路径。测试用 `fs.realpathSync.native` 处理。AI 在 macOS 上按文档执行时会不会撞上这条限制，本测试验证不了。
+6. **重跑时 `.git/config` 会被重写。** `SKILL.md` 第 5 步第 8 项写的是直接执行 `git config core.hooksPath .githooks`，没有要求先读当前值。值已经正确时，git 仍用相同内容重写 `.git/config`，文件的修改时间会变。测试照 `SKILL.md` 的写法执行，所以对这个文件只核对字节。要不要改成先读后写，留给 #113。
