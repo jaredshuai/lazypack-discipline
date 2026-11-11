@@ -121,6 +121,7 @@
 | [proposals/issue-29-commit-footer-semantics.md](proposals/issue-29-commit-footer-semantics.md) | 讨论材料 | reference | （补登记）issue #29 commit 脚注语义提案原文。讨论已于 reviews/2026-01-07-commit-footer-semantics/ 收束并经维护者裁定，现行条文为 DECISIONS.md §5.1（0.6.0）。本行只登记提案原文位置，不表示提案原文有现行效力。其讨论留档见下一条 reviews/ 行 |
 | [reviews/2026-01-07-commit-footer-semantics/](reviews/2026-01-07-commit-footer-semantics/) | 讨论留档 | current | issue #29「Commit 脚注词表语义」§9 讨论留档（5 位参与者，两轮：独立意见 + 互评，第三轮投票经主持人建议跳过）。已收束：`RULING.md` 记维护者 jaredshuai 2026-01-07 裁定——保持 §5.1 集中（4:1）、版本 0.5.0→0.6.0（3:2）、检查器句不入条文（4:1）；实施清单已勾选。**为 DECISIONS.md 0.6.0 的生效依据**，对应现行条文 §5.1（脚注 `Refs` 关联 vs `Closes` 关闭、封闭白名单排除 `Fixes` 等平台保留词），见其版本历史 0.6.0 行（2026-01-07，同引 issue #29）。`round-1/`（提示词、五份 opinion.md 与 summary.md）与 `round-2/`（提示词、五份 round-2-response.md 与 summary.md）为真实内容。仅登记讨论留档与其生效版本，不表示下游目标仓已获取 0.6.0 快照 |
 | [reviews/](reviews/) | 讨论材料集合入口 | reference | 子文档各自状态需要核实，不将整个目录认作实施基线 |
+| [reviews/README.md](reviews/README.md) | 讨论留档索引 | current | 2026-11-10 #118 新增。`docs/reviews/` 下六个讨论目录各一行，指向裁决或综述文件和对应固定层版本。只是检索入口：不改写留档原文，不决定议题状态，状态以各目录裁决文件和 DECISIONS.md 版本历史为准 |
 | [reviews/2026-09-10-document-homes-adoption/](reviews/2026-09-10-document-homes-adoption/) | 讨论留档 | current | 2026-09-10 文档归属正式采纳三轮会议留档、表决与维护者裁定，0.3.0 生效依据 |
 | [reviews/2026-09-22-release-tag-semantics/](reviews/2026-09-22-release-tag-semantics/) | 讨论留档 | current | §5.7 发版与标签语义修订 §9 会议留档，维护者已裁定批准（round-3/tally.md §七），0.4.0 生效依据。**本仓自生效提交起打 v0.4.0，0.3.0 不追溯补标** |
 | `docs/reviews/2026-09-07-lazypack-harvest/`（历史登记路径，当前工作区与 Git 树均不存在） | 讨论留档 | reference | 历史记录曾描述为未完成的讨论材料；当前未找到该目录或可保留的工作区副本，去向未核实，不把它当作可访问入口。不是现行 harvest 规范；现行入口仍是已跟踪的 [skills/lazypack-harvest/SKILL.md](../skills/lazypack-harvest/SKILL.md) |
@@ -129,6 +130,15 @@
 | [reviews/2026-10-06-iterative-dev-architecture/](reviews/2026-10-06-iterative-dev-architecture/) | 讨论留档 | current | 2026-10-06「迭代开发与架构复盘」§9 会议留档（issue #41 反重前置规划 + 需求文档生命周期、issue #40 每轮迭代后的人工架构复盘），二轮讨论通过并经维护者裁定，0.7.0 生效依据。草案 A（§4.1 文档二分判据）与草案 B（§7.7 跨票据结构复盘）通过纳入固定层；草案 C（单迭代上限）拆分为 §6.5 可判定内核 + `docs/agents/iteration-scope.md` 行为指引。`round-1/` 五位参与者意见、`round-2/` 评估与维护者最终裁定（`FINAL-RULINGS.md`）为真实内容。Closes #41, Closes #40。2026-10-08 收尾文档防腐：P1/P2/P3 失败（固定层 0.7.0 需同步到 setup skill，待另有授权），P4/P5/P8 通过，iteration-scope.md 登记准确性人工审查通过，详见系统临时目录 `lazypack-discipline-freshness-check-2026-10-08.md` |
 
 ## 4. 本次补齐的范围
+
+### 2026-11-10 #118 为 docs/reviews 建讨论留档索引
+
+- 检查范围：P4（本轮改了登记册）；另跑了其余全部编号确认未受影响。人工核对：索引 21 个链接全部可解析且目标不是占位桩；六个讨论目录全部有行；每行的版本取自目录内的裁决或计票文件，其中三行 DECISIONS.md 版本历史未列，一行两处矛盾写「待核对」；`docs/reviews/` 下已有文件未移动、未删除、未改写。
+- 依据版本：开工 `9758632`，收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
+- 处理结果：新增 `docs/reviews/README.md`，登记册第 3 节新增一行指向它。按 #116 裁定不归档：固定层 §9.5 要求原文留在 `docs/reviews/`。PR #123 评审后补修：首段改为陈述 §9.5 的要求并写明索引不保证留档完整；日期列注明取自目录名；「提示词瘦、工具肥」的版本和两行查不到的关联 issue 不再给确定值；版本历史未列的三行在格里注明，表下补记一个登记册仍登记着、但工作区与 Git 树里都已不存在的 harvest 讨论目录。
+- 检查结果（`node scripts/check_doc_pairs.mjs`，9/9 PASS，退出码 0，各行均无 `declaration=`）：P4 未发现差异（links=132 failures=0）；P1、P2、P3、P5、P8、P9、P10、P11 未发现差异。
+- 未覆盖范围：索引的链接没有机器检查（P4 只覆盖登记册）；今后新增讨论目录时要人工加行。
+- 未决事项：「提示词瘦、工具肥」的状态表述不一致，待维护者核对。DECISIONS.md 版本历史记 0.5.0（§6.6）已通过并裁定，该目录 README 末节记已收束，但 README 文首状态行仍是第一轮，本册该目录行仍写「讨论未收束」且称各席位产物为占位桩。本轮没有改动其中任何一处。「Commit 脚注词表语义」的目录名和 DECISIONS.md 版本历史 0.6.0 条都写 2026-01-07，该目录的提交都在 2026-10-07，同样待维护者核对。
 
 ### 2026-11-10 #108 后续补修：包检查增加 eol 项并堵住源路径写法缺口
 
