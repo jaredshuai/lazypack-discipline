@@ -109,6 +109,7 @@
 | [../scripts/fixtures/sample-ts/](../scripts/fixtures/sample-ts/) | 本仓执行辅助 | current | 夜跑闭环的 TypeScript/Stryker 端到端夹具：故意欠测试的微型项目，价值在存活变异体。依赖与运行产物不入库 |
 | [../scripts/fixtures/sample-py/](../scripts/fixtures/sample-py/) | 本仓执行辅助 | current | 夜跑闭环的 Python/mutmut 2.x 端到端夹具：故意欠测试的微型项目，价值在存活变异体。venv 与运行产物不入库 |
 | [../scripts/fixtures/clean-room/](../scripts/fixtures/clean-room/) | 本仓执行辅助 | current | 净室安装测试的夹具：全新 TypeScript、全新 Python 各一份目标仓和预置回答文件 answers.json。不含依赖，不是存量仓样本 |
+| [../scripts/fixtures/setup-pipeline/](../scripts/fixtures/setup-pipeline/) | 本仓执行辅助 | current | 管线入口测试（#114）的夹具：已有聚合脚本的 TypeScript 仓、判断文件和预置回答。不含依赖 |
 | [../.vscode/tasks.json](../.vscode/tasks.json) | 本仓执行辅助 | current | 夜跑闭环的 VS Code 手动触发任务模板。VS Code 原生不支持定时任务，只能手动触发；依据见同表的定时任务调研报告 |
 | [research/vscode-scheduled-tasks.md](research/vscode-scheduled-tasks.md) | 给 agent 的按需说明 | current | VS Code 定时任务调研报告（2026-10-06 快照）：原生没有时间触发器。官方文档与扩展状态会过时，复用前重新核对 |
 | [research/recipe-interaction-patterns.md](research/recipe-interaction-patterns.md) | 给 agent 的按需说明 | current | setup 配方交互模式对照研究笔记，横向比对两个随包 preset（v0.1.0 快照）。随附研究材料，正文未声明交付票 |

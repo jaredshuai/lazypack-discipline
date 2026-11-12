@@ -70,7 +70,7 @@ description: >-
        · 优先级 5（传统纯 JS/无 tsconfig）：受限分支，保留已有命令，缺失项给手动指引；
        · 优先级 6（显式选择 TS 的新仓分支）：**恢复明确选择 TS 的新仓分支**；当目标目录为空目录或未初始化工程，且用户显式指定/选择了 TypeScript 时，**绝对不因无清单而直接退出，亦不自行猜测语言**；直接提供标准 TS 最小化工程模板初始化（ESM `"type": "module"`、最小 package/scripts、双 tsconfig、CLI `parseArgs`、bin/files、可选 MCP、单包 `pnpm-workspace.yaml: verifyDepsBeforeRun: error` 契约）。
    - **解耦声明**：缺对应清单或缺对应包管理器仅限制特定语言配方补缺，**绝对不关闭、不改写仓库已有的其他有效门禁**，亦不阻断通用纪律装配。
-4. **既有质量门禁命令**：按 [setup-pipeline.md](references/setup-pipeline.md) 运行 `scripts/setup_helper.mjs scan`，第 3 步回答后运行 `plan` 分槽；聚合脚本的覆盖按 [verification.md §3.3](references/verification.md#33-门禁命令规范执行边界与缓存授权) 判断，写入 `judgments`。工具没查到的既有命令仍由你只读查找。向用户说明：已有命令原样保留、不拆；`plan` 因事实变化停下时指出哪条变了。
+4. **既有质量门禁命令**：按 [setup-pipeline.md](references/setup-pipeline.md)，带 `--cwd <目标仓>` 运行 `scripts/setup_helper.mjs scan`；第 3 步后运行 `plan` 分槽，同槽冲突即停，补判断。聚合脚本覆盖按 [verification.md §3.3](references/verification.md#33-门禁命令规范执行边界与缓存授权) 判断，写入 `judgments`。工具没查到的由你只读查找。向用户说明：命令原样保留、不拆；事实变了指出哪条。
 5. **既有变异测试配置**：检查是否存在变异测试工具配置：
    - TypeScript 项目：检查 `stryker.conf.js`、`stryker.conf.mjs`、`.stryker.conf.json`；
    - Python 项目：检查 `pyproject.toml` 中的 `[tool.mutmut]` 段、`setup.cfg` 中的 `[mutmut]` 段。

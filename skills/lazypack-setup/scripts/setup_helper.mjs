@@ -8,17 +8,19 @@
  * 命令列表（本票只实现前两个）:
  *   scan --cwd <repoRoot> [--out <facts.json>]
  *       只读探测第 2 步第 4 项：既有质量门禁命令。输出事实文件
- *       (schema lazypack-facts/1, covers [4])，facts 里只有 kind=existing-command。
+ *       (schema lazypack-facts/1, covers [4])，facts 里只有 kind=existing-command；
+ *       根 package.json 的每个 scripts 条目都是一条事实。
  *   plan --cwd <repoRoot> --facts <facts.json> --answers <answers.json> [--out <plan.json>]
  *       重扫目标仓并与事实文件的 machineFp 比对，一致才出计划
  *       (schema lazypack-plan/1)；本票只出 slots，不出 actions。
  *   render、execute、verify：尚未迁入。
  *
- * 退出码: 0 成功 | 1 输入或内容错误 | 2 用法错误 | 3 输出路径不安全 | 4 事实已变化（零输出）
+ * 退出码: 0 成功 | 1 输入或内容错误（含事实文件自身被改坏、同槽冲突） | 2 用法错误（含缺 --cwd）
+ *         | 3 输出路径不安全 | 4 目标仓自 scan 后变了（零输出）
  *
  * 要点：
- *   - invocation 是项目现在怎么调用它的完整字符串，逐字记录；definition 只作证据，
- *     任何阶段都不拿它拆子命令。
+ *   - invocation 由包管理器与脚本名合成（依据 packageManager 字段或锁文件，默认 npm），
+ *     不是逐字摘录；逐字记录的是 definition，它只作证据，任何阶段都不拿它拆子命令。
  *   - 探测只读，不运行包管理器、构建工具或项目测试。
  *   - 事实、回答、计划文件必须写在目标仓之外。
  */
@@ -35,7 +37,7 @@ export const ANSWERS_SCHEMA = 'lazypack-answers/1';
 export const PLAN_SCHEMA = 'lazypack-plan/1';
 /** 槽的固定顺序与 verification.md §3.3 的执行顺序一致。 */
 export const SLOTS = Object.freeze(['format', 'lint', 'type', 'test']);
-/** 脚本名到槽的对应：只认这几个名字；其余脚本是否覆盖某个槽，由 AI 读脚本后写 coverage 判断。 */
+/** 脚本名到槽的对应：只认这几个名字；其余脚本默认不认领任何槽，要覆盖某个槽须由 AI 读脚本后写 coverage 判断。 */
 const NAME_TO_SLOT = Object.freeze({
   format: 'format',
   lint: 'lint',
@@ -96,7 +98,7 @@ function realRepoRoot(cwd) {
 
 function isInside(parent, child) {
   const rel = path.relative(parent, child);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
 }
 
 /** 输出文件必须在目标仓之外；父目录取真实路径再比较（macOS 的临时目录经过符号链接）。 */
@@ -167,8 +169,9 @@ export function scanExistingCommands(cwd) {
   let stat;
   try {
     stat = fs.lstatSync(manifestPath);
-  } catch {
-    return [];
+  } catch (err) {
+    if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') return [];
+    throw new CliError(EXIT.ERROR, `读取 package.json 的状态失败（${err?.code ?? err?.message}），不继续：${manifestPath}`);
   }
   if (!stat.isFile()) throw new CliError(EXIT.ERROR, 'package.json 不是普通文件（符号链接或目录），不读取');
   const manifest = readJsonFile(manifestPath, 'package.json');
@@ -177,7 +180,6 @@ export function scanExistingCommands(cwd) {
   const packageManager = detectPackageManager(repoRoot, manifest);
   const facts = [];
   for (const name of Object.keys(manifest.scripts)) {
-    if (!Object.hasOwn(NAME_TO_SLOT, name)) continue;
     const definition = manifest.scripts[name];
     if (typeof definition !== 'string' || definition.trim() === '') continue;
     const locator = `scripts.${name}`;
@@ -261,16 +263,17 @@ function validateJudgments(judgments, factIds) {
     if (judgment.about !== null && typeof judgment.about !== 'string') {
       throw new CliError(EXIT.ERROR, `${where}：about 必须是事实 id 或 null`);
     }
-    if (judgment.kind === 'coverage' || judgment.kind === 'dissent') {
-      if (judgment.about === null || !factIds.has(judgment.about)) {
-        throw new CliError(EXIT.ERROR, `${where}：about 必须指向一条现有事实的 id，收到 ${JSON.stringify(judgment.about)}`);
-      }
+    if (judgment.about !== null && !factIds.has(judgment.about)) {
+      throw new CliError(EXIT.ERROR, `${where}：about 必须指向一条现有事实的 id，收到 ${JSON.stringify(judgment.about)}`);
+    }
+    if (judgment.kind === 'coverage' && judgment.about === null) {
+      throw new CliError(EXIT.ERROR, `${where}：coverage 的 about 必须指向一条现有事实的 id，不能是 null`);
     }
     if (judgment.kind === 'coverage') {
       const { slots, compliant } = judgment.value;
-      const slotsOk = Array.isArray(slots) && slots.length > 0 && new Set(slots).size === slots.length &&
+      const slotsOk = Array.isArray(slots) && new Set(slots).size === slots.length &&
         slots.every((slot) => SLOTS.includes(slot));
-      if (!slotsOk) throw new CliError(EXIT.ERROR, `${where}：coverage.slots 必须是 ${SLOTS.join('、')} 的非空不重复子集`);
+      if (!slotsOk) throw new CliError(EXIT.ERROR, `${where}：coverage.slots 必须是 ${SLOTS.join('、')} 的不重复子集（可以是空数组，表示这条命令不认领任何槽）`);
       if (typeof compliant !== 'boolean') throw new CliError(EXIT.ERROR, `${where}：coverage.compliant 必须是布尔值`);
     }
   }
@@ -287,16 +290,21 @@ function validateAnswers(answers) {
   if (answers.rulings !== undefined && !Array.isArray(answers.rulings)) {
     throw new CliError(EXIT.ERROR, '回答文件的 rulings 必须是数组');
   }
+  (answers.rulings ?? []).forEach((ruling, index) => {
+    if (!isPlainObject(ruling) || typeof ruling.judgment !== 'string' || typeof ruling.adopt !== 'boolean') {
+      throw new CliError(EXIT.ERROR, `回答文件的 rulings[${index}] 必须是对象，含字符串 judgment 与布尔 adopt`);
+    }
+  });
 }
 
 const scriptNameOf = (fact) => fact.value.definedAt.locator.replace(/^scripts\./, '');
 
 /**
  * 槽位分配。不读 definition 的内容，更不拆它：
- *   - 有 coverage 判断的事实：以判断为准。compliant 为 true，则判断里的每个槽都分给这条事实；
- *     为 false，则这条事实不分配任何槽（Hook PAUSE，不盲目拆解）。
- *   - 没有判断的事实：只按脚本名对应到同名的一个槽。
- *   - 同一个槽，有判断的认领优先于按名字的认领；同一层里被两条事实认领则停下，由 AI 补判断。
+ *   - 有 coverage 判断的事实：判断的 slots 就是它认领的全部槽（取代按名字认领），可以是空数组；
+ *     compliant 为 false 则不认领任何槽（Hook PAUSE，不盲目拆解）。每条事实最多一条 coverage 判断。
+ *   - 没有判断的事实：按脚本名认领同名的一个槽；名字不在表里则不认领。
+ *   - 同一个槽被两条及以上不同事实认领（不论来自判断还是名字）：停下，由 AI 补判断，不择一。
  */
 export function assignSlots(facts, judgments) {
   const coverageByFact = new Map();
@@ -308,35 +316,44 @@ export function assignSlots(facts, judgments) {
     coverageByFact.set(judgment.about, judgment);
   }
 
-  const claims = new Map(SLOTS.map((slot) => [slot, { judgment: [], name: [] }]));
+  const claims = new Map(SLOTS.map((slot) => [slot, []]));
   const paused = new Map();
+  const unassignedReason = new Map();
   for (const fact of facts) {
     const judgment = coverageByFact.get(fact.id);
     if (judgment) {
       if (!judgment.value.compliant) {
         paused.set(fact.id, judgment);
-        continue;
+        unassignedReason.set(fact.id, 'hook-pause');
+      } else if (judgment.value.slots.length === 0) {
+        unassignedReason.set(fact.id, `judged-no-slot:${judgment.id}`);
+      } else {
+        for (const slot of judgment.value.slots) claims.get(slot).push({ fact, via: `判断 ${judgment.id}` });
       }
-      for (const slot of judgment.value.slots) claims.get(slot).judgment.push(fact);
     } else {
       const slot = NAME_TO_SLOT[scriptNameOf(fact)];
-      if (slot) claims.get(slot).name.push(fact);
+      if (slot) claims.get(slot).push({ fact, via: '按名字' });
+      else unassignedReason.set(fact.id, 'no-slot-name');
     }
+  }
+
+  const conflicts = SLOTS.filter((slot) => claims.get(slot).length > 1);
+  if (conflicts.length > 0) {
+    const lines = conflicts.map(
+      (slot) => `槽 ${slot} 被多条既有命令认领：\n${claims.get(slot).map(({ fact, via }) => `    - ${fact.id}（来源：${via}）`).join('\n')}`
+    );
+    throw new CliError(
+      EXIT.ERROR,
+      `${lines.join('\n')}\n补救：改其中某条判断的 slots，去掉这个槽；或为某条按名字认领的事实写一条 coverage 判断（slots 不含这个槽，可以为空数组）。`
+    );
   }
 
   const slots = [];
   const used = new Set();
   for (const slot of SLOTS) {
-    const { judgment: byJudgment, name: byName } = claims.get(slot);
-    const tier = byJudgment.length > 0 ? byJudgment : byName;
-    if (tier.length > 1) {
-      throw new CliError(
-        EXIT.ERROR,
-        `槽 ${slot} 被多条既有命令认领：${tier.map((fact) => fact.id).join('、')}。请对其中应占该槽的命令补一条 coverage 判断`
-      );
-    }
-    if (tier.length === 1) {
-      const fact = tier[0];
+    const [claim] = claims.get(slot);
+    if (claim) {
+      const { fact } = claim;
       used.add(fact.id);
       slots.push({
         slot,
@@ -367,10 +384,7 @@ export function assignSlots(facts, judgments) {
 
   const unassigned = facts
     .filter((fact) => !used.has(fact.id))
-    .map((fact) => ({
-      from: fact.id,
-      reason: paused.has(fact.id) ? 'hook-pause' : 'not-selected'
-    }));
+    .map((fact) => ({ from: fact.id, reason: unassignedReason.get(fact.id) }));
   return { slots, unassigned };
 }
 
@@ -383,7 +397,7 @@ export function buildPlan({ cwd, factsFile, answersFile }) {
   const currentFacts = scanExistingCommands(repoRoot);
   const currentFp = digest(currentFacts);
   if (digest(factsFile.facts) !== factsFile.machineFp) {
-    throw new CliError(EXIT.STALE, '事实文件的 facts 段与它自带的 machineFp 不一致，文件被改动过。请重新运行 scan');
+    throw new CliError(EXIT.ERROR, '事实文件的 facts 段与它自带的 machineFp 不一致，文件被改动过。请重新运行 scan');
   }
   if (currentFp !== factsFile.machineFp) {
     const changes = describeFactChanges(factsFile.facts, currentFacts);
@@ -423,7 +437,7 @@ export function buildPlan({ cwd, factsFile, answersFile }) {
 // ---------------------------------------------------------------------------
 
 const OPTIONS = {
-  cwd: { type: 'string', default: process.cwd() },
+  cwd: { type: 'string' },
   facts: { type: 'string' },
   answers: { type: 'string' },
   out: { type: 'string' },
@@ -443,15 +457,15 @@ Commands:
 事实、回答、计划文件必须在目标仓之外。格式见 references/setup-pipeline.md。
 `;
 
-function emit(value, out, summary, repoRoot) {
+/** target 是 assertSafeOutput 返回的规范路径；没有 --out 时为 null，打印到标准输出。 */
+function emit(value, target, summary) {
   const json = `${JSON.stringify(value, null, 2)}\n`;
-  if (!out) {
+  if (!target) {
     process.stdout.write(json);
     return;
   }
-  const target = assertSafeOutput(repoRoot, out);
   fs.writeFileSync(target, json, 'utf8');
-  console.log(`${summary}\n输出已写入 ${out}`);
+  console.log(`${summary}\n输出已写入 ${target}`);
 }
 
 export function main(argv) {
@@ -463,16 +477,20 @@ export function main(argv) {
   }
   const { values, positionals } = parsed;
   const command = positionals[0];
-  if (!command || values.help) {
+  if (values.help) {
     console.log(USAGE);
     return EXIT.OK;
+  }
+  if (!command) throw new CliError(EXIT.USAGE, `缺少子命令\n${USAGE}`);
+  if ((command === 'scan' || command === 'plan') && !values.cwd) {
+    throw new CliError(EXIT.USAGE, `缺少 --cwd <目标仓>（必填，不再默认当前目录）\n${USAGE}`);
   }
 
   if (command === 'scan') {
     const repoRoot = realRepoRoot(values.cwd);
-    if (values.out) assertSafeOutput(repoRoot, values.out);
+    const target = values.out ? assertSafeOutput(repoRoot, values.out) : null;
     const factsFile = buildFactsFile(repoRoot);
-    emit(factsFile, values.out, `扫描完成：${factsFile.facts.length} 条既有命令，machineFp ${factsFile.machineFp}`, repoRoot);
+    emit(factsFile, target, `扫描完成：${factsFile.facts.length} 条既有命令，machineFp ${factsFile.machineFp}`);
     return EXIT.OK;
   }
 
@@ -480,13 +498,13 @@ export function main(argv) {
     if (!values.facts) throw new CliError(EXIT.USAGE, '缺少 --facts <facts.json>');
     if (!values.answers) throw new CliError(EXIT.USAGE, '缺少 --answers <answers.json>');
     const repoRoot = realRepoRoot(values.cwd);
-    if (values.out) assertSafeOutput(repoRoot, values.out);
+    const target = values.out ? assertSafeOutput(repoRoot, values.out) : null;
     const plan = buildPlan({
       cwd: repoRoot,
       factsFile: readJsonFile(path.resolve(values.facts), '事实文件'),
       answersFile: readJsonFile(path.resolve(values.answers), '回答文件')
     });
-    emit(plan, values.out, `计划已生成：planFp ${plan.planFp}，回答来源 ${plan.answersOrigin}`, repoRoot);
+    emit(plan, target, `计划已生成：planFp ${plan.planFp}，回答来源 ${plan.answersOrigin}`);
     return EXIT.OK;
   }
 

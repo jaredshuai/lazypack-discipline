@@ -5,7 +5,7 @@
  * 针对 #86：既有聚合命令（`npm test` = 先查版本、再 tsc、再 node --test）曾被拆进
  * type 和 test 两个槽。本测试用「已有聚合脚本的 TypeScript 仓」夹具复现那个输入，
  * 并用性质断言守住两件事：
- *   1. 事实文件里每条既有命令的完整调用，在计划的槽命令里逐字出现；
+ *   1. 计划里每个槽的 command 与对应事实的 invocation 相同（definition 才是逐字摘录）；
  *   2. 聚合脚本没有被展开成子命令。
  * 反向用例：人为把聚合命令拆开，断言必须失败，证明断言本身有效。
  *
@@ -114,7 +114,7 @@ function independentDigest(value) {
 }
 
 // ---------------------------------------------------------------------------
-// 性质断言：既有命令逐字保留、聚合脚本不被展开
+// 性质断言：计划的 command 与事实的 invocation 相同、聚合脚本不被展开
 // ---------------------------------------------------------------------------
 
 /** 把定义按 shell 的串联符号切成片段。只用来判断「槽命令是不是定义的内部片段」，从不用来产出命令。 */
@@ -127,11 +127,11 @@ function assertGateCommandsKeptVerbatim(factsFile, plan) {
   const referenced = new Set(plan.slots.filter((s) => s.origin === 'existing').map((s) => s.from));
   const unassigned = new Set((plan.unassigned || []).map((u) => u.from));
 
-  // 1. 每条既有命令：要么在某个槽里，要么被计划明确列为未分配。
+  // 1. 每条事实：要么在某个槽里，要么被计划明确列为未分配。
   for (const fact of facts.values()) {
     assert.ok(
       referenced.has(fact.id) || unassigned.has(fact.id),
-      `事实 ${fact.id} 的完整调用「${fact.value.invocation}」既不在任何槽里，也没有被计划列为未分配`
+      `事实 ${fact.id} 的 invocation「${fact.value.invocation}」既不在任何槽里，也没有被计划列为未分配`
     );
   }
 
@@ -139,11 +139,11 @@ function assertGateCommandsKeptVerbatim(factsFile, plan) {
     if (slot.origin === 'existing') {
       const fact = facts.get(slot.from);
       assert.ok(fact, `槽 ${slot.slot} 引用了不存在的事实 ${slot.from}`);
-      // 2. 逐字相同：不去空白、不改写、不换入口。
+      // 2. command 与 invocation 相同：不去空白、不改写、不换入口。
       assert.strictEqual(
         slot.command,
         fact.value.invocation,
-        `槽 ${slot.slot} 的命令「${slot.command}」与事实 ${fact.id} 的完整调用「${fact.value.invocation}」不逐字相同`
+        `槽 ${slot.slot} 的命令「${slot.command}」与事实 ${fact.id} 的 invocation「${fact.value.invocation}」不相同`
       );
       assert.strictEqual(slot.cwd, fact.value.cwd, `槽 ${slot.slot} 的工作目录与事实 ${fact.id} 不同`);
     }
@@ -175,7 +175,7 @@ const slotOf = (plan, name) => plan.slots.find((slot) => slot.slot === name);
 // 测试
 // ---------------------------------------------------------------------------
 
-test('scan：事实文件的形状、逐字记录与摘要', (t) => {
+test('scan：事实文件的形状、definition 逐字记录与摘要', (t) => {
   const workspace = makeWorkspace(t);
   const { facts } = scan(workspace, { withJudgments: false });
 
@@ -185,7 +185,13 @@ test('scan：事实文件的形状、逐字记录与摘要', (t) => {
   assert.deepEqual(facts.judgments, []);
   assert.deepEqual(
     facts.facts.map((f) => f.id),
-    ['cmd:package.json#scripts.format', 'cmd:package.json#scripts.lint', 'cmd:package.json#scripts.test']
+    [
+      'cmd:package.json#scripts.check',
+      'cmd:package.json#scripts.check:versions',
+      'cmd:package.json#scripts.format',
+      'cmd:package.json#scripts.lint',
+      'cmd:package.json#scripts.test'
+    ]
   );
   for (const fact of facts.facts) {
     assert.equal(fact.item, 4);
@@ -241,7 +247,10 @@ test('#86：聚合脚本整条保留，type 与 test 槽都是完整的 npm test
     assert.equal(slot.outcomes.wired.provenance, 'wired:existing:pre-existing');
   }
   assert.deepEqual(result.aiItems, ['j1']);
-  assert.deepEqual(result.unassigned, []);
+  assert.deepEqual(result.unassigned, [
+    { from: 'cmd:package.json#scripts.check', reason: 'no-slot-name' },
+    { from: 'cmd:package.json#scripts.check:versions', reason: 'no-slot-name' }
+  ]);
 
   assertGateCommandsKeptVerbatim(facts, result);
 });
@@ -259,7 +268,7 @@ test('反向用例：人为把聚合命令拆进 type 和 test 两槽，断言�
   assert.throws(
     () => assertGateCommandsKeptVerbatim(facts, split),
     (err) => {
-      assert.match(err.message, /不逐字相同/);
+      assert.match(err.message, /的 invocation.*不相同/);
       assert.match(err.message, /npm run check/);
       return true;
     }
@@ -279,7 +288,7 @@ test('反向用例：人为把聚合命令拆进 type 和 test 两槽，断言�
   assert.throws(() => assertGateCommandsKeptVerbatim(facts, dropped), /既不在任何槽里/);
 });
 
-test('性质：多种仓形状下，每条既有命令逐字保留（包管理器与改动后的脚本）', (t) => {
+test('性质：多种仓形状下，每个槽的命令与事实的 invocation 相同（包管理器与改动后的脚本）', (t) => {
   for (const [lockfile, prefix, testCommand] of [
     ['pnpm-lock.yaml', 'pnpm', 'pnpm test'],
     ['yarn.lock', 'yarn', 'yarn test'],
@@ -307,7 +316,7 @@ test('性质：多种仓形状下，每条既有命令逐字保留（包管理�
   assert.equal(slotOf(result, 'test').command, 'npm test');
 });
 
-test('没有 coverage 判断时只按脚本名分配，type 槽没有命令，聚合命令仍不展开', (t) => {
+test('没有 coverage 判断时只按脚本名分配，type 槽没有命令，聚合命令仍不展开；其他名字的脚本不认领槽', (t) => {
   const workspace = makeWorkspace(t);
   const { file, facts } = scan(workspace, { withJudgments: false });
   const { plan: result } = plan(workspace, file);
@@ -317,6 +326,13 @@ test('没有 coverage 判断时只按脚本名分配，type 槽没有命令，�
   assert.equal(type.command, null);
   assert.equal(type.reason, 'no-existing-command');
   assert.deepEqual(result.aiItems, []);
+  assert.deepEqual(
+    result.unassigned.map((u) => [u.from, u.reason]),
+    [
+      ['cmd:package.json#scripts.check', 'no-slot-name'],
+      ['cmd:package.json#scripts.check:versions', 'no-slot-name']
+    ]
+  );
   assertGateCommandsKeptVerbatim(facts, result);
 });
 
@@ -328,20 +344,82 @@ test('coverage.compliant 为 false：不分配任何槽，列入 unassigned 并�
   assert.equal(slotOf(result, 'test').origin, 'none');
   assert.equal(slotOf(result, 'test').reason, `hook-pause:${TEST_FACT_ID}`);
   assert.equal(slotOf(result, 'type').reason, `hook-pause:${TEST_FACT_ID}`);
-  assert.deepEqual(result.unassigned, [{ from: TEST_FACT_ID, reason: 'hook-pause' }]);
+  assert.ok(result.unassigned.some((u) => u.from === TEST_FACT_ID && u.reason === 'hook-pause'));
   assertGateCommandsKeptVerbatim(facts, result);
 });
 
-test('同一个槽被两条既有命令认领：停下，不猜', (t) => {
+test('typecheck 与 type-check 并存：停下并列出两个认领者；给其中一条写 slots 为空的判断后通过', (t) => {
   const workspace = makeWorkspace(t);
   editPackageJson(workspace, (manifest) => {
-    manifest.scripts.type = 'tsc --noEmit';
     manifest.scripts.typecheck = 'tsc -p . --noEmit';
+    manifest.scripts['type-check'] = 'tsc --noEmit';
     return manifest;
   });
   const { file } = scan(workspace, { withJudgments: false });
   const { result } = plan(workspace, file, { expect: EXIT.ERROR });
   assert.match(result.stderr, /槽 type 被多条既有命令认领/);
+  assert.match(result.stderr, /scripts\.typecheck（来源：按名字）/);
+  assert.match(result.stderr, /scripts\.type-check（来源：按名字）/);
+  assert.match(result.stderr, /补救/);
+
+  workspace.judgments = [
+    {
+      id: 'j-tc',
+      about: 'cmd:package.json#scripts.type-check',
+      kind: 'coverage',
+      value: { slots: [], compliant: true },
+      source: 'ai',
+      basis: '读 scripts.type-check：与 typecheck 重复，不占槽。口径：references/verification.md §3.3'
+    }
+  ];
+  const fixed = scan(workspace);
+  const { plan: result2 } = plan(workspace, fixed.file);
+  assert.equal(slotOf(result2, 'type').from, 'cmd:package.json#scripts.typecheck');
+  assert.ok(result2.unassigned.some((u) => u.from === 'cmd:package.json#scripts.type-check' && u.reason === 'judged-no-slot:j-tc'));
+});
+
+test('判断与按名字同占一个槽：停下，不再静默挤掉；去掉冲突的槽后成功', (t) => {
+  const workspace = makeWorkspace(t);
+  editPackageJson(workspace, (manifest) => {
+    manifest.scripts.type = 'tsc --noEmit && node scripts/check-public-api.mjs';
+    return manifest;
+  });
+  const first = scan(workspace); // j1 覆盖 type 与 test，scripts.type 按名字占 type
+  const { result } = plan(workspace, first.file, { expect: EXIT.ERROR });
+  assert.match(result.stderr, /槽 type 被多条既有命令认领/);
+  assert.match(result.stderr, /scripts\.test（来源：判断 j1）/);
+  assert.match(result.stderr, /scripts\.type（来源：按名字）/);
+  assert.match(result.stderr, /改其中某条判断的 slots/);
+  assert.match(result.stderr, /coverage 判断/);
+
+  workspace.judgments = structuredClone(workspace.judgments);
+  workspace.judgments[0].value.slots = ['test'];
+  const second = scan(workspace);
+  const { plan: result2 } = plan(workspace, second.file);
+  assert.equal(slotOf(result2, 'type').from, 'cmd:package.json#scripts.type');
+  assert.equal(slotOf(result2, 'type').command, 'npm run type');
+  assert.equal(slotOf(result2, 'test').from, TEST_FACT_ID);
+  assert.equal(slotOf(result2, 'test').command, 'npm test');
+});
+
+test('每条事实最多一条 coverage 判断', (t) => {
+  const workspace = makeWorkspace(t);
+  workspace.judgments = [workspace.judgments[0], { ...structuredClone(workspace.judgments[0]), id: 'j2' }];
+  const { file } = scan(workspace);
+  const { result } = plan(workspace, file, { expect: EXIT.ERROR });
+  assert.match(result.stderr, /多条 coverage 判断/);
+});
+
+test('事实覆盖根 package.json 的全部脚本：只改 scripts.check，plan 退出 4 并指出它', (t) => {
+  const workspace = makeWorkspace(t);
+  const { file } = scan(workspace);
+  editPackageJson(workspace, (manifest) => {
+    manifest.scripts.check = 'tsc --noEmit --strict';
+    return manifest;
+  });
+  const { result, plan: produced } = plan(workspace, file, { expect: EXIT.STALE });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /变化：cmd:package\.json#scripts\.check\b/);
 });
 
 test('plan 重扫：目标仓的既有命令变了就停下，零输出，并指出哪条变了', (t) => {
@@ -353,17 +431,18 @@ test('plan 重扫：目标仓的既有命令变了就停下，零输出，并指
   });
   const { result, plan: produced } = plan(workspace, file, { expect: EXIT.STALE });
   assert.equal(produced, null, '不一致时不得留下计划文件');
+  assert.equal(result.stdout, '', '不一致时标准输出必须为空');
   assert.match(result.stderr, /变化：cmd:package\.json#scripts\.test/);
 });
 
-test('plan 不信任事实文件自称的内容：facts 被改动即停下', (t) => {
+test('plan 不信任事实文件自称的内容：facts 被改坏退出 1，伪造成自洽但与仓对不上退出 4', (t) => {
   const workspace = makeWorkspace(t);
   const { file, facts } = scan(workspace);
   // 只改 facts 里的调用字符串，不动 machineFp
   const forged = structuredClone(facts);
   forged.facts.find((f) => f.id === TEST_FACT_ID).value.invocation = 'npm run check';
   fs.writeFileSync(file, JSON.stringify(forged), 'utf8');
-  const { result } = plan(workspace, file, { expect: EXIT.STALE });
+  const { result } = plan(workspace, file, { expect: EXIT.ERROR });
   assert.match(result.stderr, /machineFp 不一致/);
 
   // 连 machineFp 一起伪造成自洽：仍与重扫结果对不上
@@ -378,7 +457,8 @@ test('判断的校验：指向不存在的事实、槽名非法、来源不是 a
     ['about 不存在', (j) => { j.about = 'cmd:package.json#scripts.nope'; }, /about 必须指向一条现有事实/],
     ['槽名非法', (j) => { j.value.slots = ['type', 'build']; }, /coverage\.slots/],
     ['来源是 machine', (j) => { j.source = 'machine'; }, /source 必须是 ai/],
-    ['缺 compliant', (j) => { delete j.value.compliant; }, /compliant 必须是布尔值/]
+    ['缺 compliant', (j) => { delete j.value.compliant; }, /compliant 必须是布尔值/],
+    ['coverage 的 about 是 null', (j) => { j.about = null; }, /coverage 的 about 必须指向一条现有事实/]
   ]) {
     const workspace = makeWorkspace(t);
     workspace.judgments = structuredClone(workspace.judgments);
@@ -387,6 +467,40 @@ test('判断的校验：指向不存在的事实、槽名非法、来源不是 a
     const { result } = plan(workspace, file, { expect: EXIT.ERROR });
     assert.match(result.stderr, pattern, label);
   }
+});
+
+test('judgments：非 null 的 about 必须命中现有事实（含 repo-visibility）；dissent 允许 about 为 null', (t) => {
+  const make = (extra) => ({ source: 'ai', basis: '读 README', value: {}, ...extra });
+  for (const kind of ['repo-visibility', 'dissent']) {
+    const workspace = makeWorkspace(t);
+    workspace.judgments = [make({ id: 'x1', kind, about: 'cmd:package.json#scripts.nope' })];
+    const { file } = scan(workspace);
+    const { result } = plan(workspace, file, { expect: EXIT.ERROR });
+    assert.match(result.stderr, /about 必须指向一条现有事实/, kind);
+  }
+  const workspace = makeWorkspace(t);
+  workspace.judgments = [
+    make({ id: 'x1', kind: 'dissent', about: null }),
+    make({ id: 'x2', kind: 'repo-visibility', about: null })
+  ];
+  const { file } = scan(workspace);
+  plan(workspace, file);
+});
+
+test('回答文件的 rulings：每项必须是含字符串 judgment 与布尔 adopt 的对象', (t) => {
+  const workspace = makeWorkspace(t);
+  const { file } = scan(workspace);
+  for (const bad of ['j1', null, { judgment: 'j1' }, { judgment: 1, adopt: true }, { judgment: 'j1', adopt: 'yes' }]) {
+    const answers = readJson(workspace.answers);
+    answers.rulings = [bad];
+    fs.writeFileSync(workspace.answers, JSON.stringify(answers), 'utf8');
+    const { result } = plan(workspace, file, { expect: EXIT.ERROR });
+    assert.match(result.stderr, /rulings\[0\]/, JSON.stringify(bad));
+  }
+  const answers = readJson(workspace.answers);
+  answers.rulings = [{ judgment: 'j1', adopt: false }];
+  fs.writeFileSync(workspace.answers, JSON.stringify(answers), 'utf8');
+  plan(workspace, file);
 });
 
 test('回答文件：origin 原样带进计划；schema 不对则拒绝；摘要随内容变化', (t) => {
@@ -438,6 +552,54 @@ test('输出文件放进目标仓里：拒绝，退出码 3，且不写任何东
   const planInside = path.join(workspace.repo, 'src', 'plan.json');
   helper(workspace, ['plan', '--cwd', workspace.repo, '--facts', file, '--answers', workspace.answers, '--out', planInside], { expect: EXIT.UNSAFE });
   assert.equal(fs.existsSync(planInside), false);
+});
+
+test('输出路径以 .. 开头的文件名（<repo>/..facts.json）仍在仓内：拒绝，退出码 3', (t) => {
+  const workspace = makeWorkspace(t);
+  const inside = path.join(workspace.repo, '..facts.json');
+  helper(workspace, ['scan', '--cwd', workspace.repo, '--out', inside], { expect: EXIT.UNSAFE });
+  assert.equal(fs.existsSync(inside), false);
+});
+
+test('--cwd 必填：scan 与 plan 不带它退出 2；裸调用退出 2；--help 退出 0', (t) => {
+  const workspace = makeWorkspace(t);
+  assert.match(helper(workspace, ['scan'], { expect: EXIT.USAGE }).stderr, /--cwd/);
+  const { file } = scan(workspace);
+  assert.match(
+    helper(workspace, ['plan', '--facts', file, '--answers', workspace.answers], { expect: EXIT.USAGE }).stderr,
+    /--cwd/
+  );
+  assert.match(helper(workspace, [], { expect: EXIT.USAGE }).stderr, /Usage/);
+  assert.match(helper(workspace, ['--help'], { expect: EXIT.OK }).stdout, /Usage/);
+});
+
+test('package.json 是符号链接：拒绝读取，退出 1', (t) => {
+  const workspace = makeWorkspace(t);
+  const real = path.join(workspace.root, 'real-package.json');
+  fs.renameSync(path.join(workspace.repo, 'package.json'), real);
+  try {
+    fs.symlinkSync(real, path.join(workspace.repo, 'package.json'));
+  } catch (err) {
+    t.skip(`无法创建符号链接：${err.code}`);
+    return;
+  }
+  const result = helper(workspace, ['scan', '--cwd', workspace.repo], { expect: EXIT.ERROR });
+  assert.match(result.stderr, /不是普通文件/);
+});
+
+test('package.json 读状态失败不是「没有命令」：非 ENOENT 的错误退出 1', (t) => {
+  if (process.platform === 'win32' || (process.getuid && process.getuid() === 0)) {
+    t.skip('需要非 root 的 POSIX 环境来制造 EACCES');
+    return;
+  }
+  const workspace = makeWorkspace(t);
+  fs.chmodSync(workspace.repo, 0o600); // 去掉进入目录的 x 权限，lstat 子项得 EACCES
+  try {
+    const result = helper(workspace, ['scan', '--cwd', workspace.repo], { expect: EXIT.ERROR });
+    assert.match(result.stderr, /EACCES/);
+  } finally {
+    fs.chmodSync(workspace.repo, 0o700);
+  }
 });
 
 test('没有 package.json 的仓：没有事实，计划里四个槽都没有命令', (t) => {
