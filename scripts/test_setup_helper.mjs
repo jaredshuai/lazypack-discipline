@@ -348,6 +348,45 @@ test('coverage.compliant 为 false：不分配任何槽，列入 unassigned 并�
   assertGateCommandsKeptVerbatim(facts, result);
 });
 
+test('compliant 为 false 时只有判断里列出的槽标 PAUSE，同名的槽不跟着标', (t) => {
+  const workspace = makeWorkspace(t);
+  workspace.judgments = [{ ...workspace.judgments[0], value: { slots: ['type'], compliant: false } }];
+  const { file } = scan(workspace);
+  const { plan: result } = plan(workspace, file);
+  assert.equal(slotOf(result, 'type').reason, `hook-pause:${TEST_FACT_ID}`);
+  assert.equal(slotOf(result, 'test').reason, 'no-existing-command');
+});
+
+test('原型上的名字（toString、constructor）不是槽：不崩溃，列为 no-slot-name', (t) => {
+  const workspace = makeWorkspace(t);
+  editPackageJson(workspace, (m) => ({ ...m, scripts: { ...m.scripts, toString: 'echo a', constructor: 'echo b' } }));
+  const { file } = scan(workspace);
+  const { plan: result } = plan(workspace, file);
+  for (const name of ['toString', 'constructor']) {
+    assert.ok(result.unassigned.some((u) => u.from === `cmd:package.json#scripts.${name}` && u.reason === 'no-slot-name'));
+  }
+});
+
+test('脚本名带 shell 字符：仍记成事实，invocation 为 null，不认领槽；判断让它认领则拒绝', (t) => {
+  const workspace = makeWorkspace(t);
+  const name = 'lint; touch pwned';
+  editPackageJson(workspace, (m) => ({ ...m, scripts: { ...m.scripts, [name]: 'eslint .' } }));
+  const id = `cmd:package.json#scripts.${name}`;
+  const { file, facts } = scan(workspace);
+  assert.equal(facts.facts.find((f) => f.id === id).value.invocation, null);
+  const { plan: result } = plan(workspace, file);
+  assert.ok(result.unassigned.some((u) => u.from === id && u.reason === 'unsafe-name'));
+  assert.ok(result.slots.every((slot) => slot.from !== id));
+
+  workspace.judgments = [
+    ...workspace.judgments,
+    { id: 'j9', kind: 'coverage', about: id, value: { slots: ['format'], compliant: true }, source: 'ai', basis: 'test' }
+  ];
+  const again = scan(workspace);
+  const { result: refused } = plan(workspace, again.file, { expect: EXIT.ERROR });
+  assert.match(refused.stderr, /不能安全拼进命令行/);
+});
+
 test('typecheck 与 type-check 并存：停下并列出两个认领者；给其中一条写 slots 为空的判断后通过', (t) => {
   const workspace = makeWorkspace(t);
   editPackageJson(workspace, (manifest) => {

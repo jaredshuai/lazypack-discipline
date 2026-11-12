@@ -46,6 +46,15 @@ const NAME_TO_SLOT = Object.freeze({
   'type-check': 'type',
   test: 'test'
 });
+
+/** 名字到槽。只认自有键：`toString`、`constructor` 这类原型上的名字不是槽。 */
+const slotForName = (name) => (Object.hasOwn(NAME_TO_SLOT, name) ? NAME_TO_SLOT[name] : undefined);
+
+/**
+ * 能安全拼进命令行的脚本名。Hook 用 shell 执行完整调用，名字里带空白、引号、`;`、`&`、`|`、`$`
+ * 等字符会被当成另一段命令。这类脚本仍记成事实（参与指纹），但 invocation 为 null，不能认领槽。
+ */
+const SAFE_SCRIPT_NAME = /^[A-Za-z0-9_][A-Za-z0-9_:.\/@+-]*$/;
 const JUDGMENT_KINDS = ['coverage', 'dissent', 'repo-visibility'];
 const ANSWER_ORIGINS = ['interactive', 'preset'];
 
@@ -159,6 +168,7 @@ function detectPackageManager(repoRoot, manifest) {
 
 /** 项目现在怎么调用这个脚本。bun 的 `bun test` 是内置测试运行器，不是脚本，所以一律写 run。 */
 function invocationFor(packageManager, scriptName) {
+  if (!SAFE_SCRIPT_NAME.test(scriptName)) return null;
   if (scriptName === 'test' && packageManager !== 'bun') return `${packageManager} test`;
   return `${packageManager} run ${scriptName}`;
 }
@@ -327,12 +337,15 @@ export function assignSlots(facts, judgments) {
         unassignedReason.set(fact.id, 'hook-pause');
       } else if (judgment.value.slots.length === 0) {
         unassignedReason.set(fact.id, `judged-no-slot:${judgment.id}`);
+      } else if (fact.value.invocation === null) {
+        throw new CliError(EXIT.ERROR, `判断 ${judgment.id} 让 ${fact.id} 认领槽，但它的脚本名不能安全拼进命令行，不能分槽`);
       } else {
         for (const slot of judgment.value.slots) claims.get(slot).push({ fact, via: `判断 ${judgment.id}` });
       }
     } else {
-      const slot = NAME_TO_SLOT[scriptNameOf(fact)];
-      if (slot) claims.get(slot).push({ fact, via: '按名字' });
+      const slot = slotForName(scriptNameOf(fact));
+      if (fact.value.invocation === null) unassignedReason.set(fact.id, 'unsafe-name');
+      else if (slot) claims.get(slot).push({ fact, via: '按名字' });
       else unassignedReason.set(fact.id, 'no-slot-name');
     }
   }
@@ -366,9 +379,8 @@ export function assignSlots(facts, judgments) {
       });
       continue;
     }
-    const pausedFor = [...paused.values()].find(
-      (judgment) => judgment.value.slots.includes(slot) || NAME_TO_SLOT[scriptNameOf(facts.find((f) => f.id === judgment.about))] === slot
-    );
+    // 判断的 slots 取代按名字的认领，所以只有判断里列出的槽才标 PAUSE。
+    const pausedFor = [...paused.values()].find((judgment) => judgment.value.slots.includes(slot));
     slots.push({
       slot,
       origin: 'none',
@@ -464,7 +476,11 @@ function emit(value, target, summary) {
     process.stdout.write(json);
     return;
   }
-  fs.writeFileSync(target, json, 'utf8');
+  try {
+    fs.writeFileSync(target, json, 'utf8');
+  } catch (err) {
+    throw new CliError(EXIT.ERROR, `写不进 ${target}：${err.code ?? err.message}`);
+  }
   console.log(`${summary}\n输出已写入 ${target}`);
 }
 

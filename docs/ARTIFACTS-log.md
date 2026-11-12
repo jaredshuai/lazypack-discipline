@@ -13,8 +13,8 @@
 
 - 检查范围：P4、P5（本轮改了登记册、`SKILL.md` 第 2 步第 4 项和资源清单、`tests.yml`、净室说明文档）；另跑了其余全部编号确认未受影响，固定层、`verification.md`、声明文件和检查器没有改。人工核对：`SKILL.md` 该项改后只剩入口与解释，口径仍在 `verification.md` §3.3；新文档与 #113 结论的字段逐项对过；登记册新增三行说明均不超过 80 个汉字。
 - 依据版本：开工 `cfef2ce`，收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
-- 处理结果：P1–P5、P8–P11 均未发现差异（9/9 PASS，退出码 0，各行均无 `declaration=`；P4 输出 register=127 log=124 failures=0，P5 输出 agents=7 readme=12 failures=0），`node scripts/run_tests.mjs --fast` 为 17 passed, 0 failed, 2 skipped。新增管线入口脚本、格式说明、夹具与测试，登记册第 3 节加三行并缩短 `tests.yml` 一行，`tests.yml` 的三系统作业加跑新测试，净室说明文档第 2 步一行补了指向，已同步清单与矩阵。 PR #127 评审后：事实改为覆盖根 `package.json` 的全部脚本；同槽冲突一律停下，不再让判断压过名字；`--cwd` 必填，事实文件自身被改坏改为退出 1；补了输出路径、读文件错误和判断与回答校验，文档同步重写。管线测试由 17 个增至 26 个，复跑后数字已按最终结果更新（P4 register=127），`--fast` 仍为 17 passed, 0 failed, 2 skipped。
-- 未覆盖范围：工具只探测根目录 `package.json` 的 `scripts`；`pyproject.toml`、`Makefile`、子目录工作区里的既有命令，以及 `render`、`execute`、验证结果文件都尚未迁入，没有可核对的实证。新测试在 Windows 与 macOS 上的结果以 PR 的 Actions 运行为准，本轮只在 Linux 上跑过。
+- 处理结果：P1–P5、P8–P11 均未发现差异（9/9 PASS，退出码 0，各行均无 `declaration=`；P4 输出 register=127 log=124 failures=0，P5 输出 agents=7 readme=12 failures=0），`node scripts/run_tests.mjs --fast` 为 17 passed, 0 failed, 2 skipped。新增管线入口脚本、格式说明、夹具与测试，登记册第 3 节加三行并缩短 `tests.yml` 一行，`tests.yml` 的三系统作业加跑新测试，净室说明文档第 2 步一行补了指向，已同步清单与矩阵。PR #127 评审后：事实改为覆盖根 `package.json` 的全部脚本；同槽冲突一律停下，不再让判断压过名字；`--cwd` 必填，事实文件自身被改坏改为退出 1；补了输出路径、读文件错误和判断与回答校验，文档同步重写。第二轮评审后：原型上的名字（如 `toString`）不再让 `plan` 崩溃；不合规判断只把它列出的槽标 PAUSE；不能安全拼进命令行的脚本名不认领槽；写文件失败改为干净报错。管线测试共 29 个用例（最初 17 个），`--fast` 的 17 passed, 0 failed, 2 skipped 是测试文件数；P4 register=127。
+- 未覆盖范围：工具只探测根目录 `package.json` 的 `scripts`；`pyproject.toml`、`Makefile`、子目录工作区里的既有命令，以及 `render`、`execute`、验证结果文件都尚未迁入，没有可核对的实证。新测试在 Windows 与 macOS 上由 PR 的 Actions 跑过并通过。
 - 未决事项：本轮自行裁定的几点可由维护者推翻：脚本名到槽的对应只认 `format`、`lint`、`type`、`typecheck`、`type-check`、`test`；同槽被两条命令认领时停下而不择一；多出 `unassigned` 与槽上的 `reason` 两个字段；管线文件的摘要取全长而 `managed-blocks.md` §3.2 给块头用前 16 位；没有既有命令的槽 `outcomes` 留空，管线外查到的既有命令只用于这类槽。票面写「夹具在 #109 的测试里通过」，实际放在独立的 `test_setup_helper.mjs`、与净室测试同一个三系统作业里跑。
 
 ### 2026-11-11 #111 单元契约与验证矩阵：五份契约、校验器和生成的矩阵

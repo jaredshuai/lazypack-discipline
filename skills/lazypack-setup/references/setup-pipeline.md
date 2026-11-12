@@ -63,14 +63,15 @@ node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answ
 
 | 字段 | 含义 |
 |---|---|
-| `invocation` | 项目现在怎么调用它，完整字符串，如 `npm run lint`、`npm test`。由包管理器与脚本名合成，依据 `packageManager` 字段或锁文件，默认 npm；不是从仓里逐字摘录的 |
+| `invocation` | 项目现在怎么调用它，完整字符串，如 `npm run lint`、`npm test`。由包管理器与脚本名合成，依据 `packageManager` 字段或锁文件，默认 npm；不是从仓里逐字摘录的。脚本名带空白、引号、`;`、`&`、`|`、`$` 等不能安全拼进命令行的字符时为 `null` |
 | `cwd` | 工作目录，相对目标仓根的 POSIX 路径，仓根写 `.` |
 | `definedAt` | 定义位置 `{path, locator}`，如 `{"path": "package.json", "locator": "scripts.lint"}` |
 | `definition` | 定义原文，逐字记录，如 `tsc --noEmit && vitest run`。**只作证据，任何阶段都不拿它拆出子命令** |
 
 ### 现在探测什么
 
-- 只读目标仓根的 `package.json` 的 `scripts`，**每个**条目都记成一条事实（`definition` 不是非空字符串的除外）。包管理器按 `packageManager` 字段、再按锁文件（`pnpm-lock.yaml`、`yarn.lock`、`bun.lock`、`bun.lockb`）判定，都没有按 npm。
+- 只读目标仓根的 `package.json` 的 `scripts`，**每个**条目都记成一条事实（`definition` 不是非空字符串的除外）。包管理器按 `packageManager` 字段、再按锁文件（`pnpm-lock.yaml`、`yarn.lock`、`bun.lock`、`bun.lockb`）判定，都没有按 npm。`packageManager` 不是 `npm`、`pnpm`、`yarn`、`bun` 之一时忽略这个字段。
+- 脚本名不能安全拼进命令行时，这条脚本仍记成事实，变了照样让 `plan` 停下，但 `invocation` 为 `null`，不认领任何槽；有 `coverage` 判断让它认领槽时 `plan` 退出 1。
 - 只有 `format`、`lint`、`type`、`typecheck`、`type-check`、`test` 这六个名字按名字认领槽。其他名字（如 `check`、`verify`）默认不认领任何槽，进 `unassigned`，`reason` 为 `no-slot-name`，除非有 `coverage` 判断认领。它们变了，`machineFp` 也变，`plan` 重扫时退出 4。
 - 调用字符串：`test` 脚本写 `<pm> test`，其余写 `<pm> run <名字>`；bun 一律写 `bun run <名字>`（`bun test` 是内置测试运行器，不是脚本）。
 - 不运行包管理器、构建工具或项目测试。
@@ -126,8 +127,8 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 | `docPlanFp` | 文档迁移计划的 `planFp`；目前恒为 `null`（尚未迁入）。文档迁移仍走 `doc_helper.mjs`，两份计划并列不合并 |
 | `covers` | 本计划覆盖的写入类别，目前是 `["gate-slots"]` |
 | `slots` | 四个门禁槽各自的决定，顺序 `format`、`lint`、`type`、`test` |
-| `unassigned` | 没有分到任何槽的既有命令：`{from, reason}`，`reason` 为 `hook-pause`（判断为不合规）、`judged-no-slot:<判断 id>`（判断的 `slots` 为空）或 `no-slot-name`（名字不认领槽且没有判断认领） |
-| `aiItems` | 依赖 AI 判断的条目：用到的 `coverage` 判断的 `id` |
+| `unassigned` | 没有分到任何槽的既有命令：`{from, reason}`，`reason` 为 `hook-pause`（判断为不合规）、`judged-no-slot:<判断 id>`（判断的 `slots` 为空）、`no-slot-name`（名字不认领槽且没有判断认领）或 `unsafe-name`（脚本名不能安全拼进命令行）。列在这里不等于缺一个门禁：被聚合命令内部调用的脚本（如夹具里的 `check`）也在这里，AI 不要为它们另补 Hook 命令 |
+| `aiItems` | 依赖 AI 判断的条目：全部 `coverage` 判断的 `id`。`slots` 为空或 `compliant` 为 `false` 的判断也决定了哪个槽没有命令，所以一并列出 |
 | `planFp` | 除 `planFp` 自身以外全部字段的摘要 |
 
 `actions`（要做的动作）、`render` 的确认清单、`execute` 与验证结果文件：尚未迁入。AI 目前把 `slots[].command` 原样用进它仍然手工组装的 Hook spec。
@@ -165,6 +166,6 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 
 - `scan` 在第 2 步第 4 项运行；随后 AI 读事实里每条聚合脚本的 `definition`，按 §3.3 写 `coverage` 判断。
 - `plan` 在第 3 步回答之后、第 4 步草案之前运行。第 4 步草案里的槽位接线命令取自 `slots[].command`，AI 不改写、不重新拆分。
-- **重跑**：目标仓已有 lazypack 装好且验证过的 Hook 时，`SKILL.md` 第 2 步第 7 项优先。已有槽的命令和出处以 Hook 记录为准，不因计划把 `preset` 改成 `existing`。两者不一致时加一条 `dissent` 说明，交用户裁。
+- **重跑**：`plan` 不读已装好的 Hook，这一步由 AI 按第 7 项核对。目标仓已有 lazypack 装好且验证过的 Hook 时，`SKILL.md` 第 2 步第 7 项优先。已有槽的命令和出处以 Hook 记录为准，不因计划把 `preset` 改成 `existing`。两者不一致时加一条 `dissent` 说明，交用户裁。
 - 向用户解释：既有命令原样保留；聚合脚本整条分给它覆盖的槽，没有拆；哪些命令是工具查到的，哪些覆盖判断是 AI 读脚本后的判断（`aiItems`）；`plan` 因事实变化停下时，说明是哪条变了。
 - 报告里的「既有命令保留事实」仍按 `verification.md` §3.3 与 §4 的口径写：只有有效调用字符串确实一致才可声称原样保留。
