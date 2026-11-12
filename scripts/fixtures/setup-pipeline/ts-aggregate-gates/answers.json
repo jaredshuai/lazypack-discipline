@@ -1,0 +1,10 @@
+{
+  "schema": "lazypack-answers/1",
+  "origin": "preset",
+  "answers": {
+    "3.A.document_homes": { "asked": false, "reason": "夹具没有存量文档，按默认 preserve-existing，不提问" },
+    "3.B.mutation_recipe": { "answer": "declined" },
+    "3.C.ui_recipe": { "answer": "declined" }
+  },
+  "rulings": []
+}

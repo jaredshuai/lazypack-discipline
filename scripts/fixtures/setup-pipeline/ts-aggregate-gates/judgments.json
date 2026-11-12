@@ -1,0 +1,10 @@
+[
+  {
+    "id": "j1",
+    "about": "cmd:package.json#scripts.test",
+    "kind": "coverage",
+    "value": { "slots": ["type", "test"], "compliant": true },
+    "source": "ai",
+    "basis": "package.json scripts.test 以 && 串起 check:versions、check 与 node --test，失败传播；check 即 tsc --noEmit，覆盖 type。口径：references/verification.md §3.3"
+  }
+]

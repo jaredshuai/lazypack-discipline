@@ -3,7 +3,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "4c65ea1a8d6b1f9ace076453b17096baff0409da70356ed901c491560d2c7c80"
+      "sha256": "9943c7e9fb587821d4baa41c552742f7c4d24b80183a5353d576e370fb7eb575"
     },
     {
       "path": "assets/mutation/config/crontab.example",
@@ -262,6 +262,10 @@
       "sha256": "3a4169441cf937168452c413a327af6c3b7b43143b9bdeaa3ba91969e9e90e6e"
     },
     {
+      "path": "references/setup-pipeline.md",
+      "sha256": "ec5ff000871c5a318f313c1a90abdc188139568bf039cc2c8cf627a82aeed0cc"
+    },
+    {
       "path": "references/unit-matrix.md",
       "sha256": "6131a825efb91260b8c58a54bd35842f2e6eed02c8abec86950587f9503296e8"
     },
@@ -296,6 +300,10 @@
     {
       "path": "scripts/package_manifest.mjs",
       "sha256": "ae4da25cfc39f53c6cc79b19e9ee1172c7b809b5fa1f71c546651707ee1571b4"
+    },
+    {
+      "path": "scripts/setup_helper.mjs",
+      "sha256": "e7a572d4c45d38816aa959661558fe32ebf6551dd4cd905fc4314c55aaa26626"
     },
     {
       "path": "scripts/unit_contracts.mjs",
