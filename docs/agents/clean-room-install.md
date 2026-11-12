@@ -69,7 +69,7 @@ node scripts/run_tests.mjs test_clean_room_install
 | 1 | 包完整性检查 | 入口 | `package_manifest.mjs check`，在拷出的 skill 目录里运行。退出码非 0 时测试停止装配 |
 | 1 | 前置双检（Issue Tracker、常驻入口） | 预置 | 规则在 `references/verification.md` §1，没有脚本。夹具按通过双检的样子准备 |
 | 1 | `--docs-only` 快速入口 | 未覆盖 | |
-| 2 | 只读探测第 1–6、8–10 项 | 预置 | 结论由夹具形状和 `assumed` 段代替。`doc_helper.mjs scan` / `plan` 有入口，测试没有调用 |
+| 2 | 只读探测第 1–6、8–10 项 | 预置 | 结论由夹具形状和 `assumed` 段代替。`doc_helper.mjs scan` / `plan` 有入口，测试没有调用。第 4 项另有 `setup_helper.mjs scan` / `plan`（#114）入口，净室测试同样没有调用，由 `scripts/test_setup_helper.mjs` 单独覆盖 |
 | 2 | 第 7 项：写前基线 | 入口 | `managed_blocks.mjs snapshot`。写前的只读 `verify` 没有运行，受管 Hook 的出处读回没有覆盖 |
 | 3.A | 留存偏好 | 预置 | 只覆盖 `ideas`、`minutes`、`decisions-only`。`raw_qa`、暂不配置、未答三条分支未覆盖 |
 | 3.A | 同主题冲突与文档归属 | 预置 | 夹具没有存量文档，不提问 |

@@ -64,7 +64,7 @@
 | [../scripts/test_check_commit_msg.mjs](../scripts/test_check_commit_msg.mjs) | 本仓执行辅助 | current | 提交说明格式检查器的测试，临时夹具加子进程运行；经 tests.yml 在 PR 与 main 上运行 |
 | [../.github/workflows/droid.yml](../.github/workflows/droid.yml) | 本仓执行辅助 | current | Factory Droid 点名审查（#78）：PR 普通评论可触发，行内评论与审查限本仓分支 PR。需仓库 secret；不是门禁，结果只作参考 |
 | [../.github/workflows/droid-review.yml](../.github/workflows/droid-review.yml) | 本仓执行辅助 | current | Factory Droid 自动审查（#78）：本仓分支的非 draft PR 打开或转为可评审时触发。需仓库 secret；不是门禁，结果只作参考 |
-| [../.github/workflows/tests.yml](../.github/workflows/tests.yml) | 本仓执行辅助 | current | 本仓测试 CI（#105）：PR、推送 main 与手动触发，跑 fast、integration 和三个操作系统上的 clean-room（#109）。只跑测试不跑检查器；未设为必需检查 |
+| [../.github/workflows/tests.yml](../.github/workflows/tests.yml) | 本仓执行辅助 | current | 本仓测试 CI（#105）：跑 fast、integration，及三系统上的净室（#109）与管线入口（#114）测试。不跑检查器，非必需检查 |
 | [../scripts/run_tests.mjs](../scripts/run_tests.mjs) | 本仓执行辅助 | current | 本仓测试单一入口（#105）：依次运行各测试文件并汇总退出码。`--fast` 跳过两个需夹具依赖的集成测试并列为 SKIP |
 | [../.github/workflows/qodercn-review.yml](../.github/workflows/qodercn-review.yml) | 本仓执行辅助 | current | Qoder CN 自动审查：直接运行国内版 CLI，禁用工具且环境内无 GitHub 令牌，仅本仓分支非 draft PR。不是门禁，结果只作参考 |
 | [../.github/workflows/multica-issue-pilot.yml](../.github/workflows/multica-issue-pilot.yml) | 本仓事件触发辅助 | current | Issue 评论 `/multica pilot` 转发到 Multica 的冒烟入口，仅维护者可触发，Runner 无仓库写权限。不是门禁 |
@@ -82,6 +82,9 @@
 | [../skills/lazypack-setup/scripts/unit_contracts.mjs](../skills/lazypack-setup/scripts/unit_contracts.mjs) | setup 执行辅助 | current | #111 单元契约校验与矩阵生成：查字段、包内引用、版本、覆盖和矩阵是否过期。不运行验证命令，不联网核对出处链接 |
 | [../skills/lazypack-setup/lazypack-core.unit.json](../skills/lazypack-setup/lazypack-core.unit.json) | setup 执行辅助 | current | #111 单元契约，共五份：本文件管通用纪律产物，另四份在 presets/、recipes/ 的卡片旁。只放可判定事实，装配口径以卡片正文为准 |
 | [../skills/lazypack-setup/references/unit-matrix.md](../skills/lazypack-setup/references/unit-matrix.md) | setup 执行辅助 | current | #111 「单元 × 操作系统」验证记录表，由契约证据生成，不手改。「未验证」表示没有可公开核对的记录；不含文档迁移引擎 |
+| [../skills/lazypack-setup/scripts/setup_helper.mjs](../skills/lazypack-setup/scripts/setup_helper.mjs) | setup 执行辅助 | current | #114 管线入口：scan 探测既有门禁命令，plan 重扫比对后逐字分槽。只迁入第 2 步第 4 项，不读 definition 拆命令 |
+| [../skills/lazypack-setup/references/setup-pipeline.md](../skills/lazypack-setup/references/setup-pipeline.md) | setup 执行辅助 | current | 管线事实、回答、计划文件格式与入口用法，随迁移步骤增补。只写已落地部分，未迁入的注明「尚未迁入」 |
+| [../scripts/test_setup_helper.mjs](../scripts/test_setup_helper.mjs) | 本仓执行辅助 | current | #114 管线入口回归：聚合脚本夹具，断言既有命令逐字入槽、不展开，含反向用例；经 tests.yml 三系统运行 |
 | [../scripts/test_doc_retention.mjs](../scripts/test_doc_retention.mjs) | 本仓执行辅助 | current | #84 留存策略的隔离回归，含 Junction 与硬链接实际夹具；经 tests.yml 在 PR 与 main 上运行。未执行真实 setup 顺序 |
 | [../scripts/test_verify_hook_install.mjs](../scripts/test_verify_hook_install.mjs) | 本仓执行辅助 | current | #85 Hook 静态验收的隔离 Git 回归，只在临时无害夹具执行，不调用真实 Hook；经 tests.yml 运行。完整 Windows 安装仍未验证 |
 | [../scripts/test_aggregate_gates.mjs](../scripts/test_aggregate_gates.mjs) | 本仓执行辅助 | current | #86 原生 Git Hook 聚合门禁的隔离回归，只执行自建无害夹具，不调用真实业务 Hook；经 tests.yml 在 PR 与 main 上运行 |
