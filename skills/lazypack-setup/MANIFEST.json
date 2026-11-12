@@ -3,7 +3,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "f245a3822f5e9f9e5f09fd213a5b4e20d0888c745c91ee117ccc1c488fd8243a"
+      "sha256": "4c65ea1a8d6b1f9ace076453b17096baff0409da70356ed901c491560d2c7c80"
     },
     {
       "path": "assets/mutation/config/crontab.example",
@@ -206,20 +206,40 @@
       "sha256": "6a0d8672f04edf2e5ce83f99ab8ab6ff9e074db043ea906c1a824893bdd65c1b"
     },
     {
+      "path": "lazypack-core.unit.json",
+      "sha256": "8781fa13b0ff90916d968b4a58966b1d7d488925cd184af979ad07ab46da2e52"
+    },
+    {
       "path": "presets/python-uv-ruff.md",
       "sha256": "f5a7a785849ad11210da0fe564581feac97cc9b66e95ef7475f8e87a01cc436d"
+    },
+    {
+      "path": "presets/python-uv-ruff.unit.json",
+      "sha256": "3ce5029f71424cc8e9f3fb52758e8943741ef812634ef313a32e3901c6c51099"
     },
     {
       "path": "presets/ts-biome-vitest.md",
       "sha256": "429a30221f91e647ecf16ee70f358beb4853701ab863a12ed5b3304e0b8ff6d2"
     },
     {
+      "path": "presets/ts-biome-vitest.unit.json",
+      "sha256": "6c75d996288cd4b950b9be8968a42094660a698f922906cf297d4b561dc49448"
+    },
+    {
       "path": "recipes/mutation-testing.md",
       "sha256": "cb93481968a13803a63690d7e59709718d267b95eed49810cdf4f0a7d2dec570"
     },
     {
+      "path": "recipes/mutation-testing.unit.json",
+      "sha256": "2d6ed7e2c9135bbb8bba41f6bc11c16a85532220eef9d2eb5b146152e4740491"
+    },
+    {
       "path": "recipes/react-vite-app-shell.md",
       "sha256": "c85574ed854bcefabaa7338692fe6c2da69ade6e13d10f8383641f17e45cf8ad"
+    },
+    {
+      "path": "recipes/react-vite-app-shell.unit.json",
+      "sha256": "52a8a36a46d4215145dc2e16273935c577b6b3d143b09df705fe6d5c34b6d49f"
     },
     {
       "path": "references/DECISIONS.md",
@@ -240,6 +260,10 @@
     {
       "path": "references/retention-sections.md",
       "sha256": "3a4169441cf937168452c413a327af6c3b7b43143b9bdeaa3ba91969e9e90e6e"
+    },
+    {
+      "path": "references/unit-matrix.md",
+      "sha256": "6131a825efb91260b8c58a54bd35842f2e6eed02c8abec86950587f9503296e8"
     },
     {
       "path": "references/verification.md",
@@ -271,7 +295,11 @@
     },
     {
       "path": "scripts/package_manifest.mjs",
-      "sha256": "57a95fdf451d34bd7379c001f3d74f58808bdf500ee986f6c4fd061771f1bb51"
+      "sha256": "ae4da25cfc39f53c6cc79b19e9ee1172c7b809b5fa1f71c546651707ee1571b4"
+    },
+    {
+      "path": "scripts/unit_contracts.mjs",
+      "sha256": "5282a69b0fc0d4ce9487bcd0ada89063c22f0862d41b19acfe9bfb37d1b4a891"
     },
     {
       "path": "scripts/verify_hook_install.mjs",

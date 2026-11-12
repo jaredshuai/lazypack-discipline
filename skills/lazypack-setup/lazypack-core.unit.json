@@ -1,0 +1,81 @@
+{
+  "schema": "lazypack-unit/1",
+  "id": "lazypack-core",
+  "version": "0.7.0",
+  "kind": "core",
+  "card": "SKILL.md",
+  "applies_when": [],
+  "provides": [
+    "pre-commit-hook",
+    "coding-standards",
+    "release-discipline",
+    "agent-roles",
+    "resident-discipline",
+    "artifacts-register",
+    "changelog",
+    "report-layers",
+    "section9-protocol",
+    "ideas-inbox"
+  ],
+  "files": [
+    { "source": "templates/pre-commit.sh", "target": ".githooks/pre-commit", "mode": "0755", "managed": true },
+    { "source": "templates/CODING_STANDARDS.md", "target": "CODING_STANDARDS.md", "mode": "0644", "managed": true },
+    { "source": "templates/RELEASE.md", "target": "RELEASE.md", "mode": "0644", "managed": true },
+    { "source": "templates/roles.md", "target": "docs/agents/roles.md", "mode": "0644", "managed": true },
+    { "source": "templates/resident-entry.md", "target": "AGENTS.md", "mode": "0644", "managed": true },
+    { "source": "templates/ARTIFACTS.md", "target": "docs/ARTIFACTS.md", "mode": "0644", "managed": true },
+    { "source": "templates/changelog.mjs", "target": "scripts/changelog.mjs", "mode": "0644", "managed": false },
+    { "source": "templates/check_report_layers.mjs", "target": "scripts/check_report_layers.mjs", "mode": "0644", "managed": false },
+    { "source": "templates/section9-discussion-protocol.md", "target": "docs/agents/section9-discussion-protocol.md", "mode": "0644", "managed": false },
+    { "source": "templates/ideas-inbox.md", "target": "docs/ideas/inbox.md", "mode": "0644", "managed": false }
+  ],
+  "verify": [
+    { "command": "git hook run pre-commit", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "node scripts/changelog.mjs check", "expect_exit": 0, "cwd": "target-root" }
+  ],
+  "evidence": [
+    {
+      "kind": "fixture-test",
+      "platform": "linux",
+      "environment": "GitHub Actions ubuntu-latest（镜像 ubuntu-26.04 20261101.186.1，Ubuntu 26.04.1）/ Node 24.22.2",
+      "date": "2026-11-11",
+      "unit_version": "0.7.0",
+      "scope": "被测提交 main@54ec0e1。只拷出 skill 目录，在 ts-new、py-new 两份全新夹具上用包内确定性入口装配两遍：包检查，managed_blocks.mjs 的 snapshot / write / verify / render-retention，verify_hook_install.mjs --mode new，三份种子原样复制，changelog.mjs init；第二遍全部无改动。没有执行由 AI 完成的环节，没有安装依赖，没有运行门禁命令和 git hook run pre-commit，没有写 docs/ARTIFACTS.md，不含存量仓与文档迁移。",
+      "source": "https://github.com/jaredshuai/lazypack-discipline/actions/runs/42965978337/job/130343195395"
+    },
+    {
+      "kind": "host-acceptance",
+      "platform": "windows",
+      "environment": "Windows 11 专业版 10.0.26300 / PowerShell / Node 24.19.0 / Git for Windows 2.51.0，Multica Windows 宿主",
+      "date": "2026-10-19",
+      "unit_version": "0.7.0",
+      "scope": "有界验收：在系统临时目录的合成仓上运行隔离验收脚本，被测提交 main@323fd1a。六个受管块写入后 managed_blocks.mjs verify 退出 0，verify_hook_install.mjs 返回 CONFIGURED_STATIC_ONLY，git hook run pre-commit 原生调用退出 0。按维护者裁决，这不是完整交互式 /lazypack-setup 的验收，没有重跑 AI 对话环节，也不代表之后的 main。",
+      "source": "https://github.com/jaredshuai/lazypack-discipline/issues/82#issuecomment-6257868627"
+    },
+    {
+      "kind": "fixture-test",
+      "platform": "windows",
+      "environment": "GitHub Actions windows-latest（镜像 windows-2025-vs2026 20261103.298.1，Windows Server 2025 10.0.26100）/ Node 24.22.2",
+      "date": "2026-11-11",
+      "unit_version": "0.7.0",
+      "scope": "被测提交 main@54ec0e1。只拷出 skill 目录，在 ts-new、py-new 两份全新夹具上用包内确定性入口装配两遍：包检查，managed_blocks.mjs 的 snapshot / write / verify / render-retention，verify_hook_install.mjs --mode new，三份种子原样复制，changelog.mjs init；第二遍全部无改动。没有执行由 AI 完成的环节，没有安装依赖，没有运行门禁命令和 git hook run pre-commit，没有写 docs/ARTIFACTS.md，不含存量仓与文档迁移。",
+      "source": "https://github.com/jaredshuai/lazypack-discipline/actions/runs/42965978337/job/130343195694"
+    },
+    {
+      "kind": "fixture-test",
+      "platform": "macos",
+      "environment": "GitHub Actions macos-latest（镜像 macos-26-arm64 20261102.0473.1，macOS 26.7.2）/ Node 24.22.2",
+      "date": "2026-11-11",
+      "unit_version": "0.7.0",
+      "scope": "被测提交 main@54ec0e1。只拷出 skill 目录，在 ts-new、py-new 两份全新夹具上用包内确定性入口装配两遍：包检查，managed_blocks.mjs 的 snapshot / write / verify / render-retention，verify_hook_install.mjs --mode new，三份种子原样复制，changelog.mjs init；第二遍全部无改动。没有执行由 AI 完成的环节，没有安装依赖，没有运行门禁命令和 git hook run pre-commit，没有写 docs/ARTIFACTS.md，不含存量仓与文档迁移。",
+      "source": "https://github.com/jaredshuai/lazypack-discipline/actions/runs/42965978337/job/130343195371"
+    }
+  ],
+  "rules": [
+    "references/managed-blocks.md §1",
+    "references/managed-blocks.md §5",
+    "references/verification.md §2",
+    "references/verification.md §3",
+    "references/retention-sections.md §1"
+  ]
+}

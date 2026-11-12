@@ -1,0 +1,42 @@
+{
+  "schema": "lazypack-unit/1",
+  "id": "mutation-testing",
+  "version": "1.0.0",
+  "kind": "recipe",
+  "card": "mutation-testing.md",
+  "applies_when": [],
+  "provides": [
+    "mutation"
+  ],
+  "files": [
+    { "source": "assets/mutation/scripts/mutation-baseline.mjs", "target": "scripts/mutation-baseline.mjs", "mode": "0644", "managed": false },
+    { "source": "assets/mutation/scripts/parse-stryker-report.mjs", "target": "scripts/parse-stryker-report.mjs", "mode": "0644", "managed": false },
+    { "source": "assets/mutation/scripts/parse_mutmut_report.py", "target": "scripts/parse_mutmut_report.py", "mode": "0644", "managed": false },
+    { "source": "assets/mutation/scripts/create-mutation-issues.mjs", "target": "scripts/create-mutation-issues.mjs", "mode": "0644", "managed": false },
+    { "source": "assets/mutation/scripts/nightly-mutation-runner.sh", "target": "scripts/nightly-mutation-runner.sh", "mode": "0755", "managed": false },
+    { "source": "assets/mutation/workflows/nightly-mutation-ts.yml", "target": ".github/workflows/nightly-mutation-ts.yml", "mode": "0644", "managed": false },
+    { "source": "assets/mutation/workflows/nightly-mutation-py.yml", "target": ".github/workflows/nightly-mutation-py.yml", "mode": "0644", "managed": false },
+    { "source": "assets/mutation/config/crontab.example", "target": "docs/setup/crontab.example", "mode": "0644", "managed": false },
+    { "source": "assets/mutation/config/mutation-testing.service", "target": "docs/setup/mutation-testing.service", "mode": "0644", "managed": false },
+    { "source": "assets/mutation/config/mutation-testing.timer", "target": "docs/setup/mutation-testing.timer", "mode": "0644", "managed": false }
+  ],
+  "verify": [
+    { "command": "node scripts/mutation-baseline.mjs --help", "expect_exit": 0, "cwd": "target-root" }
+  ],
+  "evidence": [
+    {
+      "kind": "fixture-test",
+      "platform": "linux",
+      "environment": "GitHub Actions ubuntu-latest（镜像 ubuntu-26.04 20261101.186.1，Ubuntu 26.04.1）/ Node 24.22.2 / Python 3.12.16",
+      "date": "2026-11-11",
+      "unit_version": "1.0.0",
+      "scope": "被测提交 main@54ec0e1。本仓 sample-ts、sample-py 两份夹具上按 workflow 模板逐步模拟执行夜间回路，Stryker 与 mutmut 2.x 实跑。不是真实目标仓的定时运行，没有覆盖 cron / systemd 触发面，也没有真实创建 issue。",
+      "source": "https://github.com/jaredshuai/lazypack-discipline/actions/runs/42965978337/job/130343195368"
+    }
+  ],
+  "rules": [
+    "mutation-testing.md §2",
+    "mutation-testing.md §4",
+    "mutation-testing.md §6"
+  ]
+}

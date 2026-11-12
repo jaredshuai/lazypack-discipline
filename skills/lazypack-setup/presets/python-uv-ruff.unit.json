@@ -1,0 +1,33 @@
+{
+  "schema": "lazypack-unit/1",
+  "id": "python-uv-ruff",
+  "version": "0.1.0",
+  "kind": "preset",
+  "card": "python-uv-ruff.md",
+  "applies_when": [
+    { "probe": "path-exists", "path": "pyproject.toml" },
+    { "probe": "command-exists", "command": "uv" },
+    { "probe": "path-absent", "path": "poetry.lock" },
+    { "probe": "path-absent", "path": "pdm.lock" },
+    { "probe": "path-absent", "path": "Pipfile" }
+  ],
+  "provides": [
+    "format",
+    "lint",
+    "type",
+    "test"
+  ],
+  "files": [],
+  "verify": [
+    { "command": "uv run --no-sync ruff format --check", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "uv run --no-sync ruff check --no-fix", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "uv run --no-sync ty check", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "uv run --no-sync pytest", "expect_exit": 0, "cwd": "target-root" }
+  ],
+  "evidence": [],
+  "rules": [
+    "python-uv-ruff.md §2",
+    "python-uv-ruff.md §3",
+    "python-uv-ruff.md §5.1"
+  ]
+}

@@ -31,7 +31,7 @@ description: >-
 
 ### 第 1 步：前置双检 (Pre-flight Double Check)
 
-**包完整性（先于双检）**：在本 skill 目录运行 `node scripts/package_manifest.mjs check`，核对 [MANIFEST.json](MANIFEST.json) 登记的每个文件存在且内容一致、包内文档的相对链接与配方引用的 `assets/` 源路径都在包内、必须保持 LF 的脚本与 cron/systemd 配置不含 CR。退出码非 0 时**立即停止，不写入任何文件**，把输出的 `FAIL` 行原样告诉用户，并说明 skill 安装不完整、需要重新安装；不得从网络、本仓克隆或其他目录补取缺失资源后继续装配。
+**包完整性（先于双检）**：在本 skill 目录运行 `node scripts/package_manifest.mjs check`，核对 [MANIFEST.json](MANIFEST.json) 登记的每个文件存在且内容一致、包内文档的相对链接与配方引用的 `assets/` 源路径都在包内、必须保持 LF 的脚本与 cron/systemd 配置不含 CR、各单元契约（`*.unit.json`）字段齐全、`id` 与 `version` 同卡片相同、引用的文件都在包内，且 [references/unit-matrix.md](references/unit-matrix.md) 与契约一致。退出码非 0 时**立即停止，不写入任何文件**，把输出的 `FAIL` 行原样告诉用户，并说明 skill 安装不完整、需要重新安装；不得从网络、本仓克隆或其他目录补取缺失资源后继续装配。
 
 执行前置只读检查，规则遵循 [references/verification.md](references/verification.md) §1：
 
@@ -480,6 +480,8 @@ description: >-
 - [recipes/mutation-testing.md](recipes/mutation-testing.md)：变异测试配方数据卡（只读源，多语言优先级 0 补充质检层）；分发资源在 [assets/mutation/](assets/mutation/)。
 - [assets/react-vite-app-shell-1/](assets/react-vite-app-shell-1/)：App Shell 1 起始副本（随包分发，`SHA256SUMS` 固定关键文件）。
 - [MANIFEST.json](MANIFEST.json) 与 [scripts/package_manifest.mjs](scripts/package_manifest.mjs)：本包分发清单（每个文件的路径与 sha256、工具脚本版本）与包检查；装配前的资源完整性核验见第 1 步开头。
+- `lazypack-core.unit.json`、`presets/*.unit.json`、`recipes/*.unit.json` 与 [scripts/unit_contracts.mjs](scripts/unit_contracts.mjs)：各单元的机器可读契约（适用的必要条件、文件清单、验证命令、验证证据）与校验器。契约只放可判定的事实，目前只用于校验和生成矩阵；是否适用、怎么装配仍以卡片正文为准。
+- [references/unit-matrix.md](references/unit-matrix.md)：由契约里的证据生成的「单元 × 操作系统」验证记录表，每条带公开出处，没有记录的格子写「未验证」。不手改。
 - [references/retention-sections.md](references/retention-sections.md)：规划者访谈与碎片想法留存指引正文库（单一事实源）。
 - [references/document-routing.md](references/document-routing.md)：既有文档归属与 8 大知识区路由规范（原位保留与安全登记），并含子项目根发现、逐区探测覆盖记录与本地 CI/脚本路径失效信号只读核对（§2.1 第 5 项、§2.3、§2.4）。
 - [references/managed-blocks.md](references/managed-blocks.md)：标记语法、换行/编码规范、指纹与输入摘要算法、重跑决策树。

@@ -9,7 +9,7 @@
  *   node scripts/package_manifest.mjs check      检查包是否完整，失败退出码 1
  * 包根目录固定为本脚本的上一级目录（按真实路径解析，符号链接调用也一样）。
  *
- * check 覆盖五项：
+ * check 覆盖六项：
  *   1. manifest：MANIFEST.json 与包内文件逐一一致（路径、sha256、工具版本）。
  *   2. links：SKILL.md、assets/、presets/、recipes/、references/ 下 Markdown 的
  *      行内链接与引用式链接都解析到包内存在的文件，不允许跳出包根目录
@@ -21,6 +21,9 @@
  *      避免在目标仓里被误读为目标仓自己的文件。
  *   5. eol：必须保持 LF 的文件（所有 .sh，加 assets/mutation/config/ 下全部文件，与仓库根
  *      .gitattributes 的 eol=lf 规则一致）不得含 CR 字节；bash 与 cron/systemd 不容忍 CRLF。
+ *   6. units：单元契约（*.unit.json）字段齐全、引用的文件与章节在包内存在、版本与卡片一致、
+ *      每张卡片和每个模板文件都有契约覆盖，且 references/unit-matrix.md 与契约一致。
+ *      规则在同目录的 unit_contracts.mjs；该脚本缺失或加载失败时本项报 FAIL，前五项照常检查。
  *
  * 哈希按「文本文件把 CRLF 规范为 LF、二进制文件按原字节」计算，Windows 上
  * 开了 autocrlf 的检出也能通过；必须保持 LF 的文件另由第 5 项检查。
@@ -31,6 +34,18 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// 惰性加载：unit_contracts.mjs 缺失或损坏时，前五项照常检查，units 一项报 FAIL。
+// 写成静态 import 的话，整个包检查会在加载阶段崩掉，一条 FAIL 行都不输出。
+let checkUnits = null;
+let unitsLoadError = null;
+try {
+  ({ checkUnits } = await import('./unit_contracts.mjs'));
+  if (typeof checkUnits !== 'function') throw new Error('没有导出 checkUnits');
+} catch (err) {
+  checkUnits = null;
+  unitsLoadError = err;
+}
 
 export const MANIFEST_NAME = 'MANIFEST.json';
 export const SCHEMA = 'lazypack-skill-manifest/1';
@@ -310,6 +325,23 @@ function checkEol(root, failures) {
   }
 }
 
+function errorLine(err) {
+  return String(err && err.message ? err.message : err).split(/\r?\n/)[0];
+}
+
+function checkUnitContracts(root, failures) {
+  const fail = (detail) => failures.push({ check: 'units', detail });
+  if (!checkUnits) {
+    fail(`scripts/unit_contracts.mjs 无法加载，单元契约没有检查：${errorLine(unitsLoadError)}`);
+    return;
+  }
+  try {
+    for (const detail of checkUnits(root)) fail(detail);
+  } catch (err) {
+    fail(`单元契约检查中途出错：${errorLine(err)}`);
+  }
+}
+
 export function checkPackage(rootDir) {
   const root = fs.realpathSync(rootDir);
   const failures = [];
@@ -319,6 +351,7 @@ export function checkPackage(rootDir) {
   checkSources(root, failures);
   checkExternal(root, docs, failures);
   checkEol(root, failures);
+  checkUnitContracts(root, failures);
   return failures;
 }
 
@@ -339,7 +372,7 @@ function main(argv) {
       console.error(`包检查失败：${failures.length} 项。资源缺失时 setup 不得继续装配。`);
       return 1;
     }
-    console.log('包检查通过：manifest、links、sources、external、eol 五项均无差异');
+    console.log('包检查通过：manifest、links、sources、external、eol、units 六项均无差异');
     return 0;
   }
   console.error('用法：node scripts/package_manifest.mjs <generate|check>');

@@ -1,0 +1,32 @@
+{
+  "schema": "lazypack-unit/1",
+  "id": "ts-biome-vitest",
+  "version": "0.1.0",
+  "kind": "preset",
+  "card": "ts-biome-vitest.md",
+  "applies_when": [
+    { "probe": "command-exists", "command": "pnpm" },
+    { "probe": "path-absent", "path": "yarn.lock" },
+    { "probe": "path-absent", "path": "package-lock.json" },
+    { "probe": "path-absent", "path": "bun.lockb" }
+  ],
+  "provides": [
+    "format",
+    "lint",
+    "type",
+    "test"
+  ],
+  "files": [],
+  "verify": [
+    { "command": "pnpm run format", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "pnpm run lint", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "pnpm run type", "expect_exit": 0, "cwd": "target-root" },
+    { "command": "pnpm run test", "expect_exit": 0, "cwd": "target-root" }
+  ],
+  "evidence": [],
+  "rules": [
+    "ts-biome-vitest.md §2",
+    "ts-biome-vitest.md §3",
+    "ts-biome-vitest.md §5.1"
+  ]
+}
