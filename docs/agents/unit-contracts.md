@@ -25,9 +25,9 @@
 | `version` | `x.y.z` | `preset`、`recipe` 与卡片 frontmatter 的 `version` 相同；`core` 与 `references/DECISIONS.md` 的版本行相同 |
 | `kind` | `core` / `preset` / `recipe` | 见上表 |
 | `card` | 相对契约所在目录的路径 | 卡片文件 |
-| `applies_when` | 探测数组，`core` 为空 | 适用的必要条件，全部为真才可能适用。只允许四种探测，见下 |
+| `applies_when` | 探测数组，可为空；`core` 必须为空 | 适用的必要条件，全部为真才可能适用。空数组表示契约里没写条件，不表示无条件适用。只允许四种探测，见下 |
 | `provides` | 非空的标签数组 | 提供的门禁槽（`format`、`lint`、`type`、`test`）或能力标签 |
-| `files` | 数组，可为空 | 每项 `{source, target, mode, managed}`：`source` 相对 skill 根目录，`target` 相对目标仓根目录，`mode` 是 `"0644"` 或 `"0755"`，`managed` 表示写入时是否带托管块 |
+| `files` | 数组，可为空 | 每项 `{source, target, mode, managed}`：`source` 相对 skill 根目录，`target` 相对目标仓根目录（App Shell 例外，见「已知局限」），`mode` 是 `"0644"` 或 `"0755"`，`managed` 表示写入时是否带托管块 |
 | `verify` | 非空数组 | 每项 `{command, expect_exit, cwd}`：`command` 非空，`cwd` 是 `target-root` 或 `files[].target` 里出现的某个目录 |
 | `evidence` | 数组，可为空 | 每项 `{kind, platform, environment, date, unit_version, scope, source}`，见「证据」一节 |
 | `rules` | 非空数组 | 口径所在的章节，写成 `<文件> §<章节号>`，文件相对契约所在目录 |
@@ -45,11 +45,15 @@
 
 `node skills/lazypack-setup/scripts/unit_contracts.mjs check` 检查下面五类，`package_manifest.mjs check` 把它作为第六项 `units` 一并运行：
 
-1. 字段：齐全、类型和取值合法、没有多余字段。
+1. 字段：齐全、类型和取值合法、没有多余字段；`core` 的 `applies_when` 必须是空数组；同一份契约里 `platform` 和 `source` 都相同的证据只能有一条。
 2. 引用：`card`、每个 `files[].source`、`rules` 指向的文件都在包内；`rules` 的章节号在该文件里恰好对应一个二级或三级标题。更深的标题常在小节内从 1 重新编号，不参与；代码围栏里的不算。
 3. 版本：`id`、`version` 与卡片 frontmatter 或固定层版本逐字相同。
-4. 覆盖：`presets/`、`recipes/` 下每张卡片都有契约；`templates/`、`assets/` 下每个文件都被某份契约的 `files[].source` 引用；`lazypack-core.unit.json` 存在。
+4. 覆盖：`presets/`、`recipes/` 下第一层的每张卡片（`.md` 文件）都有契约；`templates/`、`assets/` 下每个文件都被某份契约的 `files[].source` 引用；`lazypack-core.unit.json` 存在。
 5. 矩阵：提交的 `references/unit-matrix.md` 与按当前契约生成的内容一致。
+
+`matrix` 只写包内的普通文件：`references/` 或矩阵文件是符号链接时不写，退出 1。
+
+`units` 一项失败时包检查退出非 0，setup 按 `SKILL.md` 第 1 步停止，不写任何文件。这是有意的：契约、矩阵和清单在发布时是一致的，装到用户机器上却不一致，说明包不是从一次完整的发布里拷出来的。`tests.yml` 在合并前跑同一项检查，本仓自己造成的不一致到不了 `main`。`unit_contracts.mjs` 缺失或加载失败时，包检查照常跑完前五项，`units` 一项报 `FAIL`。
 
 回归测试是 `scripts/test_unit_contracts.mjs`，随 `tests.yml` 运行。
 
@@ -77,6 +81,8 @@
 2. **实跑过这个单元。** 至少实跑过该单元 `verify` 里的一条命令，或实跑过该单元 `files` 里的文件：运行其中的脚本，或走过复制、写入路径。只读了代码、只跑了别的单元的测试，都不算。
 3. **有公开出处。** `source` 只接受三种链接：GitHub issue 评论（`…/issues/<n>#issuecomment-<id>`）、PR 评论（`…/pull/<n>#issuecomment-<id>` 或 `…#discussion_r<id>`）、Actions 运行或作业（`…/actions/runs/<id>` 或 `…/actions/runs/<id>/job/<id>`）。本机文件路径、没有评论锚点的 issue 链接都不接受。
 
+出处是 Actions 运行时，被测提交必须已经在默认分支上，并在 `scope` 开头写明（如「被测提交 main@54ec0e1」）。PR 分支上的运行验的是合并前还会改的代码，不收。
+
 总体失败的验收不作为证据。部分通过的验收可以收，`scope` 里写明通过的是哪一部分。
 
 校验器只检查链接的写法，不联网核对链接能不能打开、内容是否支持 `scope` 的说法。这两点靠评审时人工点开核对。
@@ -92,10 +98,14 @@
 ## 已知局限
 
 - **`applies_when` 只是必要条件的子集。** 四种探测表达不了的条件没有进契约，例如 App Shell 要求 Node 主版本为 24、TypeScript 配方要求「有 `tsconfig.json` 或有 `.ts` 源码」。是否适用以卡片正文为准，契约里的条件全部为真不等于适用。
-- **App Shell 的 `target` 相对的是配方 §2 说的「新建或空的前端目录」。** 这个目录可能就是目标仓根，也可能是它的子目录。其余单元的 `target` 都相对目标仓根。
-- **`core` 的版本取固定层版本。** `templates/` 下的文件没有自己的版本号，改了模板而固定层版本没变时，契约版本不会变，旧证据也不会被标成「旧版」。
+- **App Shell 的路径都相对配方 §2 说的「新建或空的前端目录」。** 这个目录可能就是目标仓根，也可能是它的子目录。该单元的 `files[].target`、`applies_when` 里的 `path`、`verify[].cwd` 的 `target-root` 都以它为准；其余单元以目标仓根为准。
+- **`lazypack-core` 的 `files` 和 `verify` 写的是全集，不是每次装配都会发生的事。** 契约没有表达「按条件」的字段。常驻入口在已有 `CLAUDE.md` 的仓里写进 `CLAUDE.md`，契约只写了 `AGENTS.md`；想法池种子只在用户启用想法池时写；用户选「暂不配置」门禁时不创建 Hook，`git hook run pre-commit` 这条验证命令此时不适用；`scripts/` 下两个脚本和各份种子在目标已存在时不覆盖。实际写哪些文件、哪条命令适用，以 `SKILL.md` 正文为准。
+- **`core` 的版本取固定层版本。** `templates/` 下的文件没有自己的版本号，改了模板而固定层版本没变时，契约版本不会变，旧证据也不会被标成「旧版」。反过来，固定层版本升了而模板没动时，旧证据会全部变成「旧版」。
+- **`scripts/`、`references/` 下的文件不属于任何单元的 `files`。** 装配用的工具脚本和参考文档改了，没有哪个单元的版本会跟着变，证据也不会变旧。
 - **校验器不运行 `verify` 里的命令。** 它只保证命令非空、退出码和目录写法合法。命令能不能跑，由证据说明。
 - **Hook 出处行与契约的一致是间接保证的。** 校验器保证契约的 `id`、`version` 与卡片 frontmatter 相同；出处行由卡片 frontmatter 写出，净室安装测试整行核对。校验器本身不读任何 Hook。
+- **不查两份契约的 `target` 是否相同。** App Shell 的 `target` 基准与其余单元不同，路径相同不等于写到同一个文件。
+- **不查证据日期是否在未来。** 包检查的结果不能取决于运行当天的日期。
 - **`provides` 的标签没有登记表。** 校验器只查写法和不重复，不查标签是否为已知的槽位或能力名。
 
 ## 没有收进矩阵的历史记录

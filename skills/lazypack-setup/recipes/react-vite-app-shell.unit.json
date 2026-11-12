@@ -78,7 +78,7 @@
       "environment": "Windows 11 专业版 10.0.26200 / Windows PowerShell 5.1 / Node 24.21.0 / npm 12.1.0 / core.autocrlf=true，Multica 上的 Codebuddy agent",
       "date": "2026-11-10",
       "unit_version": "1.0.1",
-      "scope": "从提交 00b364b 检出：配方 §5.1 复制脚本三条路径（空目标写入 40 个文件、重跑零写入、源目录不存在零写入），§5.2 哈希 19/19，npm ci 与 typecheck、lint、test、build 全部退出 0，Edge 157 宽屏渲染正常。第一次 npm ci 十分钟无输出被终止，重跑通过，原因未查明。没有覆盖浏览器里的搜索与筛选交互、窄屏视口，也不是经 /lazypack-setup 对话装配；当时起始副本在仓库根 templates/，后迁入 skill 的 assets/。",
+      "scope": "从提交 00b364b 检出：配方 §5.1 复制脚本只把开头的 $src、$dst 赋值改成参数、其余原样，实跑三条路径（空目标写入 40 个文件、重跑零写入、源目录不存在零写入），§5.2 哈希 19/19，npm ci 与 typecheck、lint、test、build 全部退出 0，Edge 157 宽屏渲染正常。第一次 npm ci 十分钟无输出被终止，重跑通过，原因未查明。没有覆盖浏览器里的搜索与筛选交互、窄屏视口，也不是经 /lazypack-setup 对话装配；当时起始副本在仓库根 templates/，后迁入 skill 的 assets/。",
       "source": "https://github.com/jaredshuai/lazypack-discipline/pull/103#issuecomment-6760385015"
     }
   ],

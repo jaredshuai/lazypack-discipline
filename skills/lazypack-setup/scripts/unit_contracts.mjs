@@ -14,7 +14,8 @@
  *   - 包根一份 lazypack-core.unit.json，描述不属于任何配方的通用纪律产物，card 是 SKILL.md。
  *
  * check 做的事：
- *   1. 字段：全部字段必填，类型与取值合法，不允许多余字段；verify 至少一条且命令非空。
+ *   1. 字段：全部字段必填，类型与取值合法，不允许多余字段；verify 至少一条且命令非空；
+ *      core 的 applies_when 必须是空数组；同一份契约里系统与出处都相同的证据只能有一条。
  *   2. 引用：card、files[].source、rules 里的文件都在包内存在；rules 的章节号在该文件里
  *      恰好对应一个二级或三级标题（更深的标题常在小节内从 1 重新编号，不参与；
  *      代码围栏内的不算）。
@@ -26,6 +27,7 @@
  *
  * 证据（evidence）只登记有公开出处的记录：source 必须是 GitHub 的 issue 评论、
  * PR 评论或 Actions 运行/作业链接。矩阵里没有证据的格子显示「未验证」。
+ * matrix 只写包内的普通文件：references/ 或矩阵文件是符号链接时不写，退出 1。
  * 退出码：0 通过；1 检查失败；2 用法错误。
  */
 
@@ -43,7 +45,7 @@ const CORE_CARD = 'SKILL.md';
 const CORE_VERSION_SOURCE = 'references/DECISIONS.md';
 const CARD_DIRS = { presets: 'preset', recipes: 'recipe' };
 const COVERED_DIRS = ['templates', 'assets'];
-const FIELDS = ['schema', 'id', 'version', 'kind', 'card', 'applies_when', 'provides', 'files', 'verify', 'evidence', 'rules'];
+export const FIELDS = ['schema', 'id', 'version', 'kind', 'card', 'applies_when', 'provides', 'files', 'verify', 'evidence', 'rules'];
 const KINDS = ['core', 'preset', 'recipe'];
 const PROBES = {
   'path-exists': ['path'],
@@ -59,7 +61,7 @@ const EVIDENCE_KINDS = ['host-acceptance', 'fixture-test'];
 const SEMVER_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const SOURCE_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:(issues|pull)\/(\d+)#issuecomment-\d+|pull\/(\d+)#discussion_r\d+|actions\/runs\/(\d+)(?:\/job\/\d+)?)$/;
+const SOURCE_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:(issues|pull)\/(\d+)#issuecomment-\d+|pull\/(\d+)#discussion_r\d+|actions\/runs\/(\d+)(?:\/job\/(\d+))?)$/;
 const RULE_RE = /^(\S+) §(\d+(?:\.\d+)*)$/;
 const HEADING_RE = /^#{2,3}[ \t]+(\d+(?:\.\d+)*)\.?(?:[ \t]|$)/;
 
@@ -192,13 +194,13 @@ function checkProbes(list, where, fail) {
   }
   list.forEach((p, i) => {
     const at = `${where}[${i}]`;
-    if (!isPlainObject(p) || !Object.hasOwn(PROBES, p.probe)) {
+    if (!isPlainObject(p) || typeof p.probe !== 'string' || !Object.hasOwn(PROBES, p.probe)) {
       fail(`${at} 的 probe 必须是 ${Object.keys(PROBES).join(' / ')} 之一`);
       return;
     }
     if (!checkKeys(p, ['probe', ...PROBES[p.probe]], at, fail)) return;
     if (Object.hasOwn(p, 'path') && !isRelPath(p.path)) fail(`${at}.path 必须是目标仓内的相对路径`);
-    if (Object.hasOwn(p, 'command') && !/^[\w.+-]+$/.test(String(p.command))) fail(`${at}.command 必须是单个命令名`);
+    if (Object.hasOwn(p, 'command') && (typeof p.command !== 'string' || !/^[\w.+-]+$/.test(p.command))) fail(`${at}.command 必须是单个命令名`);
     if (Object.hasOwn(p, 'field') && !isText(p.field)) fail(`${at}.field 必须是非空字符串`);
     if (Object.hasOwn(p, 'exists') && typeof p.exists !== 'boolean') fail(`${at}.exists 必须是布尔值`);
   });
@@ -263,9 +265,13 @@ function checkEvidence(list, where, fail) {
     fail(`${where} 必须是数组`);
     return;
   }
+  const seen = new Map();
   list.forEach((e, i) => {
     const at = `${where}[${i}]`;
     if (!checkKeys(e, EVIDENCE_FIELDS, at, fail)) return;
+    const key = JSON.stringify([e.platform, e.source]);
+    if (seen.has(key)) fail(`${at} 与 ${where}[${seen.get(key)}] 的 platform、source 都相同：同一条记录只登记一次`);
+    else seen.set(key, i);
     if (!EVIDENCE_KINDS.includes(e.kind)) fail(`${at}.kind 必须是 ${EVIDENCE_KINDS.join(' 或 ')}`);
     if (!PLATFORMS.includes(e.platform)) fail(`${at}.platform 必须是 ${PLATFORMS.join(' / ')} 之一`);
     if (!isText(e.environment)) fail(`${at}.environment 必须是单行非空字符串`);
@@ -299,7 +305,7 @@ function checkRules(root, contractRel, list, where, fail) {
     }
     if (!cache.has(rel)) cache.set(rel, headingNumbers(fs.readFileSync(path.join(root, rel), 'utf8')));
     const n = cache.get(rel).get(m[2]) || 0;
-    if (n === 0) fail(`${at} 在 ${rel} 里找不到以 ${m[2]} 开头的标题`);
+    if (n === 0) fail(`${at} 在 ${rel} 里没有编号恰为 ${m[2]} 的二级或三级标题`);
     else if (n > 1) fail(`${at} 在 ${rel} 里对应 ${n} 个标题，章节号不唯一`);
   });
 }
@@ -357,6 +363,9 @@ function checkContract(root, rel, failures) {
   if (!isRelPath(unit.card)) fail('card 必须是相对契约所在目录的路径');
   else checkIdentity(root, rel, unit, placement, fail);
   checkProbes(unit.applies_when, 'applies_when', fail);
+  if (placement.kind === 'core' && Array.isArray(unit.applies_when) && unit.applies_when.length > 0) {
+    fail('core 的 applies_when 必须是空数组：通用纪律产物不靠探测决定是否适用');
+  }
   checkProvides(unit.provides, 'provides', fail);
   checkFiles(root, unit.files, 'files', fail);
   checkVerify(unit.verify, unit.files, 'verify', fail);
@@ -419,6 +428,7 @@ function cell(text) {
 
 function sourceLabel(url) {
   const m = url.match(SOURCE_RE);
+  if (m && m[5]) return `Actions 运行 ${m[4]} 作业 ${m[5]}`;
   if (m && m[4]) return `Actions 运行 ${m[4]}`;
   if (m && m[1] === 'issues') return `issue #${m[2]} 评论`;
   if (m) return `PR #${m[2] || m[3]} 评论`;
@@ -495,6 +505,23 @@ export function checkUnits(rootDir) {
   return [];
 }
 
+/**
+ * 把矩阵写进包内。references/ 的真实路径必须就是包内的 references/，矩阵文件已存在时必须是
+ * 普通文件：任一处是符号链接都会把内容写到包外，这里不写，返回说明文字；写成功返回 null。
+ */
+export function writeMatrix(rootDir, text) {
+  const root = fs.realpathSync(rootDir);
+  const file = path.join(root, MATRIX_REL);
+  const dir = path.dirname(file);
+  let realDir;
+  try { realDir = fs.realpathSync(dir); } catch { return `找不到目录 ${path.posix.dirname(MATRIX_REL)}/`; }
+  if (realDir !== dir) return `${path.posix.dirname(MATRIX_REL)}/ 是符号链接，指向包外或包内别处`;
+  const st = fs.lstatSync(file, { throwIfNoEntry: false });
+  if (st && !st.isFile()) return `${MATRIX_REL} 不是普通文件（符号链接或目录）`;
+  fs.writeFileSync(file, text);
+  return null;
+}
+
 function main(argv) {
   const args = argv.slice(2);
   const cmd = args.length === 1 ? args[0] : null;
@@ -506,7 +533,11 @@ function main(argv) {
       console.error(`契约校验失败：${failures.length} 项。未写入 ${MATRIX_REL}。`);
       return 1;
     }
-    fs.writeFileSync(path.join(root, MATRIX_REL), renderMatrix(units));
+    const refused = writeMatrix(root, renderMatrix(units));
+    if (refused) {
+      console.error(`FAIL ${refused}。未写入 ${MATRIX_REL}。`);
+      return 1;
+    }
     console.log(`已写入 ${MATRIX_REL}：${units.length} 个单元，${units.reduce((n, u) => n + u.evidence.length, 0)} 条证据`);
     return 0;
   }

@@ -23,7 +23,7 @@
  *      .gitattributes 的 eol=lf 规则一致）不得含 CR 字节；bash 与 cron/systemd 不容忍 CRLF。
  *   6. units：单元契约（*.unit.json）字段齐全、引用的文件与章节在包内存在、版本与卡片一致、
  *      每张卡片和每个模板文件都有契约覆盖，且 references/unit-matrix.md 与契约一致。
- *      规则在同目录的 unit_contracts.mjs。
+ *      规则在同目录的 unit_contracts.mjs；该脚本缺失或加载失败时本项报 FAIL，前五项照常检查。
  *
  * 哈希按「文本文件把 CRLF 规范为 LF、二进制文件按原字节」计算，Windows 上
  * 开了 autocrlf 的检出也能通过；必须保持 LF 的文件另由第 5 项检查。
@@ -35,7 +35,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { checkUnits } from './unit_contracts.mjs';
+// 惰性加载：unit_contracts.mjs 缺失或损坏时，前五项照常检查，units 一项报 FAIL。
+// 写成静态 import 的话，整个包检查会在加载阶段崩掉，一条 FAIL 行都不输出。
+let checkUnits = null;
+let unitsLoadError = null;
+try {
+  ({ checkUnits } = await import('./unit_contracts.mjs'));
+  if (typeof checkUnits !== 'function') throw new Error('没有导出 checkUnits');
+} catch (err) {
+  checkUnits = null;
+  unitsLoadError = err;
+}
 
 export const MANIFEST_NAME = 'MANIFEST.json';
 export const SCHEMA = 'lazypack-skill-manifest/1';
@@ -315,6 +325,23 @@ function checkEol(root, failures) {
   }
 }
 
+function errorLine(err) {
+  return String(err && err.message ? err.message : err).split(/\r?\n/)[0];
+}
+
+function checkUnitContracts(root, failures) {
+  const fail = (detail) => failures.push({ check: 'units', detail });
+  if (!checkUnits) {
+    fail(`scripts/unit_contracts.mjs 无法加载，单元契约没有检查：${errorLine(unitsLoadError)}`);
+    return;
+  }
+  try {
+    for (const detail of checkUnits(root)) fail(detail);
+  } catch (err) {
+    fail(`单元契约检查中途出错：${errorLine(err)}`);
+  }
+}
+
 export function checkPackage(rootDir) {
   const root = fs.realpathSync(rootDir);
   const failures = [];
@@ -324,7 +351,7 @@ export function checkPackage(rootDir) {
   checkSources(root, failures);
   checkExternal(root, docs, failures);
   checkEol(root, failures);
-  for (const detail of checkUnits(root)) failures.push({ check: 'units', detail });
+  checkUnitContracts(root, failures);
   return failures;
 }
 

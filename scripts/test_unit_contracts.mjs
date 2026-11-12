@@ -19,12 +19,14 @@ import test from 'node:test';
 
 import {
   CORE_CONTRACT,
+  FIELDS as UNIT_FIELDS,
   MATRIX_REL,
   PLATFORMS,
   checkUnits,
   findContracts,
   renderMatrix,
   validateContracts,
+  writeMatrix,
 } from '../skills/lazypack-setup/scripts/unit_contracts.mjs';
 
 const SKILL = fileURLToPath(new URL('../skills/lazypack-setup', import.meta.url));
@@ -124,6 +126,10 @@ test('there is one contract per card plus the core contract', () => {
     fs.readdirSync(path.join(SKILL, dir)).filter((n) => n.endsWith('.md')).map((n) => `${dir}/${n.slice(0, -3)}.unit.json`));
   assert.deepEqual(contracts, [CORE_CONTRACT, ...cards].sort());
   assert.equal(validateContracts(SKILL).units.length, contracts.length);
+});
+
+test('the validator requires exactly the fields decided in #110', () => {
+  assert.deepEqual(UNIT_FIELDS, FIELDS);
 });
 
 test('removing any required field from any contract fails', async (t) => {
@@ -248,6 +254,12 @@ test('evidence without a public GitHub source fails', async (t) => {
   }
 });
 
+test('the same record listed twice in one contract fails', (t) => {
+  const root = copySkill(t);
+  editContract(root, MUTATION, (u) => { u.evidence.push({ ...u.evidence[0] }); });
+  assertFails(root, MUTATION, /evidence\[1\] 与 evidence\[0\] 的 platform、source 都相同/);
+});
+
 test('evidence with an unknown platform, kind or date fails', async (t) => {
   const cases = [
     ['platform', 'freebsd', /evidence\[0\]\.platform 必须是/],
@@ -308,7 +320,7 @@ test('a rule that does not resolve to exactly one heading fails', async (t) => {
   await t.test('section number does not exist', (t2) => {
     const root = copySkill(t2);
     editContract(root, PRESET, (u) => { u.rules[0] = 'python-uv-ruff.md §99'; });
-    assertFails(root, PRESET, /rules\[0\] 在 presets\/python-uv-ruff\.md 里找不到以 99 开头的标题/);
+    assertFails(root, PRESET, /rules\[0\] 在 presets\/python-uv-ruff\.md 里没有编号恰为 99 的二级或三级标题/);
   });
   await t.test('file does not exist', (t2) => {
     const root = copySkill(t2);
@@ -330,8 +342,8 @@ test('a rule that does not resolve to exactly one heading fails', async (t) => {
     const root = copySkill(t2);
     write(root, 'references/deep.md', '# 标题\n\n## 1. 甲\n\n#### 7. 深层\n\n```\n## 8. 围栏里的\n```\n');
     editContract(root, CORE_CONTRACT, (u) => { u.rules.push('references/deep.md §7', 'references/deep.md §8'); });
-    assertFails(root, CORE_CONTRACT, /里找不到以 7 开头的标题/);
-    assertFails(root, CORE_CONTRACT, /里找不到以 8 开头的标题/);
+    assertFails(root, CORE_CONTRACT, /里没有编号恰为 7 的二级或三级标题/);
+    assertFails(root, CORE_CONTRACT, /里没有编号恰为 8 的二级或三级标题/);
   });
 });
 
@@ -356,6 +368,30 @@ test('an applies_when entry with an unknown probe or a missing argument fails', 
     editContract(root, PRESET, (u) => { u.applies_when[0] = { probe: 'json-field', path: 'package.json' }; });
     assertFails(root, PRESET, /applies_when\[0\] 缺少必填字段 field/);
   });
+  // 非字符串的 probe 会被当成属性名：数组能蒙混过关，toString 为 null 的对象会直接抛错。
+  for (const [name, probe] of [['array', ['command-exists']], ['object', { toString: null }], ['number', 7], ['null', null]]) {
+    await t.test(`probe is not a string: ${name}`, (t2) => {
+      const root = copySkill(t2);
+      editContract(root, PRESET, (u) => { u.applies_when[0] = { probe, command: 'uv' }; });
+      assertFails(root, PRESET, /applies_when\[0\] 的 probe 必须是/);
+    });
+  }
+});
+
+test('a command-exists probe needs a string that is a single command name', async (t) => {
+  for (const [label, value] of [['number', 123], ['boolean', true], ['null', null], ['array', ['uv']], ['with arguments', 'uv --version'], ['empty', '']]) {
+    await t.test(label, (t2) => {
+      const root = copySkill(t2);
+      editContract(root, PRESET, (u) => { u.applies_when = [{ probe: 'command-exists', command: value }]; });
+      assertFails(root, PRESET, /applies_when\[0\]\.command 必须是单个命令名/);
+    });
+  }
+});
+
+test('the core contract must keep applies_when empty', (t) => {
+  const root = copySkill(t);
+  editContract(root, CORE_CONTRACT, (u) => { u.applies_when = [{ probe: 'path-exists', path: '.git' }]; });
+  assertFails(root, CORE_CONTRACT, /core 的 applies_when 必须是空数组/);
 });
 
 test('a card without a contract fails', async (t) => {
@@ -483,6 +519,60 @@ test('matrix refuses to write while a contract is invalid', (t) => {
   assert.ok(fs.readFileSync(file).equals(before), '矩阵文件不应被改动');
 });
 
+test('matrix does not write through a symbolic link', async (t) => {
+  const outside = (t2) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lazypack-unit-outside-'));
+    t2.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    return dir;
+  };
+  // Windows 上没有权限时建不了符号链接，跳过。
+  const link = (t2, target, at, type) => {
+    try {
+      fs.symlinkSync(target, at, type);
+      return true;
+    } catch (err) {
+      if (err.code !== 'EPERM' && err.code !== 'EACCES') throw err;
+      t2.skip('这台机器不允许创建符号链接');
+      return false;
+    }
+  };
+  await t.test('the matrix file is a link', (t2) => {
+    const root = copySkill(t2);
+    const victim = path.join(outside(t2), 'victim.md');
+    fs.writeFileSync(victim, '不该被改动\n');
+    const file = path.join(root, MATRIX_REL);
+    fs.rmSync(file);
+    if (!link(t2, victim, file, 'file')) return;
+    assert.match(writeMatrix(root, 'x\n'), /不是普通文件/);
+    const r = cli(root, 'unit_contracts.mjs', 'matrix');
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /FAIL references\/unit-matrix\.md 不是普通文件.*未写入 references\/unit-matrix\.md/);
+    assert.equal(fs.readFileSync(victim, 'utf8'), '不该被改动\n');
+  });
+  await t.test('the references directory is a link', (t2) => {
+    const root = copySkill(t2);
+    const elsewhere = path.join(outside(t2), 'references');
+    fs.renameSync(path.join(root, 'references'), elsewhere);
+    const before = fs.readFileSync(path.join(elsewhere, 'unit-matrix.md'));
+    if (!link(t2, elsewhere, path.join(root, 'references'), 'dir')) return;
+    assert.match(writeMatrix(root, 'x\n'), /references\/ 是符号链接/);
+    assert.ok(fs.readFileSync(path.join(elsewhere, 'unit-matrix.md')).equals(before), '链接指向的文件不应被改动');
+  });
+});
+
+test('an Actions link is labelled with its run, and with its job when it names one', (t) => {
+  const root = copySkill(t);
+  const base = 'https://github.com/jaredshuai/lazypack-discipline/actions/runs/123';
+  editContract(root, MUTATION, (u) => { u.evidence[0].source = `${base}/job/456`; });
+  let { units, failures } = validateContracts(root);
+  assert.deepEqual(failures, []);
+  assert.ok(renderMatrix(units).includes(`[Actions 运行 123 作业 456](${base}/job/456)`));
+  editContract(root, MUTATION, (u) => { u.evidence[0].source = base; });
+  ({ units, failures } = validateContracts(root));
+  assert.deepEqual(failures, []);
+  assert.ok(renderMatrix(units).includes(`[Actions 运行 123](${base})`));
+});
+
 test('cells without evidence read 未验证 and every other cell links to its source', () => {
   const { units } = validateContracts(SKILL);
   const text = fs.readFileSync(path.join(SKILL, MATRIX_REL), 'utf8').replace(/\r\n/g, '\n');
@@ -553,6 +643,26 @@ test('the package check reports a stale matrix under units', (t) => {
   const r = cli(root, 'package_manifest.mjs', 'check');
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /FAIL \[units\] references\/unit-matrix\.md 与契约不一致/);
+});
+
+test('the package check still prints FAIL lines when unit_contracts.mjs cannot be loaded', async (t) => {
+  await t.test('script removed', (t2) => {
+    const root = copySkill(t2);
+    fs.rmSync(path.join(root, 'scripts', 'unit_contracts.mjs'));
+    const r = cli(root, 'package_manifest.mjs', 'check');
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /FAIL \[units\] scripts\/unit_contracts\.mjs 无法加载，单元契约没有检查/);
+    assert.match(r.out, /FAIL \[manifest\] .*scripts\/unit_contracts\.mjs/);
+    assert.match(r.out, /包检查失败：\d+ 项/);
+  });
+  await t.test('script does not parse', (t2) => {
+    const root = copySkill(t2);
+    fs.writeFileSync(path.join(root, 'scripts', 'unit_contracts.mjs'), 'export function checkUnits( {\n');
+    const r = cli(root, 'package_manifest.mjs', 'check');
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /FAIL \[units\] scripts\/unit_contracts\.mjs 无法加载，单元契约没有检查/);
+    assert.match(r.out, /FAIL \[manifest\] .*scripts\/unit_contracts\.mjs/);
+  });
 });
 
 test('usage errors exit with 2', () => {

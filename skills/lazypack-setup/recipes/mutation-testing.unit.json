@@ -27,10 +27,10 @@
     {
       "kind": "fixture-test",
       "platform": "linux",
-      "environment": "GitHub Actions ubuntu-latest / Node 24 / Python 3.12",
+      "environment": "GitHub Actions ubuntu-latest（镜像 ubuntu-26.04 20261101.186.1，Ubuntu 26.04.1）/ Node 24.22.2 / Python 3.12.16",
       "date": "2026-11-11",
       "unit_version": "1.0.0",
-      "scope": "本仓 sample-ts、sample-py 两份夹具上按 workflow 模板逐步模拟执行夜间回路，Stryker 与 mutmut 2.x 实跑。不是真实目标仓的定时运行，没有覆盖 cron / systemd 触发面，也没有真实创建 issue。",
+      "scope": "被测提交 main@54ec0e1。本仓 sample-ts、sample-py 两份夹具上按 workflow 模板逐步模拟执行夜间回路，Stryker 与 mutmut 2.x 实跑。不是真实目标仓的定时运行，没有覆盖 cron / systemd 触发面，也没有真实创建 issue。",
       "source": "https://github.com/jaredshuai/lazypack-discipline/actions/runs/42965978337/job/130343195368"
     }
   ],

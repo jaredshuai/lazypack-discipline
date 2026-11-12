@@ -5,7 +5,6 @@
   "kind": "preset",
   "card": "ts-biome-vitest.md",
   "applies_when": [
-    { "probe": "path-exists", "path": "package.json" },
     { "probe": "command-exists", "command": "pnpm" },
     { "probe": "path-absent", "path": "yarn.lock" },
     { "probe": "path-absent", "path": "package-lock.json" },

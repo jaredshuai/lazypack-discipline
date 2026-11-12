@@ -37,10 +37,10 @@
     {
       "kind": "fixture-test",
       "platform": "linux",
-      "environment": "GitHub Actions ubuntu-latest / Node 24",
+      "environment": "GitHub Actions ubuntu-latest（镜像 ubuntu-26.04 20261101.186.1，Ubuntu 26.04.1）/ Node 24.22.2",
       "date": "2026-11-11",
       "unit_version": "0.7.0",
-      "scope": "只拷出 skill 目录，在 ts-new、py-new 两份全新夹具上用包内确定性入口装配两遍：包检查，managed_blocks.mjs 的 snapshot / write / verify / render-retention，verify_hook_install.mjs --mode new，三份种子原样复制，changelog.mjs init；第二遍全部无改动。没有执行由 AI 完成的环节，没有安装依赖，没有运行门禁命令和 git hook run pre-commit，没有写 docs/ARTIFACTS.md，不含存量仓与文档迁移。",
+      "scope": "被测提交 main@54ec0e1。只拷出 skill 目录，在 ts-new、py-new 两份全新夹具上用包内确定性入口装配两遍：包检查，managed_blocks.mjs 的 snapshot / write / verify / render-retention，verify_hook_install.mjs --mode new，三份种子原样复制，changelog.mjs init；第二遍全部无改动。没有执行由 AI 完成的环节，没有安装依赖，没有运行门禁命令和 git hook run pre-commit，没有写 docs/ARTIFACTS.md，不含存量仓与文档迁移。",
       "source": "https://github.com/jaredshuai/lazypack-discipline/actions/runs/42965978337/job/130343195395"
     },
     {
@@ -55,19 +55,19 @@
     {
       "kind": "fixture-test",
       "platform": "windows",
-      "environment": "GitHub Actions windows-latest / Node 24",
+      "environment": "GitHub Actions windows-latest（镜像 windows-2025-vs2026 20261103.298.1，Windows Server 2025 10.0.26100）/ Node 24.22.2",
       "date": "2026-11-11",
       "unit_version": "0.7.0",
-      "scope": "只拷出 skill 目录，在 ts-new、py-new 两份全新夹具上用包内确定性入口装配两遍：包检查，managed_blocks.mjs 的 snapshot / write / verify / render-retention，verify_hook_install.mjs --mode new，三份种子原样复制，changelog.mjs init；第二遍全部无改动。没有执行由 AI 完成的环节，没有安装依赖，没有运行门禁命令和 git hook run pre-commit，没有写 docs/ARTIFACTS.md，不含存量仓与文档迁移。",
+      "scope": "被测提交 main@54ec0e1。只拷出 skill 目录，在 ts-new、py-new 两份全新夹具上用包内确定性入口装配两遍：包检查，managed_blocks.mjs 的 snapshot / write / verify / render-retention，verify_hook_install.mjs --mode new，三份种子原样复制，changelog.mjs init；第二遍全部无改动。没有执行由 AI 完成的环节，没有安装依赖，没有运行门禁命令和 git hook run pre-commit，没有写 docs/ARTIFACTS.md，不含存量仓与文档迁移。",
       "source": "https://github.com/jaredshuai/lazypack-discipline/actions/runs/42965978337/job/130343195694"
     },
     {
       "kind": "fixture-test",
       "platform": "macos",
-      "environment": "GitHub Actions macos-latest / Node 24",
+      "environment": "GitHub Actions macos-latest（镜像 macos-26-arm64 20261102.0473.1，macOS 26.7.2）/ Node 24.22.2",
       "date": "2026-11-11",
       "unit_version": "0.7.0",
-      "scope": "只拷出 skill 目录，在 ts-new、py-new 两份全新夹具上用包内确定性入口装配两遍：包检查，managed_blocks.mjs 的 snapshot / write / verify / render-retention，verify_hook_install.mjs --mode new，三份种子原样复制，changelog.mjs init；第二遍全部无改动。没有执行由 AI 完成的环节，没有安装依赖，没有运行门禁命令和 git hook run pre-commit，没有写 docs/ARTIFACTS.md，不含存量仓与文档迁移。",
+      "scope": "被测提交 main@54ec0e1。只拷出 skill 目录，在 ts-new、py-new 两份全新夹具上用包内确定性入口装配两遍：包检查，managed_blocks.mjs 的 snapshot / write / verify / render-retention，verify_hook_install.mjs --mode new，三份种子原样复制，changelog.mjs init；第二遍全部无改动。没有执行由 AI 完成的环节，没有安装依赖，没有运行门禁命令和 git hook run pre-commit，没有写 docs/ARTIFACTS.md，不含存量仓与文档迁移。",
       "source": "https://github.com/jaredshuai/lazypack-discipline/actions/runs/42965978337/job/130343195371"
     }
   ],
