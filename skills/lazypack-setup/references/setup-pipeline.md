@@ -143,12 +143,12 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 | `cwd` | 工作目录；`none` 时为 `null` |
 | `from` | 出处：既有命令写事实 `id`；`none` 时为 `null` |
 | `needs` | 这个槽依赖的安装动作 `id`；既有命令为空数组 |
-| `reason` | 只在 `none` 时出现：`no-existing-command`，或 `hook-pause:<事实 id>` |
+| `reason` | 只在 `none` 时出现：`no-existing-command`、`hook-pause:<事实 id>` 或 `judged-not-covered:<事实 id>` |
 | `outcomes` | 键是状态词，值是 `{provenance, writeCommand}`。`existing` 为 `wired` → `wired:existing:pre-existing`、`writeCommand` 为 `true`（Hook 写入这条命令）。`none` 时是空对象：配方是否补这个槽尚未迁入，计划不预告它最后的状态。状态词与三段式取自 `managed-blocks.md` §5.6 和 `verification.md` §3.3 |
 
 分槽规则：
 
-1. 有 `coverage` 判断的事实，判断的 `slots` 就是它认领的全部槽，取代按名字的认领。`slots` 为空数组则不认领任何槽，进 `unassigned`（`judged-no-slot:<判断 id>`）。`compliant` 为 `false` 仍不分配，槽上 `reason` 为 `hook-pause:<事实 id>`。
+1. 有 `coverage` 判断的事实，判断的 `slots` 就是它认领的全部槽，取代按名字的认领。`slots` 为空数组则不认领任何槽，进 `unassigned`（`judged-no-slot:<判断 id>`）。`compliant` 为 `false` 仍不分配，槽上 `reason` 为 `hook-pause:<事实 id>`。有同名脚本、但它的判断没有列这个槽时，槽上 `reason` 为 `judged-not-covered:<事实 id>`，不是 `no-existing-command`，AI 不要把它当成缺口另补命令。不合规的判断不参与冲突检测：同一个槽另有一条命令认领时，槽就用那条命令。
 2. 没有判断的事实，按脚本名认领同名的那一个槽（`typecheck`、`type-check` 视为 `type`）；名字不在六个之内则不认领。
 3. 同一个槽被两条及以上不同事实认领（不论来自判断还是按名字），`plan` 以退出码 1 停下，stderr 列出该槽、所有认领者和各自来源（判断 id 或「按名字」）。不择一，也没有判断优先于名字的分层。补救分两种：判断对判断，改其中某条判断的 `slots`，去掉这个槽；名字对名字或名字对判断，为某条按名字认领的事实写一条 `coverage` 判断（`slots` 不含这个槽，可以为空数组）。
 4. **一条聚合命令覆盖多个槽时，这几个槽的 `command` 都是同一条完整调用，`from` 指向同一条事实。多个槽 `from` 相同即同一条调用，组装 Hook spec 时只跑一次，这是必须项**；证据按槽各记一份（`verification.md` §3.3）。

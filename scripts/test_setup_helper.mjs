@@ -354,7 +354,8 @@ test('compliant 为 false 时只有判断里列出的槽标 PAUSE，同名的槽
   const { file } = scan(workspace);
   const { plan: result } = plan(workspace, file);
   assert.equal(slotOf(result, 'type').reason, `hook-pause:${TEST_FACT_ID}`);
-  assert.equal(slotOf(result, 'test').reason, 'no-existing-command');
+  // scripts.test 存在，只是判断没列 test 槽：不能写成「没有既有命令」。
+  assert.equal(slotOf(result, 'test').reason, `judged-not-covered:${TEST_FACT_ID}`);
 });
 
 test('原型上的名字（toString、constructor）不是槽：不崩溃，列为 no-slot-name', (t) => {

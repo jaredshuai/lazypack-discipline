@@ -381,6 +381,8 @@ export function assignSlots(facts, judgments) {
     }
     // 判断的 slots 取代按名字的认领，所以只有判断里列出的槽才标 PAUSE。
     const pausedFor = [...paused.values()].find((judgment) => judgment.value.slots.includes(slot));
+    // 有同名脚本、但它的判断没有列这个槽：不是「没有既有命令」，单独标出来，免得被当成缺口另补。
+    const judgedOut = facts.find((fact) => coverageByFact.has(fact.id) && slotForName(scriptNameOf(fact)) === slot);
     slots.push({
       slot,
       origin: 'none',
@@ -388,7 +390,7 @@ export function assignSlots(facts, judgments) {
       cwd: null,
       from: null,
       needs: [],
-      reason: pausedFor ? `hook-pause:${pausedFor.about}` : 'no-existing-command',
+      reason: pausedFor ? `hook-pause:${pausedFor.about}` : judgedOut ? `judged-not-covered:${judgedOut.id}` : 'no-existing-command',
       // 配方是否补这个槽尚未迁入管线，所以这里不预告它最后的状态。
       outcomes: {}
     });
