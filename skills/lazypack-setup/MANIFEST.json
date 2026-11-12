@@ -299,7 +299,7 @@
     },
     {
       "path": "scripts/unit_contracts.mjs",
-      "sha256": "a08fbc1d7b9bca14c34cc1e483db26a0370e7a0db958c8df24079fa3d0b10a9b"
+      "sha256": "7bf8b718093cdce4d94a899a8e9a1465eba3a14b4a2bb72e459a5c29c3d47927"
     },
     {
       "path": "scripts/verify_hook_install.mjs",

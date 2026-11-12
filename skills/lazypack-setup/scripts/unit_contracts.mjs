@@ -497,10 +497,13 @@ export function checkUnits(rootDir) {
   const { units, failures } = validateContracts(root);
   if (failures.length) return failures;
   const file = path.join(root, MATRIX_REL);
-  if (!fs.existsSync(file)) return [`缺少 ${MATRIX_REL}；运行 node scripts/unit_contracts.mjs matrix 生成`];
+  // 这两条说明会原样转给装了本包的用户。重新生成是发布方的事：在已安装的包里重跑 matrix，
+  // 矩阵的哈希就和 MANIFEST.json 对不上，所以写明谁该做什么。
+  const hint = '发布方须在 lazypack-discipline 仓运行 node scripts/unit_contracts.mjs matrix 并重新生成 MANIFEST.json；已安装的包出现本条属于安装不完整，不要在安装目录里重新生成';
+  if (!fs.existsSync(file)) return [`缺少 ${MATRIX_REL}。${hint}`];
   const recorded = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
   if (recorded !== renderMatrix(units)) {
-    return [`${MATRIX_REL} 与契约不一致；改了契约后须运行 node scripts/unit_contracts.mjs matrix 重新生成`];
+    return [`${MATRIX_REL} 与契约不一致。${hint}`];
   }
   return [];
 }

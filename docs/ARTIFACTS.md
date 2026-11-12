@@ -14,7 +14,7 @@
 | 每轮检查记录与登记册的历史说明 | [ARTIFACTS-log.md](ARTIFACTS-log.md) | 每轮收尾由本轮执行者在最上面追加一个条目；已有条目保持当时的记录，不改写 |
 | setup / harvest 实际执行流程 | 对应 [skill 入口](../skills/) 及其直接引用的 references | 实现行为变化时同步改动并验证；愿景变更不等于 skill 已更新 |
 | 技术组合的适用条件与候选默认值 | 对应 skill 的 presets | 配方实施时更新，工具与版本事实须核实，不把案例写成强制选型规则 |
-| setup 各单元在各操作系统上的验证记录 | 各单元契约（`*.unit.json`）的 `evidence`，规则见 [agents/unit-contracts.md](agents/unit-contracts.md) | 有新的验收或测试记录时改契约并重新生成矩阵；其他文档只链接矩阵，不另写验证状态。没有发生过的验收不写 |
+| setup 各单元在各操作系统上的验证记录 | 各单元契约（`*.unit.json`）的 `evidence`，规则见 [agents/unit-contracts.md](agents/unit-contracts.md) | 有新的验收或测试记录时改契约并重新生成矩阵；其他文档只链接矩阵，不另写单元的验证状态。没有发生过的验收不写 |
 | 访谈的来源、背景、当时的意见 | [interviews/](interviews/) | 经授权保留的去敏整理稿；现行结论链接到权威正文，历史原文不改成今天的决定 |
 | 多 AI 提案、互评与主持结论 | [proposals/](proposals/) 放提案原文，[reviews/](reviews/) 按议题归档 | 提案新增时登记其议题与关联 issue；讨论收束时登记具体入口与采纳状态；集合中的一份报告不自动获得现行权威 |
 | 跨 Agent 交付与核验的操作指引 | [agents/handoff-verification.md](agents/handoff-verification.md) | 交接机制变动时维护；每轮临时报告仍按固定层放系统临时目录 |

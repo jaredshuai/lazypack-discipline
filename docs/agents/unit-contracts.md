@@ -1,6 +1,6 @@
 # 单元契约与验证矩阵
 
-本文说明 `skills/lazypack-setup/` 里的单元契约（`*.unit.json`）怎么写、校验器查什么、证据怎么收，以及验证矩阵怎么生成。字段定义来自 #110 的裁定，证据的 `platform` 字段和收录规则是 #111 实现时补的；两处与本文不一致时以本文和校验器为准。
+本文说明 `skills/lazypack-setup/` 里的单元契约（`*.unit.json`）怎么写、校验器查什么、证据怎么收，以及验证矩阵怎么生成。字段定义来自 #110 的裁定，证据的 `platform` 字段和收录规则是 #111 实现时补的；两处与本文不一致时以本文为准。本文写的是校验器的行为，本文与校验器不一致属于缺陷。
 
 矩阵在 [`skills/lazypack-setup/references/unit-matrix.md`](../../skills/lazypack-setup/references/unit-matrix.md)，由脚本生成，不手改。
 
@@ -27,7 +27,7 @@
 | `card` | 相对契约所在目录的路径 | 卡片文件 |
 | `applies_when` | 探测数组，可为空；`core` 必须为空 | 适用的必要条件，全部为真才可能适用。空数组表示契约里没写条件，不表示无条件适用。只允许四种探测，见下 |
 | `provides` | 非空的标签数组 | 提供的门禁槽（`format`、`lint`、`type`、`test`）或能力标签 |
-| `files` | 数组，可为空 | 每项 `{source, target, mode, managed}`：`source` 相对 skill 根目录，`target` 相对目标仓根目录（App Shell 例外，见「已知局限」），`mode` 是 `"0644"` 或 `"0755"`，`managed` 表示写入时是否带托管块 |
+| `files` | 数组，可为空 | 这个单元随包分发的文件全集，不是写入清单：按什么条件写、目标已存在时是否覆盖，以卡片正文为准。每项 `{source, target, mode, managed}`：`source` 相对 skill 根目录，`target` 相对目标仓根目录（App Shell 例外，见「已知局限」），`mode` 是 `"0644"` 或 `"0755"`，`managed` 表示写入时是否带托管块 |
 | `verify` | 非空数组 | 每项 `{command, expect_exit, cwd}`：`command` 非空，`cwd` 是 `target-root` 或 `files[].target` 里出现的某个目录 |
 | `evidence` | 数组，可为空 | 每项 `{kind, platform, environment, date, unit_version, scope, source}`，见「证据」一节 |
 | `rules` | 非空数组 | 口径所在的章节，写成 `<文件> §<章节号>`，文件相对契约所在目录 |
@@ -104,6 +104,7 @@
 - **`scripts/`、`references/` 下的文件不属于任何单元的 `files`。** 装配用的工具脚本和参考文档改了，没有哪个单元的版本会跟着变，证据也不会变旧。
 - **校验器不运行 `verify` 里的命令。** 它只保证命令非空、退出码和目录写法合法。命令能不能跑，由证据说明。
 - **Hook 出处行与契约的一致是间接保证的。** 校验器保证契约的 `id`、`version` 与卡片 frontmatter 相同；出处行由卡片 frontmatter 写出，净室安装测试整行核对。校验器本身不读任何 Hook。
+- **覆盖检查不查归属。** 校验器只查 `templates/`、`assets/` 下每个文件被某份契约引用，不查被哪一份引用、有没有被引用两次；本仓现有契约由回归测试保证每个文件恰好属于一份契约。卡片要求在目标仓生成、但不随包分发的文件（如门禁配方的配置文件）不在 `files` 里。
 - **不查两份契约的 `target` 是否相同。** App Shell 的 `target` 基准与其余单元不同，路径相同不等于写到同一个文件。
 - **不查证据日期是否在未来。** 包检查的结果不能取决于运行当天的日期。
 - **`provides` 的标签没有登记表。** 校验器只查写法和不重复，不查标签是否为已知的槽位或能力名。
