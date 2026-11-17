@@ -9,6 +9,14 @@
 
 ## 每轮记录
 
+### 2026-11-17 #130 Hook 静态验收进入三系统 CI，末尾 CR 用例按平台断言
+
+- 检查范围：P1、P4（本轮改了 `tests.yml`、`test_verify_hook_install.mjs`、登记册与日志；任务点名不动固定层，P1 只核验未受影响）；另跑其余全部编号确认未受影响。人工核对：CR 用例按 Git 实际读回值分支，读回带 CR 时断言 fail-closed，读回被归一化时断言静态验收通过，没有把失败改写成通过；`tests.yml` 只在既有三系统作业加关键字与说明，未动其他作业。
+- 依据版本：开工 `b3ce72a`（main），收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
+- 处理结果：P1–P5、P8–P11 均未发现差异（9/9 PASS，退出码 0，各行均无 `declaration=`；P4 输出 register=127 log=124 failures=0）；`node scripts/test_verify_hook_install.mjs` 为 33/33 PASS，`node scripts/run_tests.mjs --fast` 为 17 passed, 0 failed, 2 skipped。PR #131 的 Windows 作业首跑暴露版本差异：runner 的 Git 2.56.0 保留末尾 CR，本机 2.45.2 吞掉；用例据实改为跟随读回值，不把版本差异写死成平台差异。第二次运行（`fea26ee`）五个作业全绿，Windows 作业里该用例 33/33，并实际执行了 CR 的 fail-closed 断言。
+- 未覆盖范围：本机 Git 2.45 只能走归一化分支，fail-closed 分支由 CI Windows（2.56）与 POSIX 覆盖。未改固定层、其他 CI 作业与 skill 包，故未重生成 `MANIFEST.json`。
+- 未决事项：本机 PATH 缺 npm 时 `test_aggregate_gates` 报 `npm: command not found`；补 PATH 后 14/14 通过、全量复跑通过，属本机环境问题。
+
 ### 2026-11-17 #128 既有 Hook 出处读回迁入管线：readback 与 plan --readback
 
 - 检查范围：P1、P3、P4、P9、P10（本轮改了 `SKILL.md` 第 2 步第 4、7 项、`setup-pipeline.md`、`setup_helper.mjs`、`managed_blocks.mjs`、`test_setup_helper.mjs` 与登记册；P1 的固定层未改，只核验未受影响）；另跑其余全部编号确认未受影响。人工核对：`SKILL.md` 第 7 项只留调用入口与解释，读回口径仍在 `managed-blocks.md` §5.6；`drift`/`broken` 不出槽事实、不出 `preset`；`valid` 与 `no-provenance` 的槽事实逐字取自 Hook 字节。
