@@ -822,7 +822,7 @@ test('readback：有效出处行与 fp 一致 → valid，四个槽逐字恢复'
   assert.equal(state.value.path, HOOK_REL);
   assert.equal(state.value.state, 'valid');
   assert.deepEqual(state.value.preset, { id: 'ts-biome-vitest', version: '0.1.0' });
-  assert.deepEqual(state.value.block, { name: 'pre-commit-hook', style: 'sh', startLine: 2, endLine: 121 });
+  assert.deepEqual(state.value.block, { name: 'pre-commit-hook', style: 'sh' });
   assert.equal(state.value.header.gen, 'fedcba9876543210');
   assert.equal(state.value.header.fp, hookFingerprint(text));
   assert.equal(state.value.currentFp, hookFingerprint(text));
@@ -968,7 +968,7 @@ test('readback：Hook 存在但没有托管块 → unmanaged，零恢复值', (t
   assert.equal(state.value.block, null);
   assert.equal(state.value.preset, null);
   assert.equal(state.value.diff, null);
-  assert.deepEqual(state.evidence, { path: HOOK_REL, locator: 'lazypack:start' });
+  assert.deepEqual(state.evidence, { path: HOOK_REL, locator: 'file' });
   assert.equal(slotFactsOf(facts).length, 0);
 });
 
@@ -1010,7 +1010,7 @@ test('readback：出处行语法非法 → broken，diff provenance-grammar，�
   const state = stateFactOf(facts);
   assert.equal(state.value.state, 'broken');
   assert.equal(state.value.diff.kind, 'provenance-grammar');
-  assert.equal(state.value.diff.line, 1);
+  assert.equal(state.value.diff.line, 3);
   assert.equal(state.value.header, null);
   assert.equal(state.value.preset, null);
   assert.equal(slotFactsOf(facts).length, 0);
@@ -1054,9 +1054,7 @@ test('plan --readback：Hook 记录命令 A 而扫描是命令 B → 退出 1，
 
   const { result, plan: produced } = plan(workspace, file, { readbackFile: rb.file, expect: EXIT.ERROR });
   assert.equal(produced, null);
-  assert.match(result.stderr, /npm run format:check/);
-  assert.match(result.stderr, /npm run format/);
-  assert.match(result.stderr, /不择一/);
+  assert.match(result.stderr, /槽 format：Hook 记录命令「npm run format:check」≠ 本轮扫描命令「npm run format」/);
 });
 
 test('plan --readback：readback 后 Hook 变了 → 退出 4 并指出变化', (t) => {
@@ -1073,6 +1071,163 @@ test('plan --readback：readback 后 Hook 变了 → 退出 4 并指出变化', 
   assert.equal(produced, null);
   assert.match(result.stderr, /machineFp 不一致/);
   assert.match(result.stderr, /变化：hook:\.githooks\/pre-commit/);
+});
+
+test('readback：槽命令含换行 → 按单引号边界扫描，逐字恢复', (t) => {
+  const workspace = makeBareWorkspace(t);
+  const multiline = 'node --test\n  --experimental-strip-types';
+  writeHook(workspace, renderHook(workspace, { slotCommands: { test: multiline } }));
+
+  const facts = readback(workspace).facts;
+  assert.equal(stateFactOf(facts).value.state, 'valid');
+  assert.equal(slotFactOf(facts, 'test').value.command, multiline);
+});
+
+test('readback：正文命令里出现 lazypack:preset 字样，不被当作出处行', (t) => {
+  const workspace = makeBareWorkspace(t);
+  let text = renderHook(workspace);
+  text = text.replace(/^(# lazypack:preset .*)$/m, '$1\necho lazypack:preset-is-not-a-provenance-line');
+  writeHook(workspace, withFingerprint(text));
+
+  const facts = readback(workspace).facts;
+  const state = stateFactOf(facts);
+  assert.equal(state.value.state, 'valid');
+  assert.deepEqual(state.value.preset, { id: 'ts-biome-vitest', version: '0.1.0' });
+  assert.equal(slotFactsOf(facts).length, 4);
+});
+
+test('readback：出处行状态与 <SLOT>_STATUS 不一致 → broken，零恢复值', (t) => {
+  const workspace = makeBareWorkspace(t);
+  writeHook(
+    workspace,
+    renderHook(workspace, {
+      slotStatuses: { format: 'missing' },
+      provenances: { format: 'wired:preset:recommended' }
+    })
+  );
+
+  const facts = readback(workspace).facts;
+  const state = stateFactOf(facts);
+  assert.equal(state.value.state, 'broken');
+  assert.equal(state.value.diff.kind, 'slot-state-mismatch');
+  assert.equal(typeof state.value.diff.line, 'number');
+  assert.equal(state.value.header, null);
+  assert.equal(state.value.preset, null);
+  assert.equal(slotFactsOf(facts).length, 0);
+});
+
+test('plan --readback：Hook 漂移或损坏 → 退出 1，不猜出处也不按扫描继续', (t) => {
+  const workspace = makeWorkspace(t);
+  const text = renderHook(workspace);
+  writeHook(workspace, text.replace("FORMAT_CMD='npm run format'", "FORMAT_CMD='npm run format --check'"));
+  const { file } = scan(workspace);
+
+  const drifted = readback(workspace);
+  const first = plan(workspace, file, { readbackFile: drifted.file, expect: EXIT.ERROR });
+  assert.equal(first.plan, null);
+  assert.match(first.result.stderr, /受管 Hook 当前状态为 drift/);
+
+  writeHook(workspace, text.replace(/# lazypack:end block=pre-commit-hook\n/, ''));
+  const broken = readback(workspace);
+  const second = plan(workspace, file, { readbackFile: broken.file, expect: EXIT.ERROR });
+  assert.equal(second.plan, null);
+  assert.match(second.result.stderr, /受管 Hook 当前状态为 broken/);
+  assert.match(second.result.stderr, /第 \d+ 行/);
+});
+
+test('plan --readback：unmanaged 的 Hook 在 readback 后变了 → 退出 4（靠 contentFp）', (t) => {
+  const workspace = makeWorkspace(t);
+  fs.mkdirSync(path.join(workspace.repo, '.githooks'), { recursive: true });
+  fs.writeFileSync(hookFile(workspace), '#!/bin/sh\nnpm test\n', 'utf8');
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+  assert.equal(stateFactOf(rb.facts).value.state, 'unmanaged');
+
+  fs.appendFileSync(hookFile(workspace), '# edited after readback\n');
+  const { result, plan: produced } = plan(workspace, file, { readbackFile: rb.file, expect: EXIT.STALE });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /变化：hook:\.githooks\/pre-commit/);
+});
+
+test('plan --readback：只改托管块之外的字节 → 读回不变，计划照常', (t) => {
+  const workspace = makeWorkspace(t);
+  writeHook(workspace, renderHook(workspace));
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+
+  fs.appendFileSync(hookFile(workspace), '\n# trailing note outside the managed block\n');
+  const { plan: produced } = plan(workspace, file, { readbackFile: rb.file });
+  assert.ok(produced);
+  assert.equal(produced.readbackFp, rb.facts.machineFp);
+});
+
+test('plan --readback：多个槽同时不一致 → 一次列出全部，不择一', (t) => {
+  const workspace = makeWorkspace(t);
+  writeHook(
+    workspace,
+    renderHook(workspace, { slotCommands: { format: 'npm run format:check', lint: 'npm run lint:ci' } })
+  );
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+
+  const { result, plan: produced } = plan(workspace, file, { readbackFile: rb.file, expect: EXIT.ERROR });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /槽 format：Hook 记录命令「npm run format:check」/);
+  assert.match(result.stderr, /槽 lint：Hook 记录命令「npm run lint:ci」/);
+});
+
+test('plan --readback：Hook 记录未接线而扫描找到命令 → 退出 1，不把推荐命令当既有命令', (t) => {
+  const workspace = makeWorkspace(t);
+  writeHook(
+    workspace,
+    renderHook(workspace, {
+      slotStatuses: { format: 'missing' },
+      provenances: { format: 'missing:preset:declined' }
+    })
+  );
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+
+  const { result, plan: produced } = plan(workspace, file, { readbackFile: rb.file, expect: EXIT.ERROR });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /槽 format：Hook 记录为未接线（Hook 里记的是「npm run format」，状态 missing）/);
+});
+
+test('plan --readback：Hook 记录未接线且扫描也没有 → 该槽不出命令，仍标来自 Hook', (t) => {
+  const workspace = makeWorkspace(t);
+  writeHook(
+    workspace,
+    renderHook(workspace, {
+      slotStatuses: { format: 'missing' },
+      provenances: { format: 'missing:preset:declined' }
+    })
+  );
+  editPackageJson(workspace, (manifest) => {
+    delete manifest.scripts.format;
+    return manifest;
+  });
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+
+  const { plan: produced } = plan(workspace, file, { readbackFile: rb.file });
+  const planned = slotOf(produced, 'format');
+  assert.equal(planned.origin, 'none');
+  assert.equal(planned.command, null);
+  assert.equal(planned.cwd, null);
+  assert.equal(planned.commandSource, 'hook');
+  assert.deepEqual(planned.hook, { state: 'missing', provenance: 'missing:preset:declined', status: 'missing' });
+  assert.deepEqual(planned.outcomes, { missing: { provenance: 'missing:preset:declined', writeCommand: false } });
+});
+
+test('readback：不带 --out 时标准输出就是完整 JSON', (t) => {
+  const workspace = makeBareWorkspace(t);
+  writeHook(workspace, renderHook(workspace));
+
+  const { result, facts } = readback(workspace, { out: null });
+  assert.equal(result.stderr, '');
+  assert.equal(facts.schema, 'lazypack-facts/1');
+  assert.deepEqual(facts.covers, [7]);
+  assert.equal(stateFactOf(facts).value.state, 'valid');
 });
 
 test('readback 不写目标仓：仓库字节不变，out 目录之外没有新文件', (t) => {

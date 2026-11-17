@@ -80,7 +80,7 @@ description: >-
    - 对本轮涉及的角色、常驻入口、编码标准、发布纪律与 Hook 产物（含拟新建项）先按 [managed-blocks.md §5.3.1](references/managed-blocks.md#531-确定性写入与最终核验) 采集一次原始基线并执行只读 `verify`；重跑判定 NO-OP 前也必须执行。占位符残留、无效 header 或指纹不符均不得因 `input` 相同而跳过；首次发现问题只列修复差异，不自动覆写。后续写盘复用这份基线，草案阶段不重新采样。登记册单独按第 5 步第 6 项处理其受管区与获批 Section 3，不把该专用协作写入吸收为通用基线。
    - 检查根目录与 `docs/` 下是否已存在六类产物，解析是否存在有效 lazypack 托管标记（见 [references/managed-blocks.md](references/managed-blocks.md)）；
    - 探测 `CHANGELOG.md`、`scripts/changelog.mjs` 与 `scripts/check_report_layers.mjs`：三者均为**非受管对象**（无 lazypack 标记，不参与 fp/input 决策树）。`CHANGELOG.md` 存在即原位保留并记入 Section 3 登记候选；两个 `.mjs` 已存在时视为本地副本，不覆盖；
-   - **受管 Hook 出处读回**：带 `--cwd <目标仓>` 运行 `node scripts/setup_helper.mjs readback --out <readback.json>`，再把该文件以 `--readback` 传给 `plan`；按 [setup-pipeline.md §7](references/setup-pipeline.md#7-调用时机与怎么向用户解释) 解释 `valid`、`no-provenance`、`drift`、`broken` 与差异位置。读回口径留在 [managed-blocks.md §5.6](references/managed-blocks.md#56-hook-托管块出处读回与重跑恢复契约-provenance-recovery-on-rerun)，不在这里复述。
+   - **受管 Hook 出处读回**：带 `--cwd <目标仓>` 运行 `node scripts/setup_helper.mjs readback --out <readback.json>`，再把该文件以 `--readback` 传给 `plan`；按 [setup-pipeline.md §7](references/setup-pipeline.md#7-调用时机与怎么向用户解释) 解释结果：`valid` / `no-provenance` 说明恢复了哪些值，`absent` / `unmanaged` / `drift` / `broken` 说明停在什么状态、差异在哪一行。读回口径留在 [managed-blocks.md §5.6](references/managed-blocks.md#56-hook-托管块出处读回与重跑恢复契约-provenance-recovery-on-re-run)，不在这里复述。
 8. **访谈材料与想法留存现状探测**：
    - 读取 `docs/agents/roles.md` §3 或常驻入口中是否已存在生效的留存策略与路径配置；
    - 探测是否存在 `docs/plantree/ideas/`、`docs/ideas/`、`docs/interviews/` 等线索目录；

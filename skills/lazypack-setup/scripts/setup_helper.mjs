@@ -237,10 +237,14 @@ export const HOOK_PATH = '.githooks/pre-commit';
 const HOOK_BLOCK = 'pre-commit-hook';
 const HOOK_STATE_FACT_ID = `hook:${HOOK_PATH}`;
 const HOOK_KINDS = ['hook-managed-block', 'hook-slot'];
+const HOOK_STATES = ['absent', 'unmanaged', 'no-provenance', 'valid', 'drift', 'broken'];
 const SLOT_STATUS_VALUES = ['wired', 'missing', 'install-failed', 'n/a'];
 const PROVENANCE_LINE_RE = /^# lazypack:preset id=([a-z0-9][a-z0-9-]*) version=(\d+\.\d+\.\d+) format=(\S+) lint=(\S+) test=(\S+) type=(\S+)$/;
 const PROVENANCE_VALUE_RE = /^(wired|missing|install-failed|n\/a):(preset|existing|none):(recommended|declined|pre-existing|no-tool|install-error|not-applicable)$/;
-const SLOT_VARIABLE_RE = /^([A-Z][A-Z0-9]*)_(STATUS|CMD)='(.*)'$/;
+// 只认行首的注释，避免命令或说明文字里出现 `lazypack:preset` 被误判成出处行。
+const PROVENANCE_MARKER_RE = /^\s*#\s*lazypack:preset\b/;
+// §5.4 允许命令含换行，所以赋值要按单引号扫描，不能按行切分。
+const SLOT_ASSIGNMENT_START_RE = /(^|\n)([A-Z][A-Z0-9]*)_(STATUS|CMD)='/g;
 
 function hookStateValue() {
   return {
@@ -248,20 +252,22 @@ function hookStateValue() {
     state: 'absent',
     header: null,
     currentFp: null,
+    contentFp: null,
     block: null,
     preset: null,
     diff: null
   };
 }
 
-/** broken 状态不带任何恢复值：header、currentFp、block、preset 全清空，只留 diff。 */
-function markBroken(value, diff) {
+/** broken 状态不带任何恢复值：header、currentFp、block、preset 全清空，只留 diff 与原始内容指纹。 */
+function markBroken(value, diff, contentFp = null) {
   value.state = 'broken';
   value.header = null;
   value.currentFp = null;
   value.block = null;
   value.preset = null;
-  value.diff = diff;
+  value.contentFp = contentFp;
+  value.diff = { line: null, ...diff };
   return value;
 }
 
@@ -274,6 +280,10 @@ function lstatOrNull(abs, label) {
   }
 }
 
+function withoutBom(buf) {
+  return buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf ? buf.subarray(3) : buf;
+}
+
 function lineNumberAt(buf, offset) {
   let line = 1;
   for (let i = 0; i < offset; i += 1) {
@@ -282,24 +292,73 @@ function lineNumberAt(buf, offset) {
   return line;
 }
 
+function textLineAt(text, offset) {
+  let line = 1;
+  for (let i = 0; i < offset; i += 1) {
+    if (text.charCodeAt(i) === 0x0a) line += 1;
+  }
+  return line;
+}
+
+/** 标记不完整时 scanBlock 不返回行号，这里自己找第一条 start/end 标记，供 diff 定位。 */
+function firstMarkerLine(buf) {
+  const lines = withoutBom(buf).toString('latin1').split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].replace(/\r$/, '');
+    if (/^\s*(?:#|<!--)\s*lazypack:(?:start|end)\b/.test(line)) return i + 1;
+  }
+  return null;
+}
+
 function headerInfo(header) {
   return { src: header.src, gen: header.gen, input: header.input, fp: header.fp };
 }
 
-/** §5.4 的 `'\''` 是 shell 单引号转义；读回时还原成字面单引号。 */
-function unescapeSlotData(text) {
-  return text.split("'\\''").join("'");
-}
-
-function parseSlotVariables(bodyLines, slot) {
-  const name = slot.toUpperCase();
-  const hits = { STATUS: [], CMD: [] };
-  bodyLines.forEach((line, index) => {
-    const match = SLOT_VARIABLE_RE.exec(line);
-    if (!match || match[1] !== name) return;
-    hits[match[2]].push({ value: match[3], line: index + 1 });
-  });
-  return hits;
+/**
+ * 解析正文里的 `NAME_STATUS='...'` / `NAME_CMD='...'` 赋值。
+ * §5.4 明确命令可能含换行，因此按单引号边界扫描整段正文，不按行切分；
+ * 只接受行首的赋值，转义序列 `'\''` 还原为字面单引号。
+ */
+function parseAssignments(text) {
+  const assignments = new Map();
+  const errors = [];
+  let match;
+  SLOT_ASSIGNMENT_START_RE.lastIndex = 0;
+  while ((match = SLOT_ASSIGNMENT_START_RE.exec(text)) !== null) {
+    const name = match[2];
+    const kind = match[3];
+    const line = textLineAt(text, match.index + match[1].length);
+    let index = SLOT_ASSIGNMENT_START_RE.lastIndex;
+    let value = '';
+    let closed = false;
+    while (index < text.length) {
+      if (text[index] === "'") {
+        if (text[index + 1] === '\\' && text[index + 2] === "'" && text[index + 3] === "'") {
+          value += "'";
+          index += 4;
+          continue;
+        }
+        closed = true;
+        index += 1;
+        break;
+      }
+      value += text[index];
+      index += 1;
+    }
+    if (!closed) {
+      errors.push({ name, kind, line, detail: '单引号赋值未闭合' });
+      break;
+    }
+    let end = index;
+    while (end < text.length && text[end] !== '\n') end += 1;
+    if (text.slice(index, end).trim() !== '') {
+      errors.push({ name, kind, line, detail: '闭合引号后还有多余内容' });
+    }
+    if (!assignments.has(name)) assignments.set(name, { STATUS: [], CMD: [] });
+    assignments.get(name)[kind].push({ value, line });
+    SLOT_ASSIGNMENT_START_RE.lastIndex = end;
+  }
+  return { assignments, errors };
 }
 
 function readHook(repoRoot) {
@@ -307,12 +366,15 @@ function readHook(repoRoot) {
   let locator = 'none';
   const dirStat = lstatOrNull(path.join(repoRoot, '.githooks'), '.githooks');
   if (!dirStat) return { value, slotFacts: null, locator };
-  locator = 'lazypack:start';
   if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) {
     return {
-      value: markBroken(value, { kind: 'not-a-regular-file', detail: '.githooks 不是普通目录（符号链接或文件），不读取' }),
+      value: markBroken(value, {
+        kind: 'not-a-regular-file',
+        detail: '.githooks 不是普通目录（符号链接或文件），不读取',
+        line: null
+      }),
       slotFacts: null,
-      locator
+      locator: 'file'
     };
   }
   const fileAbs = path.join(repoRoot, HOOK_PATH);
@@ -320,9 +382,13 @@ function readHook(repoRoot) {
   if (!fileStat) return { value, slotFacts: null, locator: 'none' };
   if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
     return {
-      value: markBroken(value, { kind: 'not-a-regular-file', detail: `${HOOK_PATH} 不是普通文件（符号链接或目录），不读取` }),
+      value: markBroken(value, {
+        kind: 'not-a-regular-file',
+        detail: `${HOOK_PATH} 不是普通文件（符号链接或目录），不读取`,
+        line: null
+      }),
       slotFacts: null,
-      locator
+      locator: 'file'
     };
   }
 
@@ -332,19 +398,26 @@ function readHook(repoRoot) {
   } catch (err) {
     throw new CliError(EXIT.ERROR, `读不到 ${HOOK_PATH}（${err?.code ?? err?.message}）`);
   }
+  // 内容指纹只给 broken/unmanaged 用：这两种状态没有可信的正文指纹，
+  // 需要靠整个文件内容变化让 plan 发现「readback 之后 Hook 又变了」。
+  // 与 fp 同一口径（去 BOM、CRLF→LF），否则 CRLF 检出或带 BOM 的同一份 Hook
+  // 会算出不同的内容指纹，同一份记录换平台就误报变化。
+  const contentFp = fp16(lfNormalize(withoutBom(buf)));
   const scan = scanBlock(buf);
   if (!scan.present) {
     value.state = 'unmanaged';
-    return { value, slotFacts: null, locator };
+    value.contentFp = contentFp;
+    return { value, slotFacts: null, locator: 'file' };
   }
-  locator = `lazypack:start block=${HOOK_BLOCK}`;
+  locator = 'lazypack:start';
+  const startLineNo = scan.startLine ? lineNumberAt(buf, scan.startLine.start) : firstMarkerLine(buf);
   if (!scan.wellFormed) {
     return {
       value: markBroken(value, {
         kind: 'boundary',
         detail: '托管块标记不完整：需要恰好一对按顺序出现的 start/end 标记',
-        line: null
-      }),
+        line: startLineNo
+      }, contentFp),
       slotFacts: null,
       locator
     };
@@ -352,36 +425,51 @@ function readHook(repoRoot) {
 
   const header = parseStrictMarkers(scan.startLine.text, scan.endLine.text);
   if (!header.ok) {
-    return { value: markBroken(value, { kind: 'header', detail: header.reason }), slotFacts: null, locator };
+    return {
+      value: markBroken(value, { kind: 'header', detail: header.reason, line: startLineNo }, contentFp),
+      slotFacts: null,
+      locator
+    };
   }
   if (header.style !== 'sh') {
     return {
-      value: markBroken(value, { kind: 'style-mismatch', detail: `托管块使用 ${header.style} 注释风格，Hook 必须是 sh` }),
+      value: markBroken(value, {
+        kind: 'style-mismatch',
+        detail: `托管块使用 ${header.style} 注释风格，Hook 必须是 sh`,
+        line: startLineNo
+      }, contentFp),
       slotFacts: null,
       locator
     };
   }
   if (header.block !== HOOK_BLOCK) {
     return {
-      value: markBroken(value, { kind: 'unexpected-block', detail: `托管块名是 ${header.block}，期望 ${HOOK_BLOCK}` }),
+      value: markBroken(value, {
+        kind: 'unexpected-block',
+        detail: `托管块名是 ${header.block}，期望 ${HOOK_BLOCK}`,
+        line: startLineNo
+      }, contentFp),
       slotFacts: null,
       locator
     };
   }
+  locator = `lazypack:start block=${HOOK_BLOCK}`;
+
+  const normalizedText = lfNormalize(buf).toString('utf8');
   if (RESERVED_TOKEN.test(scan.startLine.text) || RESERVED_TOKEN.test(scan.body.toString('utf8'))) {
+    const placeholder = RESERVED_TOKEN.exec(normalizedText);
     return {
-      value: markBroken(value, { kind: 'placeholder', detail: '托管块 header 或正文仍含未展开的保留模板变量' }),
+      value: markBroken(value, {
+        kind: 'placeholder',
+        detail: '托管块 header 或正文仍含未展开的保留模板变量',
+        line: placeholder ? textLineAt(normalizedText, placeholder.index) : null
+      }, contentFp),
       slotFacts: null,
       locator
     };
   }
 
-  const block = {
-    name: header.block,
-    style: header.style,
-    startLine: lineNumberAt(buf, scan.startLine.start),
-    endLine: lineNumberAt(buf, scan.endLine.start)
-  };
+  const block = { name: header.block, style: header.style };
   const currentFp = fp16(lfNormalize(scan.body));
   if (currentFp !== header.fp) {
     value.state = 'drift';
@@ -392,25 +480,28 @@ function readHook(repoRoot) {
       kind: 'fp-mismatch',
       headerFp: header.fp,
       currentFp,
-      detail: `正文指纹与 header.fp 不一致（header ${header.fp}，当前 ${currentFp}）`
+      detail: `正文指纹与 header.fp 不一致（header ${header.fp}，当前 ${currentFp}）`,
+      line: null
     };
     return { value, slotFacts: null, locator };
   }
 
-  const bodyLines = lfNormalize(scan.body).toString('utf8').split('\n');
+  const bodyText = lfNormalize(scan.body).toString('utf8');
+  const bodyLines = bodyText.split('\n');
   const provenanceLines = [];
   bodyLines.forEach((line, index) => {
-    if (line.includes('lazypack:preset')) provenanceLines.push(index);
+    if (PROVENANCE_MARKER_RE.test(line)) provenanceLines.push(index);
   });
   const firstNonEmpty = bodyLines.findIndex((line) => line.trim() !== '');
+  const bodyLineToFile = (bodyIndex) => (startLineNo == null ? null : startLineNo + bodyIndex + 1);
 
   if (provenanceLines.length > 1) {
     return {
       value: markBroken(value, {
         kind: 'provenance-ambiguous',
         detail: `正文里有 ${provenanceLines.length} 行 lazypack:preset`,
-        line: provenanceLines[1] + 1
-      }),
+        line: bodyLineToFile(provenanceLines[1])
+      }, contentFp),
       slotFacts: null,
       locator
     };
@@ -426,8 +517,8 @@ function readHook(repoRoot) {
         value: markBroken(value, {
           kind: 'provenance-ambiguous',
           detail: 'lazypack:preset 出处行不在正文头部',
-          line: index + 1
-        }),
+          line: bodyLineToFile(index)
+        }, contentFp),
         slotFacts: null,
         locator
       };
@@ -435,7 +526,11 @@ function readHook(repoRoot) {
     const match = PROVENANCE_LINE_RE.exec(bodyLines[index]);
     if (!match) {
       return {
-        value: markBroken(value, { kind: 'provenance-grammar', detail: '出处行不符合严格语法', line: index + 1 }),
+        value: markBroken(value, {
+          kind: 'provenance-grammar',
+          detail: '出处行不符合严格语法',
+          line: bodyLineToFile(index)
+        }, contentFp),
         slotFacts: null,
         locator
       };
@@ -448,8 +543,8 @@ function readHook(repoRoot) {
           value: markBroken(value, {
             kind: 'provenance-grammar',
             detail: `出处行的 ${slot} 段不是 <state>:<source>:<reason>`,
-            line: index + 1
-          }),
+            line: bodyLineToFile(index)
+          }, contentFp),
           slotFacts: null,
           locator
         };
@@ -460,23 +555,45 @@ function readHook(repoRoot) {
     provenanceState = 'valid';
   }
 
+  const { assignments, errors } = parseAssignments(bodyText);
+  if (errors.length > 0) {
+    const first = errors[0];
+    return {
+      value: markBroken(value, {
+        kind: 'slot-variables',
+        detail: `${first.name}_${first.kind}：${first.detail}`,
+        line: first.line
+      }, contentFp),
+      slotFacts: null,
+      locator
+    };
+  }
+
   const slotFacts = [];
   for (const slot of SLOTS) {
-    const hits = parseSlotVariables(bodyLines, slot);
     const upper = slot.toUpperCase();
+    const hits = assignments.get(upper) ?? { STATUS: [], CMD: [] };
     const prefix = `${slot}/${upper}`;
     for (const variable of ['STATUS', 'CMD']) {
       const occurrences = hits[variable];
       if (occurrences.length === 0) {
         return {
-          value: markBroken(value, { kind: 'slot-variables', detail: `${prefix}_${variable} 缺失`, line: null }),
+          value: markBroken(value, {
+            kind: 'slot-variables',
+            detail: `${prefix}_${variable} 缺失`,
+            line: null
+          }, contentFp),
           slotFacts: null,
           locator
         };
       }
       if (occurrences.length > 1) {
         return {
-          value: markBroken(value, { kind: 'slot-variables', detail: `${prefix}_${variable} 出现多次`, line: occurrences[1].line }),
+          value: markBroken(value, {
+            kind: 'slot-variables',
+            detail: `${prefix}_${variable} 出现多次`,
+            line: occurrences[1].line
+          }, contentFp),
           slotFacts: null,
           locator
         };
@@ -485,15 +602,30 @@ function readHook(repoRoot) {
     const status = hits.STATUS[0].value;
     if (!SLOT_STATUS_VALUES.includes(status)) {
       return {
-        value: markBroken(value, { kind: 'slot-variables', detail: `${prefix}_STATUS 非法：${status}`, line: hits.STATUS[0].line }),
+        value: markBroken(value, {
+          kind: 'slot-variables',
+          detail: `${prefix}_STATUS 非法：${status}`,
+          line: hits.STATUS[0].line
+        }, contentFp),
         slotFacts: null,
         locator
       };
     }
-    const command = unescapeSlotData(hits.CMD[0].value);
+    const command = hits.CMD[0].value;
     // valid 用出处行三段式；no-provenance 按通用既有命令处理（§5.6）。
     const provenance = provenanceBySlot ? provenanceBySlot[slot] : `${status}:existing:pre-existing`;
     const [state, source, reason] = provenance.split(':');
+    if (provenanceBySlot && state !== status) {
+      return {
+        value: markBroken(value, {
+          kind: 'slot-state-mismatch',
+          detail: `出处行 ${slot} 的状态 ${state} 与 ${upper}_STATUS ${status} 不一致`,
+          line: hits.STATUS[0].line
+        }, contentFp),
+        slotFacts: null,
+        locator
+      };
+    }
     slotFacts.push({
       id: `${HOOK_STATE_FACT_ID}#${slot}`,
       item: 7,
@@ -591,6 +723,41 @@ function validateReadbackFile(file) {
     if (!HOOK_KINDS.includes(fact.kind)) {
       throw new CliError(EXIT.ERROR, `${where} 的 kind 必须是 ${HOOK_KINDS.join('、')} 之一`);
     }
+  });
+  const stateFacts = file.facts.filter((fact) => fact.kind === 'hook-managed-block');
+  if (stateFacts.length !== 1) {
+    throw new CliError(EXIT.ERROR, '读回文件必须恰好有一条 hook-managed-block 状态事实');
+  }
+  const stateFact = stateFacts[0];
+  if (stateFact.id !== HOOK_STATE_FACT_ID) {
+    throw new CliError(EXIT.ERROR, `读回状态事实的 id 必须是 ${HOOK_STATE_FACT_ID}`);
+  }
+  if (!isPlainObject(stateFact.value) || stateFact.value.path !== HOOK_PATH) {
+    throw new CliError(EXIT.ERROR, `读回状态事实的 value.path 必须是 ${HOOK_PATH}`);
+  }
+  if (!HOOK_STATES.includes(stateFact.value.state)) {
+    throw new CliError(EXIT.ERROR, `读回状态事实的 state 必须是 ${HOOK_STATES.join('、')} 之一`);
+  }
+  const slotFacts = file.facts.filter((fact) => fact.kind === 'hook-slot');
+  const recoverable = stateFact.value.state === 'valid' || stateFact.value.state === 'no-provenance';
+  if (!recoverable && slotFacts.length > 0) {
+    throw new CliError(EXIT.ERROR, `读回状态是 ${stateFact.value.state}，不应带 hook-slot 事实`);
+  }
+  const seenSlots = new Set();
+  slotFacts.forEach((fact, index) => {
+    const where = `读回槽事实[${index}]`;
+    const slot = fact.id.startsWith(`${HOOK_STATE_FACT_ID}#`) ? fact.id.slice(`${HOOK_STATE_FACT_ID}#`.length) : null;
+    if (!SLOTS.includes(slot)) throw new CliError(EXIT.ERROR, `${where} 的 id 必须指向四个受管槽之一`);
+    if (seenSlots.has(slot)) throw new CliError(EXIT.ERROR, `${where} 的槽 ${slot} 重复`);
+    seenSlots.add(slot);
+    const slotValue = fact.value;
+    if (!isPlainObject(slotValue) || slotValue.slot !== slot) {
+      throw new CliError(EXIT.ERROR, `${where} 的 value.slot 必须是 ${slot}`);
+    }
+    if (!SLOT_STATUS_VALUES.includes(slotValue.status)) {
+      throw new CliError(EXIT.ERROR, `${where} 的 value.status 非法`);
+    }
+    if (typeof slotValue.command !== 'string') throw new CliError(EXIT.ERROR, `${where} 的 value.command 必须是字符串`);
   });
 }
 
@@ -755,22 +922,25 @@ function mergeReadbackSlots(slots, readbackFacts) {
     slotFacts.set(slot, fact);
   }
 
-  return slots.map((slot) => {
+  const conflicts = [];
+  const mergedSlots = slots.map((slot) => {
     const fact = slotFacts.get(slot.slot);
     if (!fact) return { ...slot, commandSource: slot.command ? 'scan' : null, hook: null };
 
-    const hookCommand = fact.value.command === '' ? null : fact.value.command;
+    // 只有 wired 才代表这条命令已经接线；missing / install-failed / n/a 槽里的
+    // 命令串只是当时渲染出来的推荐命令，不能当成既有命令交给下一步草案。
+    const recordedCommand = fact.value.command === '' ? null : fact.value.command;
+    const wired = fact.value.status === 'wired';
+    const hookCommand = wired ? recordedCommand : null;
     const scanCommand = slot.command;
-    if (hookCommand !== null && scanCommand !== null && hookCommand !== scanCommand) {
-      throw new CliError(
-        EXIT.ERROR,
-        `槽 ${slot.slot} 的 Hook 记录命令「${hookCommand}」与本轮扫描命令「${scanCommand}」不一致（#113：动手前内容变了就停下重问）。不择一：请确认后重新运行 scan/readback 并重新出计划。`
+    if (wired && recordedCommand !== null && scanCommand !== null && recordedCommand !== scanCommand) {
+      conflicts.push(
+        `槽 ${slot.slot}：Hook 记录命令「${recordedCommand}」≠ 本轮扫描命令「${scanCommand}」`
       );
-    }
-    if (hookCommand === null && scanCommand !== null) {
-      throw new CliError(
-        EXIT.ERROR,
-        `槽 ${slot.slot} 的 Hook 记录为未接线（无命令），但本轮扫描找到「${scanCommand}」（#113：动手前内容变了就停下重问）。不择一：请确认后重新运行 scan/readback 并重新出计划。`
+    } else if (!wired && scanCommand !== null) {
+      const recorded = recordedCommand === null ? '' : `（Hook 里记的是「${recordedCommand}」，状态 ${fact.value.status}）`;
+      conflicts.push(
+        `槽 ${slot.slot}：Hook 记录为未接线${recorded}，本轮扫描却找到「${scanCommand}」`
       );
     }
 
@@ -791,6 +961,14 @@ function mergeReadbackSlots(slots, readbackFacts) {
     if (origin === 'existing') delete merged.reason;
     return merged;
   });
+
+  if (conflicts.length > 0) {
+    throw new CliError(
+      EXIT.ERROR,
+      `${conflicts.join('\n')}\n#113：动手前内容变了就停下重问；工具不静默择一。请确认后重新运行 scan/readback 并重新出计划。`
+    );
+  }
+  return mergedSlots;
 }
 
 export function buildPlan({ cwd, factsFile, answersFile, readbackFile = null }) {
@@ -830,7 +1008,16 @@ export function buildPlan({ cwd, factsFile, answersFile, readbackFile = null }) 
       const changes = describeFactChanges(readbackFile.facts, fresh.facts);
       throw new CliError(
         EXIT.STALE,
-        `目标仓的受管 Hook 自上次 readback 以来变了（machineFp 不一致），不出计划：\n  ${changes.join('\n  ') || '（无法定位到具体条目）'}\n请重新运行 readback。`
+        `目标仓的受管 Hook 自上次 readback 以来变了（machineFp 不一致，或读回文件来自别的仓），不出计划：\n  ${changes.join('\n  ') || '（无法定位到具体条目）'}\n请重新运行 readback。`
+      );
+    }
+    const stateFact = readbackFile.facts.find((fact) => fact.kind === 'hook-managed-block');
+    if (stateFact && (stateFact.value.state === 'drift' || stateFact.value.state === 'broken')) {
+      const diff = stateFact.value.diff;
+      const at = diff && diff.line != null ? `（第 ${diff.line} 行）` : '';
+      throw new CliError(
+        EXIT.ERROR,
+        `受管 Hook 当前状态为 ${stateFact.value.state}，不猜测出处、不按本轮扫描继续：${diff?.detail ?? '见读回事实'}${at}\n请先把差异位置交给用户裁决，重新运行 readback 后再出计划。`
       );
     }
     plannedSlots = mergeReadbackSlots(slots, readbackFile.facts);

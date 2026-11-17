@@ -24,7 +24,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const EXIT = Object.freeze({ OK: 0, USAGE: 2, UNSAFE: 3, STALE: 4, BLOCK: 5, PAUSE: 6, VALIDATE: 7 });
 const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
@@ -875,7 +875,17 @@ function main() {
   throw new CliError(EXIT.USAGE, `unknown command: ${command ?? '(none)'}`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
+/** 与 unit_contracts.mjs 同一守卫：两边都 realpath，兼容 --preserve-symlinks-main。 */
+function isEntryPoint() {
+  if (!process.argv[1]) return false;
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   try {
     main();
   } catch (error) {
