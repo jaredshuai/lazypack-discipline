@@ -876,9 +876,8 @@ test('readback：手改正文但 header fp 未更新 → drift，零槽事实、
   const state = stateFactOf(facts);
   assert.equal(state.value.state, 'drift');
   assert.equal(state.value.diff.kind, 'fp-mismatch');
-  assert.equal(state.value.diff.headerFp, hookFingerprint(text));
-  assert.notEqual(state.value.diff.currentFp, state.value.diff.headerFp);
-  assert.equal(state.value.currentFp, state.value.diff.currentFp);
+  assert.equal(state.value.header.fp, hookFingerprint(text));
+  assert.notEqual(state.value.currentFp, state.value.header.fp);
   assert.equal(state.value.preset, null);
   assert.equal(slotFactsOf(facts).length, 0);
 });
@@ -1217,6 +1216,47 @@ test('plan --readback：Hook 记录未接线且扫描也没有 → 该槽不出�
   assert.equal(planned.commandSource, 'hook');
   assert.deepEqual(planned.hook, { state: 'missing', provenance: 'missing:preset:declined', status: 'missing' });
   assert.deepEqual(planned.outcomes, { missing: { provenance: 'missing:preset:declined', writeCommand: false } });
+});
+
+test('plan --readback：pnpm run test 与 pnpm test 视为同一调用，仍逐字保留 Hook 命令', (t) => {
+  const workspace = makeWorkspace(t);
+  editPackageJson(workspace, (manifest) => {
+    manifest.packageManager = 'pnpm@9.0.0';
+    return manifest;
+  });
+  writeHook(
+    workspace,
+    renderHook(workspace, {
+      slotCommands: {
+        format: 'pnpm run format',
+        lint: 'pnpm run lint',
+        type: 'pnpm run test',
+        test: 'pnpm run test'
+      }
+    })
+  );
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+
+  const { plan: produced } = plan(workspace, file, { readbackFile: rb.file });
+  assert.equal(slotOf(produced, 'test').command, 'pnpm run test');
+  assert.equal(slotOf(produced, 'test').commandSource, 'hook');
+  assert.equal(slotOf(produced, 'type').command, 'pnpm run test');
+});
+
+test('plan --readback：本轮覆盖判断停用的槽，不因 Hook 历史命令静默恢复', (t) => {
+  const workspace = makeWorkspace(t);
+  writeHook(workspace, renderHook(workspace));
+  workspace.judgments = workspace.judgments.map((judgment) =>
+    judgment.kind === 'coverage' ? { ...judgment, value: { ...judgment.value, compliant: false } } : judgment
+  );
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+
+  const { result, plan: produced } = plan(workspace, file, { readbackFile: rb.file, expect: EXIT.ERROR });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /槽 type：Hook 记录为已接线，但本轮覆盖判断停用了该命令/);
+  assert.match(result.stderr, /槽 test：Hook 记录为已接线，但本轮覆盖判断停用了该命令/);
 });
 
 test('readback：不带 --out 时标准输出就是完整 JSON', (t) => {

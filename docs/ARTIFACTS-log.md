@@ -13,9 +13,9 @@
 
 - 检查范围：P1、P3、P4、P9、P10（本轮改了 `SKILL.md` 第 2 步第 4、7 项、`setup-pipeline.md`、`setup_helper.mjs`、`managed_blocks.mjs`、`test_setup_helper.mjs` 与登记册；P1 的固定层未改，只核验未受影响）；另跑其余全部编号确认未受影响。人工核对：`SKILL.md` 第 7 项只留调用入口与解释，读回口径仍在 `managed-blocks.md` §5.6；`drift`/`broken` 不出槽事实、不出 `preset`；`valid` 与 `no-provenance` 的槽事实逐字取自 Hook 字节。
 - 依据版本：开工 `1fe7fc5`（main），收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
-- 处理结果：P1–P5、P8–P11 均未发现差异（9/9 PASS，退出码 0，各行均无 `declaration=`；P4 输出 register=127 log=124 failures=0），`node scripts/run_tests.mjs --fast` 为 16 passed, 1 failed, 2 skipped（唯一失败是本机既有的 `test_verify_hook_install`「hooksPath 末尾 CR」用例，Windows Git 吃掉 CR，与 #128 无关）；`node scripts/test_setup_helper.mjs` 为 51 passed, 1 skipped, 0 failed（新增 23 个读回与合并用例，总数 52）。新增只读 `readback` 子命令与六态事实文件（`covers [7]`）、`plan --readback` 的 Hook 优先合并/冲突一次列全/读回指纹过期即停/`drift` 或 `broken` 即停；评审后补了整文件内容指纹（去 BOM、CRLF→LF）以免块外改动误报过期，命令按单引号边界扫描以支持换行，出处行只认行首注释。`SKILL.md` 第 7 项读回段由 1826 字节缩到 529 字节（UTF-8，含段末换行）；已重生成 `MANIFEST.json`。
+- 处理结果：P1–P5、P8–P11 均未发现差异（9/9 PASS，退出码 0，各行均无 `declaration=`；P4 输出 register=127 log=124 failures=0）；`node scripts/run_tests.mjs --fast` 为 16 passed, 1 failed, 2 skipped（唯一失败是本机既有的 `test_verify_hook_install` Windows CR 用例，与 #128 无关），`node scripts/test_setup_helper.mjs` 为 53 passed, 1 skipped, 0 failed（新增 25 个读回与合并用例）。`SKILL.md` 第 7 项读回段由 1826 字节缩到 618 字节（UTF-8，含段末换行；不含换行为 1825 → 617），`MANIFEST.json` 已重生成。
 - 未覆盖范围：只迁入第 2 步第 7 项；`render`、`execute`、`verify` 与 `gen`/`input` 重算未迁入，不宣称「重跑零提问」已端到端交付，本票只断言读回值不变。读回只认 `.githooks/pre-commit`，`.husky/` 等其它 Hook 路径未覆盖；测试夹具在系统临时目录生成，不联网。
-- 未决事项：本轮代为裁定、可由维护者推翻的三点：票面状态词为五种，另加 `unmanaged`（Hook 存在但无托管块），避免把「有 Hook 无块」误报为 `absent`；票面「后三种不产出任何恢复值」与 `valid` 必产出冲突，按 §5.6 解释为 `drift`/`broken`（及 `absent`/`unmanaged`）零恢复值、`valid` 产出历史事实、`no-provenance` 产出 `existing:pre-existing`；票面写「按 §3.2 规范序列化算 `current_fp`」，实现按 `managed-blocks.md` §2 的写入算法（正文 CRLF→LF、SHA-256 前 16 位），以保证与写入侧同源。
+- 未决事项：可由维护者推翻的裁定有：新增 `unmanaged`；`valid` / `no-provenance` 才产出恢复值而 `drift` / `broken` 零恢复值（按 §5.6 而非票面字面）；`current_fp` 按 §2 写入算法而非票面 §3.2；只有 `wired` 槽命令算既有命令；`pnpm run test` 与 `pnpm test` 视为同一调用。
 
 ### 2026-11-12 #114 既有门禁命令探测迁入管线：scan、plan 与逐字保留断言
 

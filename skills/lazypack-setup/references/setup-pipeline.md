@@ -78,19 +78,19 @@ node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answ
 | `state` | `absent`、`unmanaged`、`no-provenance`、`valid`、`drift`、`broken` 之一 |
 | `header` | 严格解析出的 `{src, gen, input, fp}`；无效时为 `null` |
 | `currentFp` | 正文按 `managed-blocks.md` §2 规范化后的 16 位指纹；无效时为 `null` |
-| `contentFp` | 整个文件去 BOM、CRLF→LF 后的 16 位指纹，只在 `unmanaged` / `broken` 时给出：这两种状态没有可信的正文指纹，`plan` 靠它发现读回后文件又变了；其余状态为 `null` |
+| `contentFp` | 整个文件去 BOM、CRLF→LF 后的 16 位指纹，只在 `unmanaged` / `broken` 且 Hook 是可读普通文件时给出：这两种状态没有可信的正文指纹，`plan` 靠它发现读回后文件又变了；其余状态（含符号链接、目录）为 `null` |
 | `block` | `{name, style}`；没有有效块时为 `null` |
 | `preset` | 出处行的 `{id, version}`；没有出处或出处无效时为 `null` |
-| `diff` | `null` 或差异 `{kind, detail, line, headerFp?, currentFp?}`；`line` 是文件内 1-based 行号，定位不到时为 `null` |
+| `diff` | `null` 或差异 `{kind, detail, line}`；`line` 是文件内 1-based 行号，定位不到时为 `null`；`drift` 的两侧指纹在 `header.fp` 与 `currentFp` |
 
 六种状态：
 
-- `absent`：没有 `.githooks/pre-commit`（或 `.githooks` 不是普通目录）。恢复值全 `null`。
+- `absent`：`.githooks` 或其下的 `pre-commit` 不存在。恢复值全 `null`。
 - `unmanaged`：文件存在但没有 lazypack 托管块。恢复值全 `null`；`contentFp` 记整个文件。
 - `no-provenance`：块有效（标记、header、`fp` 一致）但没有 `# lazypack:preset` 出处行。四个槽按 `existing` / `pre-existing` 恢复，`preset` 为 `null`。
 - `valid`：块有效且出处行严格合法。恢复 `preset` 与四个槽的出处、状态、命令。
-- `drift`：`currentFp !== header.fp`。不产出槽事实，`preset` 为 `null`，`diff.headerFp` 与 `diff.currentFp` 给出两侧指纹。
-- `broken`：标记残缺、header 非法、注释风格不对、块名不是 `pre-commit-hook`、保留变量残留、出处行歧义或语法非法、出处行状态与 `<SLOT>_STATUS` 不一致、槽变量缺失/重复/非法，或 Hook 是符号链接、目录、非普通文件。零恢复值：不产出槽事实，`header`、`currentFp`、`block`、`preset` 全 `null`；`contentFp` 记整个文件。
+- `drift`：`currentFp !== header.fp`。不产出槽事实，`preset` 为 `null`；两侧指纹看 `header.fp` 与 `currentFp`。
+- `broken`：标记残缺、header 非法、注释风格不对、块名不是 `pre-commit-hook`、保留变量残留、出处行歧义或语法非法、出处行状态与 `<SLOT>_STATUS` 不一致、槽变量缺失/重复/非法，或 `.githooks` / Hook 是符号链接、目录、非普通文件。零恢复值：不产出槽事实，`header`、`currentFp`、`block`、`preset` 全 `null`；可读普通文件时 `contentFp` 记整个文件，其余为 `null`。
 
 `diff.kind`：`not-a-regular-file`、`boundary`、`header`、`style-mismatch`、`unexpected-block`、`placeholder`、`fp-mismatch`、`provenance-ambiguous`、`provenance-grammar`、`slot-variables`、`slot-state-mismatch`。`evidence.locator`：没有文件为 `none`，有文件但无托管块为 `file`，找到 start 标记为 `lazypack:start`，块名与风格核验通过为 `lazypack:start block=pre-commit-hook`。
 
@@ -189,7 +189,7 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 | `commandSource` | 命令以谁为准：`hook`（读回记录；记录为空命令时也表示这个槽按 Hook 的「未接线」处理）、`scan`（本轮扫描）或 `null`（既没有读回记录也没有扫描命令） |
 | `hook` | 读回槽事实的 `{state, provenance, status}`；没有对应读回事实时为 `null` |
 
-带 `--readback` 且某个槽有读回事实时，以 Hook 为准：`commandSource` 为 `hook`，`from` 指向 hook 槽事实 `id`，`needs` 为空数组。只有 Hook 状态为 `wired` 时 `command` 才取读回命令（空串写 `null`）、`cwd` 为 `.`、`origin` 为 `existing`；其余状态即使 Hook 里记着命令串也写 `command: null`、`cwd: null`、`origin: none`，并把 `outcomes` 的 `writeCommand` 标为 `false`。`hook.provenance` 逐字保留；不因当前环境或本轮扫描找到同名命令就把 `preset` 改写成 `existing`。没有对应读回事实的槽保持分槽结果，`commandSource` 为 `scan`（有命令）或 `null`，`hook` 为 `null`。
+带 `--readback` 且某个槽有读回事实时，以 Hook 为准：`commandSource` 为 `hook`，`from` 指向 hook 槽事实 `id`，`needs` 为空数组。只有 Hook 状态为 `wired` 时 `command` 才取读回命令（空串写 `null`）、`cwd` 为 `.`、`origin` 为 `existing`；其余状态即使 Hook 里记着命令串也写 `command: null`、`cwd: null`、`origin: none`，并把 `outcomes` 的 `writeCommand` 标为 `false`。`hook.provenance` 逐字保留；不因当前环境或本轮扫描找到同名命令就把 `preset` 改写成 `existing`。同一包管理器的 `pnpm run test` 与 `pnpm test` 视为同一调用（同管理器、同脚本名），不因写法差异停下，命令仍逐字保留 Hook 里的写法。没有对应读回事实的槽保持分槽结果，`commandSource` 为 `scan`（有命令）或 `null`，`hook` 为 `null`。
 
 分槽规则：
 
@@ -207,7 +207,7 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 2. 再重新扫描目标仓，与 `machineFp` 比对。不一致说明目标仓自 `scan` 后变了，即停，不写任何文件，错误里逐条列出新增、变化、消失的事实 `id`（退出码 4）。AI 应向用户说明哪条变了，并重新运行 `scan`。
 3. 计划里的每个取值都能追到来处：某条事实、某条判断，或回答文件。追不到来处的不能进计划。
 4. 带 `--readback` 时重新运行读回，与读回文件的 `machineFp` 比对。不一致说明 Hook 自 `readback` 后变了，即停，不写任何文件，错误里逐条列出变化的读回事实 `id`（退出码 4）。AI 应说明哪条变了并重新运行 `readback`。
-5. Hook 记录的槽命令与本轮扫描的槽命令不一致，或 Hook 记录为未接线（状态不是 `wired`）而扫描找到命令，`plan` 退出码 1 停下，不择一，并一次列出全部冲突槽。AI 应停下重新向用户确认，再重新运行 `scan` / `readback` 出计划。
+5. Hook 记录的槽命令与本轮扫描的槽命令不一致（同一调用只差 `run` 写法除外），Hook 记录为未接线（状态不是 `wired`）而扫描找到命令，或本轮覆盖判断停用了该槽（`hook-pause`）而 Hook 记为已接线，`plan` 退出码 1 停下，不择一，并一次列出全部冲突槽。AI 应停下重新向用户确认，再重新运行 `scan` / `readback` 出计划。
 6. 读回状态是 `drift` 或 `broken` 时，`plan` 退出码 1 停下：既不猜测出处，也不按本轮扫描继续，错误里给出 `diff.kind`、`detail` 和能定位时的行号。AI 应把差异位置交给用户裁决，再重新运行 `readback`。
 
 ## 7. 调用时机与怎么向用户解释

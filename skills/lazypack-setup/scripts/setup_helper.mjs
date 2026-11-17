@@ -179,6 +179,18 @@ function invocationFor(packageManager, scriptName) {
   return `${packageManager} run ${scriptName}`;
 }
 
+/**
+ * `pnpm run test` 与 `pnpm test` 是同一个脚本的两种合法写法。读回比对时按同一调用
+ * 处理，避免配方模板的 `run` 写法与扫描合成写法打成本不存在的冲突；仍然逐字保留
+ * Hook 里的命令。
+ */
+function sameScriptInvocation(left, right) {
+  const parse = (value) => /^(npm|pnpm|yarn) (?:run )?([A-Za-z0-9_][A-Za-z0-9_:.\/@+-]*)$/.exec(value);
+  const a = parse(left);
+  const b = parse(right);
+  return Boolean(a && b && a[1] === b[1] && a[2] === b[2]);
+}
+
 export function scanExistingCommands(cwd) {
   const repoRoot = realRepoRoot(cwd);
   const manifestPath = path.join(repoRoot, 'package.json');
@@ -240,7 +252,9 @@ const HOOK_KINDS = ['hook-managed-block', 'hook-slot'];
 const HOOK_STATES = ['absent', 'unmanaged', 'no-provenance', 'valid', 'drift', 'broken'];
 const SLOT_STATUS_VALUES = ['wired', 'missing', 'install-failed', 'n/a'];
 const PROVENANCE_LINE_RE = /^# lazypack:preset id=([a-z0-9][a-z0-9-]*) version=(\d+\.\d+\.\d+) format=(\S+) lint=(\S+) test=(\S+) type=(\S+)$/;
-const PROVENANCE_VALUE_RE = /^(wired|missing|install-failed|n\/a):(preset|existing|none):(recommended|declined|pre-existing|no-tool|install-error|not-applicable)$/;
+const PROVENANCE_VALUE_RE = new RegExp(
+  `^(${SLOT_STATUS_VALUES.join('|')}):(preset|existing|none):(recommended|declined|pre-existing|no-tool|install-error|not-applicable)$`
+);
 // 只认行首的注释，避免命令或说明文字里出现 `lazypack:preset` 被误判成出处行。
 const PROVENANCE_MARKER_RE = /^\s*#\s*lazypack:preset\b/;
 // §5.4 允许命令含换行，所以赋值要按单引号扫描，不能按行切分。
@@ -455,14 +469,17 @@ function readHook(repoRoot) {
   }
   locator = `lazypack:start block=${HOOK_BLOCK}`;
 
-  const normalizedText = lfNormalize(buf).toString('utf8');
-  if (RESERVED_TOKEN.test(scan.startLine.text) || RESERVED_TOKEN.test(scan.body.toString('utf8'))) {
-    const placeholder = RESERVED_TOKEN.exec(normalizedText);
+  const headerToken = RESERVED_TOKEN.exec(scan.startLine.text);
+  const bodyToken = RESERVED_TOKEN.exec(scan.body.toString('latin1'));
+  if (headerToken || bodyToken) {
+    const line = headerToken
+      ? lineNumberAt(buf, scan.startLine.start + headerToken.index)
+      : lineNumberAt(buf, scan.bodyStart + bodyToken.index);
     return {
       value: markBroken(value, {
         kind: 'placeholder',
         detail: '托管块 header 或正文仍含未展开的保留模板变量',
-        line: placeholder ? textLineAt(normalizedText, placeholder.index) : null
+        line
       }, contentFp),
       slotFacts: null,
       locator
@@ -478,8 +495,6 @@ function readHook(repoRoot) {
     value.block = block;
     value.diff = {
       kind: 'fp-mismatch',
-      headerFp: header.fp,
-      currentFp,
       detail: `正文指纹与 header.fp 不一致（header ${header.fp}，当前 ${currentFp}）`,
       line: null
     };
@@ -933,7 +948,20 @@ function mergeReadbackSlots(slots, readbackFacts) {
     const wired = fact.value.status === 'wired';
     const hookCommand = wired ? recordedCommand : null;
     const scanCommand = slot.command;
-    if (wired && recordedCommand !== null && scanCommand !== null && recordedCommand !== scanCommand) {
+    if (wired && typeof slot.reason === 'string' && slot.reason.startsWith('hook-pause:')) {
+      // 本轮覆盖判断明确停用了这个槽（例如脚本已不合规），不能因为 Hook 里记着
+      // 一条历史命令就把它静默恢复成已接线。
+      conflicts.push(
+        `槽 ${slot.slot}：Hook 记录为已接线，但本轮覆盖判断停用了该命令（${slot.reason}），不静默恢复`
+      );
+    }
+    if (
+      wired &&
+      recordedCommand !== null &&
+      scanCommand !== null &&
+      recordedCommand !== scanCommand &&
+      !sameScriptInvocation(recordedCommand, scanCommand)
+    ) {
       conflicts.push(
         `槽 ${slot.slot}：Hook 记录命令「${recordedCommand}」≠ 本轮扫描命令「${scanCommand}」`
       );
