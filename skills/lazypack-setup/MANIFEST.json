@@ -3,7 +3,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "9943c7e9fb587821d4baa41c552742f7c4d24b80183a5353d576e370fb7eb575"
+      "sha256": "6c2d85f964835101bc3716307f63d4bdbef8e06bdca39b32c1277c89cf1ecc60"
     },
     {
       "path": "assets/mutation/config/crontab.example",
@@ -263,7 +263,7 @@
     },
     {
       "path": "references/setup-pipeline.md",
-      "sha256": "ec5ff000871c5a318f313c1a90abdc188139568bf039cc2c8cf627a82aeed0cc"
+      "sha256": "0a3966a62fbd710b27b21eae29335d44357a554bc502596c65c04c27978e5d97"
     },
     {
       "path": "references/unit-matrix.md",
@@ -295,7 +295,7 @@
     },
     {
       "path": "scripts/managed_blocks.mjs",
-      "sha256": "f15250771d26b6f6232e3818df7e85489727d8381c9497512b65701651a7e19c"
+      "sha256": "48ece39b07c495f181afa31db46546c450b7de8e992dc983da263e742acf1433"
     },
     {
       "path": "scripts/package_manifest.mjs",
@@ -303,7 +303,7 @@
     },
     {
       "path": "scripts/setup_helper.mjs",
-      "sha256": "e7a572d4c45d38816aa959661558fe32ebf6551dd4cd905fc4314c55aaa26626"
+      "sha256": "6abb013edbcfa48350dfb4b88907c35a4ad177b806bbe744248f11a7a303cd9d"
     },
     {
       "path": "scripts/unit_contracts.mjs",

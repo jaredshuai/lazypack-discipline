@@ -70,7 +70,7 @@ description: >-
        · 优先级 5（传统纯 JS/无 tsconfig）：受限分支，保留已有命令，缺失项给手动指引；
        · 优先级 6（显式选择 TS 的新仓分支）：**恢复明确选择 TS 的新仓分支**；当目标目录为空目录或未初始化工程，且用户显式指定/选择了 TypeScript 时，**绝对不因无清单而直接退出，亦不自行猜测语言**；直接提供标准 TS 最小化工程模板初始化（ESM `"type": "module"`、最小 package/scripts、双 tsconfig、CLI `parseArgs`、bin/files、可选 MCP、单包 `pnpm-workspace.yaml: verifyDepsBeforeRun: error` 契约）。
    - **解耦声明**：缺对应清单或缺对应包管理器仅限制特定语言配方补缺，**绝对不关闭、不改写仓库已有的其他有效门禁**，亦不阻断通用纪律装配。
-4. **既有质量门禁命令**：按 [setup-pipeline.md](references/setup-pipeline.md)，带 `--cwd <目标仓>` 运行 `scripts/setup_helper.mjs scan`；第 3 步后运行 `plan` 分槽，同槽冲突即停，补判断。聚合脚本覆盖按 [verification.md §3.3](references/verification.md#33-门禁命令规范执行边界与缓存授权) 判断，写入 `judgments`。工具没查到的由你只读查找。向用户说明：命令原样保留、不拆；事实变了指出哪条。
+4. **既有质量门禁命令**：按 [setup-pipeline.md](references/setup-pipeline.md)，带 `--cwd <目标仓>` 运行 `scripts/setup_helper.mjs scan`；第 3 步后带上 `--readback` 运行 `plan` 分槽，同槽冲突即停，补判断。聚合脚本覆盖按 [verification.md §3.3](references/verification.md#33-门禁命令规范执行边界与缓存授权) 判断，写入 `judgments`。工具没查到的由你只读查找。向用户说明：命令原样保留、不拆；事实变了指出哪条。
 5. **既有变异测试配置**：检查是否存在变异测试工具配置：
    - TypeScript 项目：检查 `stryker.conf.js`、`stryker.conf.mjs`、`.stryker.conf.json`；
    - Python 项目：检查 `pyproject.toml` 中的 `[tool.mutmut]` 段、`setup.cfg` 中的 `[mutmut]` 段。
@@ -80,17 +80,7 @@ description: >-
    - 对本轮涉及的角色、常驻入口、编码标准、发布纪律与 Hook 产物（含拟新建项）先按 [managed-blocks.md §5.3.1](references/managed-blocks.md#531-确定性写入与最终核验) 采集一次原始基线并执行只读 `verify`；重跑判定 NO-OP 前也必须执行。占位符残留、无效 header 或指纹不符均不得因 `input` 相同而跳过；首次发现问题只列修复差异，不自动覆写。后续写盘复用这份基线，草案阶段不重新采样。登记册单独按第 5 步第 6 项处理其受管区与获批 Section 3，不把该专用协作写入吸收为通用基线。
    - 检查根目录与 `docs/` 下是否已存在六类产物，解析是否存在有效 lazypack 托管标记（见 [references/managed-blocks.md](references/managed-blocks.md)）；
    - 探测 `CHANGELOG.md`、`scripts/changelog.mjs` 与 `scripts/check_report_layers.mjs`：三者均为**非受管对象**（无 lazypack 标记，不参与 fp/input 决策树）。`CHANGELOG.md` 存在即原位保留并记入 Section 3 登记候选；两个 `.mjs` 已存在时视为本地副本，不覆盖；
-   - **受管 Hook 出处读回与重跑恢复 (Hook Provenance Read-back)**：
-     * 探测目标 Hook（如 `.githooks/pre-commit`）是否存在；
-     * 若存在有效 lazypack 托管块：比对 `current_fp === header.fp`；
-     * 仅当通过标记与指纹核验，且正文头部存在严格语法的 `# lazypack:preset` 出处注释行时：
-       优先读取出处行的 `id`、`version` 以及逐槽 `provenance`（`<state>:<source>:<reason>`，如 `wired:preset:recommended`、`missing:preset:declined`、`install-failed:preset:install-error` 等），以及槽位命令和状态变量；
-       格式核验通过后，**完整恢复原有采纳、拒绝与安装失败等历史事实**；
-       **来源固化契约**：**绝对不能**因当前环境中已检测到对应工具（例如已在系统 PATH 或 `.venv/` 中）就将原 `<source>=preset` 改标为 `existing:pre-existing`！工具因配方而存在，来源事实仍为 `preset`；
-     * 若正文手改（`current_fp !== header.fp`）、标记残缺或出处非法：**坚决不猜测出处**，按漂移或冲突处理，展示 diff 待裁决；
-     * 若 Hook 包含有效托管块但**无 `# lazypack:preset` 出处行**（旧版 setup 或非配方 Hook）：将其中的门禁命令统一按通用既有命令处理（`source=existing`, `reason=pre-existing`）；
-     * **退出配方后的状态认知**：若此前已执行配方退出，Hook 中的出处行已移除；环境中遗留的工具**绝不代表用户重新接受了配方**；再次接线必须经由用户显式选择；
-     * **未变重跑幂等**：若恢复的出处与命令与当前仓库状态一致（未变重跑），完整保留原出处与原 input，**不重复报价、不重复发起安装、不重复执行基线、不写盘（稳定 NO-OP）**。
+   - **受管 Hook 出处读回**：带 `--cwd <目标仓>` 运行 `node scripts/setup_helper.mjs readback --out <readback.json>`，再把该文件以 `--readback` 传给 `plan`；按 [setup-pipeline.md §7](references/setup-pipeline.md#7-调用时机与怎么向用户解释) 解释结果：`valid` / `no-provenance` 说明恢复了哪些值，`absent` / `unmanaged` / `drift` / `broken` 说明停在什么状态、差异在哪一行。读回口径留在 [managed-blocks.md §5.6](references/managed-blocks.md#56-hook-托管块出处读回与重跑恢复契约-provenance-recovery-on-re-run)，不在这里复述。
 8. **访谈材料与想法留存现状探测**：
    - 读取 `docs/agents/roles.md` §3 或常驻入口中是否已存在生效的留存策略与路径配置；
    - 探测是否存在 `docs/plantree/ideas/`、`docs/ideas/`、`docs/interviews/` 等线索目录；

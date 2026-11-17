@@ -9,6 +9,14 @@
 
 ## 每轮记录
 
+### 2026-11-17 #128 既有 Hook 出处读回迁入管线：readback 与 plan --readback
+
+- 检查范围：P1、P3、P4、P9、P10（本轮改了 `SKILL.md` 第 2 步第 4、7 项、`setup-pipeline.md`、`setup_helper.mjs`、`managed_blocks.mjs`、`test_setup_helper.mjs` 与登记册；P1 的固定层未改，只核验未受影响）；另跑其余全部编号确认未受影响。人工核对：`SKILL.md` 第 7 项只留调用入口与解释，读回口径仍在 `managed-blocks.md` §5.6；`drift`/`broken` 不出槽事实、不出 `preset`；`valid` 与 `no-provenance` 的槽事实逐字取自 Hook 字节。
+- 依据版本：开工 `1fe7fc5`（main），收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
+- 处理结果：P1–P5、P8–P11 均未发现差异（9/9 PASS，退出码 0，各行均无 `declaration=`；P4 输出 register=127 log=124 failures=0）；`node scripts/run_tests.mjs --fast` 为 16 passed, 1 failed, 2 skipped（唯一失败是本机既有的 `test_verify_hook_install` Windows CR 用例，与 #128 无关），`node scripts/test_setup_helper.mjs` 为 57 passed, 1 skipped, 0 failed（新增 29 个读回与合并用例）。`SKILL.md` 第 7 项读回段由 1826 字节缩到 618 字节（UTF-8，含段末换行；不含换行为 1825 → 617），`MANIFEST.json` 已重生成。
+- 未覆盖范围：只迁入第 2 步第 7 项；`render`、`execute`、`verify` 与 `gen`/`input` 重算未迁入，不宣称「重跑零提问」已端到端交付，本票只断言读回值不变。读回只认 `.githooks/pre-commit`，`.husky/` 等其它 Hook 路径未覆盖；测试夹具在系统临时目录生成，不联网。
+- 未决事项：可由维护者推翻的裁定有：新增 `unmanaged`；`valid` / `no-provenance` 才产出恢复值而 `drift` / `broken` 零恢复值（按 §5.6 而非票面字面）；`current_fp` 按 §2 写入算法而非票面 §3.2；只有 `wired` 槽命令算既有命令；`pnpm run test` 与 `pnpm test` 视为同一调用。
+
 ### 2026-11-12 #114 既有门禁命令探测迁入管线：scan、plan 与逐字保留断言
 
 - 检查范围：P4、P5（本轮改了登记册、`SKILL.md` 第 2 步第 4 项和资源清单、`tests.yml`、净室说明文档）；另跑了其余全部编号确认未受影响，固定层、`verification.md`、声明文件和检查器没有改。人工核对：`SKILL.md` 该项改后只剩入口与解释，口径仍在 `verification.md` §3.3；新文档与 #113 结论的字段逐项对过；登记册新增三行说明均不超过 80 个汉字。
