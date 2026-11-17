@@ -130,7 +130,11 @@ function assertSafeOutput(repoRoot, out) {
     throw new CliError(EXIT.UNSAFE, `输出文件不能放在目标仓内：${out}（事实、回答、计划文件放系统临时目录下本次运行专用的子目录）`);
   }
   try {
-    if (fs.lstatSync(target).isSymbolicLink()) throw new CliError(EXIT.UNSAFE, `输出路径是符号链接：${out}`);
+    const stat = fs.lstatSync(target);
+    if (stat.isSymbolicLink()) throw new CliError(EXIT.UNSAFE, `输出路径是符号链接：${out}`);
+    if (stat.isFile() && stat.nlink > 1) {
+      throw new CliError(EXIT.UNSAFE, `输出路径有多个硬链接，可能是目标仓文件的别名：${out}`);
+    }
   } catch (err) {
     if (err instanceof CliError) throw err;
   }
@@ -185,10 +189,15 @@ function invocationFor(packageManager, scriptName) {
  * Hook 里的命令。
  */
 function sameScriptInvocation(left, right) {
-  const parse = (value) => /^(npm|pnpm|yarn) (?:run )?([A-Za-z0-9_][A-Za-z0-9_:.\/@+-]*)$/.exec(value);
+  const parse = (value) => /^(npm|pnpm|yarn) (run )?([A-Za-z0-9_][A-Za-z0-9_:.\/@+-]*)$/.exec(value);
   const a = parse(left);
   const b = parse(right);
-  return Boolean(a && b && a[1] === b[1] && a[2] === b[2]);
+  if (!a || !b || a[1] !== b[1] || a[3] !== b[3]) return false;
+  if (Boolean(a[2]) === Boolean(b[2])) return true;
+  // npm 只对 test/start/stop/restart/version 这类生命周期脚本允许省略 run；
+  // 其它脚本必须带 run，`npm lint` 与 `npm run lint` 不是同一个调用。
+  const bare = a[2] ? b : a;
+  return ['test', 'start', 'stop', 'restart', 'version'].includes(bare[3]);
 }
 
 export function scanExistingCommands(cwd) {
@@ -627,6 +636,17 @@ function readHook(repoRoot) {
       };
     }
     const command = hits.CMD[0].value;
+    if (status === 'wired' && command.trim() === '') {
+      return {
+        value: markBroken(value, {
+          kind: 'slot-variables',
+          detail: `${prefix}_CMD 为空但状态是 wired`,
+          line: hits.CMD[0].line
+        }, contentFp),
+        slotFacts: null,
+        locator
+      };
+    }
     // valid 用出处行三段式；no-provenance 按通用既有命令处理（§5.6）。
     const provenance = provenanceBySlot ? provenanceBySlot[slot] : `${status}:existing:pre-existing`;
     const [state, source, reason] = provenance.split(':');

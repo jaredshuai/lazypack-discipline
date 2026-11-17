@@ -1259,6 +1259,43 @@ test('plan --readback：本轮覆盖判断停用的槽，不因 Hook 历史命�
   assert.match(result.stderr, /槽 test：Hook 记录为已接线，但本轮覆盖判断停用了该命令/);
 });
 
+test('plan --readback：npm lint 不等价于 npm run lint，按冲突停下', (t) => {
+  const workspace = makeWorkspace(t);
+  writeHook(workspace, renderHook(workspace, { slotCommands: { lint: 'npm lint' } }));
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+
+  const { result, plan: produced } = plan(workspace, file, { readbackFile: rb.file, expect: EXIT.ERROR });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /槽 lint：Hook 记录命令「npm lint」/);
+});
+
+test('readback：wired 槽的命令为空或只有空白 → broken，零恢复值', (t) => {
+  for (const command of ['', '   ']) {
+    const workspace = makeBareWorkspace(t);
+    writeHook(workspace, renderHook(workspace, { slotCommands: { format: command } }));
+
+    const facts = readback(workspace).facts;
+    const state = stateFactOf(facts);
+    assert.equal(state.value.state, 'broken');
+    assert.equal(state.value.diff.kind, 'slot-variables');
+    assert.equal(typeof state.value.diff.line, 'number');
+    assert.equal(slotFactsOf(facts).length, 0);
+  }
+});
+
+test('readback：--out 指向目标仓文件的硬链接 → 退出 3，原文件不变', (t) => {
+  const workspace = makeBareWorkspace(t);
+  writeHook(workspace, renderHook(workspace));
+  const victim = path.join(workspace.repo, 'victim.txt');
+  fs.writeFileSync(victim, 'do not touch\n', 'utf8');
+  const alias = path.join(workspace.out, 'alias.json');
+  fs.linkSync(victim, alias);
+
+  helper(workspace, ['readback', '--cwd', workspace.repo, '--out', alias], { expect: EXIT.UNSAFE });
+  assert.equal(fs.readFileSync(victim, 'utf8'), 'do not touch\n');
+});
+
 test('readback：不带 --out 时标准输出就是完整 JSON', (t) => {
   const workspace = makeBareWorkspace(t);
   writeHook(workspace, renderHook(workspace));

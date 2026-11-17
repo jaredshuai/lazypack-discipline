@@ -189,7 +189,7 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 | `commandSource` | 命令以谁为准：`hook`（读回记录；记录为空命令时也表示这个槽按 Hook 的「未接线」处理）、`scan`（本轮扫描）或 `null`（既没有读回记录也没有扫描命令） |
 | `hook` | 读回槽事实的 `{state, provenance, status}`；没有对应读回事实时为 `null` |
 
-带 `--readback` 且某个槽有读回事实时，以 Hook 为准：`commandSource` 为 `hook`，`from` 指向 hook 槽事实 `id`，`needs` 为空数组。只有 Hook 状态为 `wired` 时 `command` 才取读回命令（空串写 `null`）、`cwd` 为 `.`、`origin` 为 `existing`；其余状态即使 Hook 里记着命令串也写 `command: null`、`cwd: null`、`origin: none`，并把 `outcomes` 的 `writeCommand` 标为 `false`。`hook.provenance` 逐字保留；不因当前环境或本轮扫描找到同名命令就把 `preset` 改写成 `existing`。同一包管理器的 `pnpm run test` 与 `pnpm test` 视为同一调用（同管理器、同脚本名），不因写法差异停下，命令仍逐字保留 Hook 里的写法。没有对应读回事实的槽保持分槽结果，`commandSource` 为 `scan`（有命令）或 `null`，`hook` 为 `null`。
+带 `--readback` 且某个槽有读回事实时，以 Hook 为准：`commandSource` 为 `hook`，`from` 指向 hook 槽事实 `id`，`needs` 为空数组。只有 Hook 状态为 `wired` 时 `command` 才取读回命令（空串写 `null`）、`cwd` 为 `.`、`origin` 为 `existing`；其余状态即使 Hook 里记着命令串也写 `command: null`、`cwd: null`、`origin: none`，并把 `outcomes` 的 `writeCommand` 标为 `false`。`hook.provenance` 逐字保留；不因当前环境或本轮扫描找到同名命令就把 `preset` 改写成 `existing`。同一包管理器的 `pnpm run test` 与 `pnpm test` 视为同一调用（同管理器、同脚本名；只允许 `test` / `start` / `stop` / `restart` / `version` 这类可省略 `run` 的生命周期脚本），不因写法差异停下，命令仍逐字保留 Hook 里的写法。没有对应读回事实的槽保持分槽结果，`commandSource` 为 `scan`（有命令）或 `null`，`hook` 为 `null`。
 
 分槽规则：
 
@@ -215,7 +215,7 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 - `scan` 在第 2 步第 4 项运行；随后 AI 读事实里每条聚合脚本的 `definition`，按 §3.3 写 `coverage` 判断。
 - `readback` 在第 2 步第 7 项运行；结果文件必须写在目标仓外。它是只读的：不执行 Hook，不读 PATH、`.venv/` 或锁文件去改写来源。
 - `plan` 在第 3 步回答之后、第 4 步草案之前运行，并带上 `--readback`。第 4 步草案里的槽位接线命令取自 `slots[].command`，AI 不改写、不重新拆分。
-- **重跑**：`plan` 不自己读 Hook，读回由第 2 步第 7 项的 `readback` 负责。目标仓已有 lazypack 装好且验证过的 Hook 时，`SKILL.md` 第 2 步第 7 项优先。已有槽的命令和出处以 Hook 记录为准，不因计划把 `preset` 改成 `existing`。两者不一致时 `plan` 退出码 1 停下，重新向用户确认。
+- **重跑**：`plan --readback` 会自己重跑一遍读回做核对，读回文件本身仍由第 2 步第 7 项的 `readback` 产出。目标仓已有 lazypack 装好且验证过的 Hook 时，`SKILL.md` 第 2 步第 7 项优先。已有槽的命令和出处以 Hook 记录为准，不因计划把 `preset` 改成 `existing`。两者不一致时 `plan` 退出码 1 停下，重新向用户确认。
 - **怎么解释读回结果**：
   - `valid`：说明恢复了哪个配方 `id`、`version`，每个槽的 `<state>:<source>:<reason>`、状态与命令，并指出这些值取自 Hook 字节；本轮扫描只用于核对，不改写来源。
   - `no-provenance`：说明块有效但没有出处行，四个槽按通用既有命令处理（`existing:pre-existing`），不假装是配方恢复的。

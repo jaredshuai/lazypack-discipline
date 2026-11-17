@@ -263,7 +263,7 @@
     },
     {
       "path": "references/setup-pipeline.md",
-      "sha256": "cfcdf181688ca22bdcd42e8eb3955f4fd8b552c25b464dbe7a06cc2f93f08cf1"
+      "sha256": "a8828cfdf0a3d4853ddc163c557ff3b0fbaed36a630cc333360f74828fec18c6"
     },
     {
       "path": "references/unit-matrix.md",
@@ -303,7 +303,7 @@
     },
     {
       "path": "scripts/setup_helper.mjs",
-      "sha256": "088cc0f5531d3eaf7df084657a6dcd4b55b9e4aa43023e44a662c1fc6435994a"
+      "sha256": "a0359690d2098cd77e9a7618714eb560536a40e208de4383f20cae19c82bfde1"
     },
     {
       "path": "scripts/unit_contracts.mjs",
