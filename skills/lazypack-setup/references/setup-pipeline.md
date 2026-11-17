@@ -7,6 +7,7 @@
 | 项 | 阶段 | 说明 |
 |---|---|---|
 | 第 2 步第 4 项：既有质量门禁命令 | `scan`、`plan` | 探测根 `package.json` 的全部脚本，把完整调用原样分给槽；`slots` 已落地，`actions` 尚未迁入 |
+| 第 2 步第 7 项：受管 Hook 出处读回 | `readback`、`plan --readback` | 只读读回 `.githooks/pre-commit` 的受管块与出处行，输出 `covers [7]` 的事实文件；`plan` 以 Hook 记录覆盖扫描命令 |
 
 「清单全部由工具渲染」只对已迁入的类别成立。事实文件与计划文件的 `covers` 写明了哪些已经归管线；没列出的仍由 AI 按 `SKILL.md` 第 4 步在草案里展示。整体确认仍然只有一次。
 
@@ -16,12 +17,13 @@
 
 ```
 node scripts/setup_helper.mjs scan --cwd <目标仓> [--out <facts.json>]
-node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answers <answers.json> [--out <plan.json>]
+node scripts/setup_helper.mjs readback --cwd <目标仓> [--out <readback.json>]
+node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answers <answers.json> [--readback <readback.json>] [--out <plan.json>]
 ```
 
 - 只用 Node 标准库。路径相对 skill 目录。
-- `--cwd` 必填，不再默认当前目录。`scan`、`plan` 不带它退出 2；不带子命令也退出 2 并打印用法；`--help` 退出 0。
-- 事实、回答、计划文件都写在**目标仓之外**，放系统临时目录下本次运行专用的子目录（先取真实路径再用）。运行目录由 AI 在运行前建好，工具不会替它建。`--out` 的目录不存在时退出 3，不写任何东西；`--out` 落在目标仓内也退出 3。不带 `--out` 时 JSON 打印到标准输出。
+- `--cwd` 必填，不再默认当前目录。`scan`、`readback`、`plan` 不带它退出 2；不带子命令也退出 2 并打印用法；`--help` 退出 0。
+- 事实、回答、读回、计划文件都写在**目标仓之外**，放系统临时目录下本次运行专用的子目录（先取真实路径再用）。运行目录由 AI 在运行前建好，工具不会替它建。`--out` 的目录不存在时退出 3，不写任何东西；`--out` 落在目标仓内也退出 3。不带 `--out` 时 JSON 打印到标准输出。`readback` 只读目标仓，不写任何目标仓文件，也不执行 Hook。
 - 运行成功后由 AI 删除这些文件；失败或被阻断时保留，报告里给出目录路径。文件内容不贴进报告正文。
 - `render`、`execute`、`verify`：尚未迁入，调用会以退出码 2 拒绝。
 
@@ -30,10 +32,10 @@ node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answ
 | 码 | 含义 |
 |---|---|
 | `0` | 成功 |
-| `1` | 输入或内容有错：文件读不到或不合法、事实文件自身被改坏（`facts` 与自带的 `machineFp` 对不上）、判断或回答不合格、同槽冲突、`package.json` 读取失败 |
+| `1` | 输入或内容有错：文件读不到或不合法、事实或读回文件自身被改坏（`facts` 与自带的 `machineFp` 对不上）、判断或回答不合格、同槽冲突、Hook 与扫描命令不一致、`package.json` 读取失败 |
 | `2` | 用法错误：缺 `--cwd`、缺 `--facts`/`--answers`、没有子命令、未知命令、调用了尚未迁入的命令 |
 | `3` | 输出路径不安全 |
-| `4` | 目标仓的既有命令自 `scan` 以来变了，不出计划、不写文件 |
+| `4` | 目标仓的既有命令或受管 Hook 自上次 `scan`/`readback` 以来变了，不出计划、不写文件 |
 
 ## 3. 事实文件（`lazypack-facts/1`）
 
@@ -41,7 +43,7 @@ node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answ
 |---|---|
 | `schema` | 固定为 `lazypack-facts/1` |
 | `scope` | 目前只支持 `full`。`docs-only` 尚未迁入 |
-| `covers` | 本次由工具探测的 `SKILL.md` 第 2 步项号，目前固定为 `[4]`。没列出的项仍由 AI 按 `SKILL.md` 探测 |
+| `covers` | 本次由工具探测的 `SKILL.md` 第 2 步项号：`scan` 输出 `[4]`，`readback` 输出 `[7]`。没列出的项仍由 AI 按 `SKILL.md` 探测 |
 | `facts` | 工具查到的事实，按 `id` 的码点升序 |
 | `judgments` | AI 的判断。`scan` 输出空数组，由 AI 追加 |
 | `machineFp` | `facts` 段的摘要，不含 `judgments` |
@@ -53,8 +55,8 @@ node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answ
 | 字段 | 含义 |
 |---|---|
 | `id` | 稳定标识，同一仓库两次扫描相同，如 `cmd:package.json#scripts.test` |
-| `item` | 来自第 2 步第几项，目前固定为 `4` |
-| `kind` | 目前只有 `existing-command`。其余种类尚未迁入 |
+| `item` | 来自第 2 步第几项：`4`（`scan`）或 `7`（`readback`） |
+| `kind` | `existing-command`（`scan`）、`hook-managed-block` 或 `hook-slot`（`readback`）。其余种类尚未迁入 |
 | `value` | 随 `kind` 而定，见下 |
 | `source` | 固定为 `machine` |
 | `evidence` | `{path, locator}`：在哪个文件的哪个位置查到的 |
@@ -67,6 +69,42 @@ node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answ
 | `cwd` | 工作目录，相对目标仓根的 POSIX 路径，仓根写 `.` |
 | `definedAt` | 定义位置 `{path, locator}`，如 `{"path": "package.json", "locator": "scripts.lint"}` |
 | `definition` | 定义原文，逐字记录，如 `tsc --noEmit && vitest run`。**只作证据，任何阶段都不拿它拆出子命令** |
+
+`hook-managed-block` 的 `value`（恒有一条，`id` 为 `hook:.githooks/pre-commit`）：
+
+| 字段 | 含义 |
+|---|---|
+| `path` | 固定为 `.githooks/pre-commit` |
+| `state` | `absent`、`unmanaged`、`no-provenance`、`valid`、`drift`、`broken` 之一 |
+| `header` | 严格解析出的 `{src, gen, input, fp}`；无效时为 `null` |
+| `currentFp` | 正文按 `managed-blocks.md` §2 规范化后的 16 位指纹；无效时为 `null` |
+| `block` | `{name, style, startLine, endLine}`；没有有效块时为 `null`，行号为 1-based |
+| `preset` | 出处行的 `{id, version}`；没有出处或出处无效时为 `null` |
+| `diff` | `null` 或差异 `{kind, detail, line?}` |
+
+六种状态：
+
+- `absent`：没有 `.githooks/pre-commit`。恢复值全 `null`。
+- `unmanaged`：文件存在但没有 lazypack 托管块。恢复值全 `null`。
+- `no-provenance`：块有效（标记、header、`fp` 一致）但没有 `# lazypack:preset` 出处行。四个槽按 `existing` / `pre-existing` 恢复，`preset` 为 `null`。
+- `valid`：块有效且出处行严格合法。恢复 `preset` 与四个槽的出处、状态、命令。
+- `drift`：`currentFp !== header.fp`。不产出槽事实，`preset` 为 `null`，`diff.headerFp` 与 `diff.currentFp` 给出两侧指纹。
+- `broken`：标记残缺、header 非法、注释风格不对、块名不是 `pre-commit-hook`、保留变量残留、出处行歧义或语法非法、槽变量缺失/重复/非法，或 Hook 是符号链接、目录、非普通文件。零恢复值：不产出槽事实，`header`、`currentFp`、`block`、`preset` 全 `null`。
+
+`diff.kind`：`not-a-regular-file`、`boundary`、`header`、`style-mismatch`、`unexpected-block`、`placeholder`、`fp-mismatch`、`provenance-ambiguous`、`provenance-grammar`、`slot-variables`。`evidence.locator`：没有文件为 `none`，有文件无托管块为 `lazypack:start`，有托管块为 `lazypack:start block=pre-commit-hook`。
+
+`hook-slot` 的 `value`（仅 `valid` / `no-provenance` 产出；按 `format`、`lint`、`type`、`test` 产出，最终事实数组仍按 `id` 码点升序，`id` 为 `hook:.githooks/pre-commit#<slot>`）：
+
+| 字段 | 含义 |
+|---|---|
+| `slot` | `format`、`lint`、`type`、`test` 之一 |
+| `state` | `valid` 时取自出处行三段式的第一段；`no-provenance` 时为 `<SLOT>_STATUS` 的值 |
+| `source` | `valid` 时取自第二段（`preset`、`existing`、`none`）；`no-provenance` 时固定 `existing` |
+| `reason` | `valid` 时取自第三段；`no-provenance` 时固定 `pre-existing` |
+| `status` | `<SLOT>_STATUS` 原值：`wired`、`missing`、`install-failed`、`n/a` |
+| `command` | `<SLOT>_CMD` 原值，按 `managed-blocks.md` §5.4 把 `'\''` 还原为 `'`；未接线时为空串 |
+
+`evidence.locator` 为 `<SLOT>_STATUS/<SLOT>_CMD`。命令、状态与三段式逐字保留；不得因当前环境里找到同名工具就把 `preset` 改写成 `existing`（No Regressive Reclassification）。
 
 ### 现在探测什么
 
@@ -126,6 +164,8 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 | `answersOrigin` | 从回答文件带过来的 `origin` |
 | `docPlanFp` | 文档迁移计划的 `planFp`；目前恒为 `null`（尚未迁入）。文档迁移仍走 `doc_helper.mjs`，两份计划并列不合并 |
 | `covers` | 本计划覆盖的写入类别，目前是 `["gate-slots"]` |
+| `readbackFp` | 读回文件的 `machineFp`；没传 `--readback` 时为 `null` |
+| `hooks` | 受管 Hook 状态事实的摘要 `[{from, path, state, preset}]`；没传读回文件时为空数组 |
 | `slots` | 四个门禁槽各自的决定，顺序 `format`、`lint`、`type`、`test` |
 | `unassigned` | 没有分到任何槽的既有命令：`{from, reason}`，`reason` 为 `hook-pause`（判断为不合规）、`judged-no-slot:<判断 id>`（判断的 `slots` 为空）、`no-slot-name`（名字不认领槽且没有判断认领）或 `unsafe-name`（脚本名不能安全拼进命令行）。列在这里不等于缺一个门禁：被聚合命令内部调用的脚本（如夹具里的 `check`）也在这里，AI 不要为它们另补 Hook 命令 |
 | `aiItems` | 依赖 AI 判断的条目：全部 `coverage` 判断的 `id`。`slots` 为空或 `compliant` 为 `false` 的判断也决定了哪个槽没有命令，所以一并列出 |
@@ -141,10 +181,14 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 | `origin` | `existing`（项目已有的命令）或 `none`（这个槽没有既有命令）。`preset`（配方补的）尚未迁入 |
 | `command` | 要写进 Hook 的完整命令。`existing` 时与对应事实的 `invocation` 相同，AI 把它原样写进 Hook spec；`none` 时为 `null` |
 | `cwd` | 工作目录；`none` 时为 `null` |
-| `from` | 出处：既有命令写事实 `id`；`none` 时为 `null` |
+| `from` | 出处：既有命令写事实 `id`；读回覆盖时写 hook 槽事实 `id`（即使该槽 `origin` 为 `none`，也指向记录「未接线」的 hook 槽事实）；其余 `none` 为 `null` |
 | `needs` | 这个槽依赖的安装动作 `id`；既有命令为空数组 |
 | `reason` | 只在 `none` 时出现：`no-existing-command`、`hook-pause:<事实 id>` 或 `judged-not-covered:<事实 id>` |
-| `outcomes` | 键是状态词，值是 `{provenance, writeCommand}`。`existing` 为 `wired` → `wired:existing:pre-existing`、`writeCommand` 为 `true`（Hook 写入这条命令）。`none` 时是空对象：配方是否补这个槽尚未迁入，计划不预告它最后的状态。状态词与三段式取自 `managed-blocks.md` §5.6 和 `verification.md` §3.3 |
+| `outcomes` | 键是状态词，值是 `{provenance, writeCommand}`。`existing` 为 `wired` → `wired:existing:pre-existing`、`writeCommand` 为 `true`（Hook 写入这条命令）。没有读回事实的 `none` 是空对象：配方是否补这个槽尚未迁入，计划不预告它最后的状态。有读回事实时，键取 Hook 记录的状态词（含 `none` 槽），`writeCommand` 仅在状态为 `wired` 且有命令时为 `true`。状态词与三段式取自 `managed-blocks.md` §5.6 和 `verification.md` §3.3 |
+| `commandSource` | 命令来自哪里：`scan`（本轮扫描）、`hook`（读回记录）或 `null`（没有命令） |
+| `hook` | 读回槽事实的 `{state, provenance, status}`；没有对应读回事实时为 `null` |
+
+带 `--readback` 且某个槽有读回事实时，以 Hook 为准：`command` 取读回命令（空串视为未接线，写 `null`），`cwd` 为 `.`，`from` 指向 hook 槽事实 `id`，`origin` 按是否有命令取 `existing` 或 `none`，`needs` 为空数组。`hook.provenance` 逐字保留；不因当前环境或本轮扫描找到同名命令就把 `preset` 改写成 `existing`。没有对应读回事实的槽保持分槽结果，`commandSource` 为 `scan`（有命令）或 `null`，`hook` 为 `null`。
 
 分槽规则：
 
@@ -161,11 +205,14 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 1. 先核对文件里的 `facts` 与它自带的 `machineFp` 是否自洽，不自洽说明文件被改坏，即停（退出码 1）。
 2. 再重新扫描目标仓，与 `machineFp` 比对。不一致说明目标仓自 `scan` 后变了，即停，不写任何文件，错误里逐条列出新增、变化、消失的事实 `id`（退出码 4）。AI 应向用户说明哪条变了，并重新运行 `scan`。
 3. 计划里的每个取值都能追到来处：某条事实、某条判断，或回答文件。追不到来处的不能进计划。
+4. 带 `--readback` 时重新运行读回，与读回文件的 `machineFp` 比对。不一致说明 Hook 自 `readback` 后变了，即停，不写任何文件，错误里逐条列出变化的读回事实 `id`（退出码 4）。AI 应说明哪条变了并重新运行 `readback`。
+5. Hook 记录的槽命令与本轮扫描的槽命令不一致，或 Hook 记录未接线（空命令）而扫描找到命令，`plan` 退出码 1 停下，不择一。AI 应停下重新向用户确认，再重新运行 `scan` / `readback` 出计划。
 
 ## 7. 调用时机与怎么向用户解释
 
 - `scan` 在第 2 步第 4 项运行；随后 AI 读事实里每条聚合脚本的 `definition`，按 §3.3 写 `coverage` 判断。
-- `plan` 在第 3 步回答之后、第 4 步草案之前运行。第 4 步草案里的槽位接线命令取自 `slots[].command`，AI 不改写、不重新拆分。
-- **重跑**：`plan` 不读已装好的 Hook，这一步由 AI 按第 7 项核对。目标仓已有 lazypack 装好且验证过的 Hook 时，`SKILL.md` 第 2 步第 7 项优先。已有槽的命令和出处以 Hook 记录为准，不因计划把 `preset` 改成 `existing`。两者不一致时加一条 `dissent` 说明，交用户裁。
+- `readback` 在第 2 步第 7 项运行；结果文件必须写在目标仓外。
+- `plan` 在第 3 步回答之后、第 4 步草案之前运行，并带上 `--readback`。第 4 步草案里的槽位接线命令取自 `slots[].command`，AI 不改写、不重新拆分。
+- **重跑**：`plan` 不自己读 Hook，读回由第 2 步第 7 项的 `readback` 负责。目标仓已有 lazypack 装好且验证过的 Hook 时，`SKILL.md` 第 2 步第 7 项优先。已有槽的命令和出处以 Hook 记录为准，不因计划把 `preset` 改成 `existing`。两者不一致时 `plan` 退出码 1 停下，重新向用户确认。
 - 向用户解释：既有命令原样保留；聚合脚本整条分给它覆盖的槽，没有拆；哪些命令是工具查到的，哪些覆盖判断是 AI 读脚本后的判断（`aiItems`）；`plan` 因事实变化停下时，说明是哪条变了。
 - 报告里的「既有命令保留事实」仍按 `verification.md` §3.3 与 §4 的口径写：只有有效调用字符串确实一致才可声称原样保留。

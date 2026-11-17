@@ -9,6 +9,9 @@
  *   2. 聚合脚本没有被展开成子命令。
  * 反向用例：人为把聚合命令拆开，断言必须失败，证明断言本身有效。
  *
+ * #128：新增 readback 测试组，覆盖既有 Hook 出处行的只读读回、六种状态、
+ * 指纹漂移、出处语法、CRLF/BOM 与 plan 的 Hook 命令合并/停止。
+ *
  * 和净室测试一样，只把 skills/lazypack-setup/ 拷到系统临时目录，运行拷出的那份脚本；
  * 夹具仓拷到旁边。临时根取规范真实路径（macOS 的 /var 是符号链接，Windows 的 TEMP
  * 可能是 8.3 短名）。事实、回答、计划文件写在目标仓之外。只用 Node 标准库。
@@ -86,14 +89,128 @@ function scan(workspace, { withJudgments = true } = {}) {
   return { file, facts };
 }
 
-function plan(workspace, factsFile, { expect = EXIT.OK } = {}) {
+function plan(workspace, factsFile, { expect = EXIT.OK, readbackFile = null } = {}) {
   const file = path.join(workspace.out, 'plan.json');
-  const result = helper(
-    workspace,
-    ['plan', '--cwd', workspace.repo, '--facts', factsFile, '--answers', workspace.answers, '--out', file],
-    { expect }
-  );
+  const args = ['plan', '--cwd', workspace.repo, '--facts', factsFile, '--answers', workspace.answers, '--out', file];
+  if (readbackFile) args.push('--readback', readbackFile);
+  const result = helper(workspace, args, { expect });
   return { result, file, plan: fs.existsSync(file) ? readJson(file) : null };
+}
+
+// ---------------------------------------------------------------------------
+// readback 夹具：只拷 skill，目标仓是空仓
+// ---------------------------------------------------------------------------
+
+const HOOK_REL = '.githooks/pre-commit';
+const HOOK_STATE_FACT_ID = 'hook:.githooks/pre-commit';
+const SLOT_NAMES = ['format', 'lint', 'type', 'test'];
+const DEFAULT_SLOT_COMMANDS = { format: 'npm run format', lint: 'npm run lint', type: 'npm test', test: 'npm test' };
+
+function makeBareWorkspace(t) {
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'lazypack-setup-readback-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workspace = {
+    root,
+    skill: path.join(root, 'lazypack-setup'),
+    repo: path.join(root, 'repo'),
+    out: path.join(root, 'artifacts')
+  };
+  fs.cpSync(SKILL_SRC, workspace.skill, {
+    recursive: true,
+    filter: (src) => !/[\\/](node_modules|\.git)([\\/]|$)/.test(src)
+  });
+  fs.mkdirSync(workspace.repo);
+  fs.mkdirSync(workspace.out);
+  return workspace;
+}
+
+const hookFile = (workspace) => path.join(workspace.repo, '.githooks', 'pre-commit');
+
+/** 按 §5.4 把单引号写成 shell 的 `'\''`，与模板渲染口径一致。 */
+function shellEscapeData(value) {
+  return value.split("'").join("'\\''");
+}
+
+/** 独立算 body 指纹：start 与 end 标记行之间，CRLF→LF，SHA-256 前 16 位。 */
+function hookFingerprint(text) {
+  const normalized = text.replace(/\r\n/g, '\n');
+  const start = /^# lazypack:start\b.*$/m.exec(normalized);
+  const end = /^# lazypack:end\b.*$/m.exec(normalized);
+  assert.ok(start && end, '模板里必须有一对 start/end 标记');
+  const body = normalized.slice(start.index + start[0].length + 1, end.index);
+  return crypto.createHash('sha256').update(Buffer.from(body, 'utf8')).digest('hex').slice(0, 16);
+}
+
+function withFingerprint(text) {
+  const fp = hookFingerprint(text);
+  return text.replace(/ fp=[0-9a-f]{16}/, ` fp=${fp}`);
+}
+
+/** 用真实 templates/pre-commit.sh 渲染夹具；头两个标记行由模板自带。 */
+function renderHook(workspace, options = {}) {
+  const {
+    includeProvenance = true,
+    presetId = 'ts-biome-vitest',
+    presetVersion = '0.1.0',
+    provenances = {},
+    slotStatuses = {},
+    slotCommands = {},
+    provenanceLine = null
+  } = options;
+  let text = fs.readFileSync(path.join(workspace.skill, 'templates', 'pre-commit.sh'), 'utf8');
+  text = text.replace('__GEN__', 'fedcba9876543210').replace('__INPUT__', '0123456789abcdef');
+
+  for (const slot of SLOT_NAMES) {
+    const upper = slot.toUpperCase();
+    const status = slotStatuses[slot] ?? 'wired';
+    const command = slotCommands[slot] ?? DEFAULT_SLOT_COMMANDS[slot];
+    text = text.split(`__${upper}_STATUS__`).join(status);
+    text = text.split(`__${upper}_CMD__`).join(shellEscapeData(command));
+  }
+
+  if (provenanceLine !== null) {
+    text = text.replace('__PRESET_PROVENANCE_LINE__', provenanceLine);
+  } else if (includeProvenance) {
+    const value = (slot) => provenances[slot] ?? 'wired:preset:recommended';
+    text = text.replace(
+      '__PRESET_PROVENANCE_LINE__',
+      `lazypack:preset id=${presetId} version=${presetVersion} format=${value('format')} lint=${value('lint')} test=${value('test')} type=${value('type')}`
+    );
+  } else {
+    text = text.replace(/^# __PRESET_PROVENANCE_LINE__\n/m, '');
+  }
+
+  // fp 占位符在 header，不在 body：先用临时值占位再写入独立算出的指纹。
+  text = text.replace('__FP__', '0000000000000000');
+  return withFingerprint(text);
+}
+
+function writeHook(workspace, text, { crlf = false, bom = false } = {}) {
+  const dir = path.dirname(hookFile(workspace));
+  fs.mkdirSync(dir, { recursive: true });
+  const data = crlf ? text.replace(/\n/g, '\r\n') : text;
+  const bytes = Buffer.from(data, 'utf8');
+  fs.writeFileSync(hookFile(workspace), bom ? Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), bytes]) : bytes);
+}
+
+function readback(workspace, { out = path.join(workspace.out, 'readback.json'), expect = EXIT.OK } = {}) {
+  const args = ['readback', '--cwd', workspace.repo];
+  if (out) args.push('--out', out);
+  const result = helper(workspace, args, { expect });
+  return { result, file: out, facts: out ? readJson(out) : JSON.parse(result.stdout) };
+}
+
+const stateFactOf = (file) => file.facts.find((fact) => fact.kind === 'hook-managed-block');
+const slotFactsOf = (file) => file.facts.filter((fact) => fact.kind === 'hook-slot');
+const slotFactOf = (file, slot) => slotFactsOf(file).find((fact) => fact.value.slot === slot);
+
+/** 目标仓全部文件的字节快照，用来证明 readback 只读。 */
+function snapshotRepo(workspace) {
+  const entries = fs.readdirSync(workspace.repo, { recursive: true }).sort();
+  return entries.map((rel) => {
+    const abs = path.join(workspace.repo, rel);
+    return `${rel}:${fs.statSync(abs).isFile() ? crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex') : 'dir'}`;
+  });
 }
 
 /** 改目标仓里的 package.json：回调拿到解析后的对象，返回新对象。 */
@@ -660,4 +777,314 @@ test('render、execute、verify 尚未迁入：明确拒绝，退出码 2', (t) 
     assert.match(result.stderr, /尚未迁入/);
   }
   helper(workspace, ['nope'], { expect: EXIT.USAGE });
+});
+
+// ---------------------------------------------------------------------------
+// readback（#128）
+// ---------------------------------------------------------------------------
+
+test('readback：有效出处行与 fp 一致 → valid，四个槽逐字恢复', (t) => {
+  const workspace = makeBareWorkspace(t);
+  const commandWithQuote = "npx prettier --write 'src/**/*.ts'";
+  const text = renderHook(workspace, {
+    slotStatuses: { format: 'missing', lint: 'wired', type: 'wired', test: 'install-failed' },
+    slotCommands: { format: commandWithQuote, lint: 'npm run lint', type: 'npm test', test: 'node --test' },
+    provenances: {
+      format: 'missing:preset:declined',
+      lint: 'wired:preset:recommended',
+      type: 'wired:preset:recommended',
+      test: 'install-failed:preset:install-error'
+    }
+  });
+  writeHook(workspace, text);
+
+  const { facts, result } = readback(workspace);
+  assert.match(result.stdout, /读回完成：\.githooks\/pre-commit 状态 valid（4 个槽，machineFp [0-9a-f]{64}）/);
+  assert.equal(facts.schema, 'lazypack-facts/1');
+  assert.equal(facts.scope, 'full');
+  assert.deepEqual(facts.covers, [7]);
+  assert.deepEqual(facts.judgments, []);
+  assert.equal(facts.machineFp, independentDigest(facts.facts));
+  assert.deepEqual(
+    facts.facts.map((fact) => fact.id),
+    [
+      HOOK_STATE_FACT_ID,
+      `${HOOK_STATE_FACT_ID}#format`,
+      `${HOOK_STATE_FACT_ID}#lint`,
+      `${HOOK_STATE_FACT_ID}#test`,
+      `${HOOK_STATE_FACT_ID}#type`
+    ]
+  );
+
+  const state = stateFactOf(facts);
+  assert.equal(state.item, 7);
+  assert.equal(state.source, 'machine');
+  assert.equal(state.value.path, HOOK_REL);
+  assert.equal(state.value.state, 'valid');
+  assert.deepEqual(state.value.preset, { id: 'ts-biome-vitest', version: '0.1.0' });
+  assert.deepEqual(state.value.block, { name: 'pre-commit-hook', style: 'sh', startLine: 2, endLine: 121 });
+  assert.equal(state.value.header.gen, 'fedcba9876543210');
+  assert.equal(state.value.header.fp, hookFingerprint(text));
+  assert.equal(state.value.currentFp, hookFingerprint(text));
+  assert.equal(state.value.diff, null);
+  assert.deepEqual(state.evidence, { path: HOOK_REL, locator: 'lazypack:start block=pre-commit-hook' });
+
+  assert.equal(slotFactsOf(facts).length, 4);
+  assert.deepEqual(slotFactOf(facts, 'format').value, {
+    slot: 'format',
+    state: 'missing',
+    source: 'preset',
+    reason: 'declined',
+    status: 'missing',
+    command: commandWithQuote
+  });
+  assert.deepEqual(slotFactOf(facts, 'lint').value, {
+    slot: 'lint',
+    state: 'wired',
+    source: 'preset',
+    reason: 'recommended',
+    status: 'wired',
+    command: 'npm run lint'
+  });
+  assert.deepEqual(slotFactOf(facts, 'type').value, {
+    slot: 'type',
+    state: 'wired',
+    source: 'preset',
+    reason: 'recommended',
+    status: 'wired',
+    command: 'npm test'
+  });
+  assert.deepEqual(slotFactOf(facts, 'test').value, {
+    slot: 'test',
+    state: 'install-failed',
+    source: 'preset',
+    reason: 'install-error',
+    status: 'install-failed',
+    command: 'node --test'
+  });
+  assert.deepEqual(slotFactOf(facts, 'format').evidence, { path: HOOK_REL, locator: 'FORMAT_STATUS/FORMAT_CMD' });
+});
+
+test('readback：手改正文但 header fp 未更新 → drift，零槽事实、无 preset', (t) => {
+  const workspace = makeBareWorkspace(t);
+  const text = renderHook(workspace);
+  const edited = text.replace("FORMAT_CMD='npm run format'", "FORMAT_CMD='npm run format --check'");
+  assert.notEqual(edited, text);
+  writeHook(workspace, edited);
+
+  const facts = readback(workspace).facts;
+  const state = stateFactOf(facts);
+  assert.equal(state.value.state, 'drift');
+  assert.equal(state.value.diff.kind, 'fp-mismatch');
+  assert.equal(state.value.diff.headerFp, hookFingerprint(text));
+  assert.notEqual(state.value.diff.currentFp, state.value.diff.headerFp);
+  assert.equal(state.value.currentFp, state.value.diff.currentFp);
+  assert.equal(state.value.preset, null);
+  assert.equal(slotFactsOf(facts).length, 0);
+});
+
+test('readback：删 end 标记或注释风格混用 → broken，零恢复值', (t) => {
+  const workspace = makeBareWorkspace(t);
+  writeHook(workspace, renderHook(workspace).replace(/# lazypack:end block=pre-commit-hook\n/, ''));
+  const boundary = readback(workspace).facts;
+  const boundaryState = stateFactOf(boundary);
+  assert.equal(boundaryState.value.state, 'broken');
+  assert.equal(boundaryState.value.diff.kind, 'boundary');
+  assert.equal(boundaryState.value.header, null);
+  assert.equal(boundaryState.value.currentFp, null);
+  assert.equal(boundaryState.value.block, null);
+  assert.equal(boundaryState.value.preset, null);
+  assert.equal(slotFactsOf(boundary).length, 0);
+
+  const mixed = renderHook(workspace).replace('# lazypack:end block=pre-commit-hook', '<!-- lazypack:end block=pre-commit-hook -->');
+  writeHook(workspace, mixed);
+  const mixedFacts = readback(workspace).facts;
+  const mixedState = stateFactOf(mixedFacts);
+  assert.equal(mixedState.value.state, 'broken');
+  assert.equal(mixedState.value.diff.kind, 'header');
+  assert.equal(mixedState.value.preset, null);
+  assert.equal(slotFactsOf(mixedFacts).length, 0);
+});
+
+test('readback：有托管块但无出处行 → no-provenance，四个槽按 existing/pre-existing 恢复', (t) => {
+  const workspace = makeBareWorkspace(t);
+  const text = renderHook(workspace, {
+    includeProvenance: false,
+    slotStatuses: { format: 'n/a', lint: 'wired', type: 'missing', test: 'install-failed' },
+    slotCommands: { format: 'biome format --write', lint: 'npm run lint', type: 'npm test', test: 'node --test' }
+  });
+  writeHook(workspace, text);
+
+  const facts = readback(workspace).facts;
+  const state = stateFactOf(facts);
+  assert.equal(state.value.state, 'no-provenance');
+  assert.equal(state.value.preset, null);
+  assert.equal(state.value.diff, null);
+  assert.equal(slotFactsOf(facts).length, 4);
+  for (const slot of SLOT_NAMES) {
+    const fact = slotFactOf(facts, slot);
+    assert.equal(fact.value.source, 'existing');
+    assert.equal(fact.value.reason, 'pre-existing');
+    assert.equal(fact.value.state, fact.value.status);
+  }
+  assert.equal(slotFactOf(facts, 'format').value.command, 'biome format --write');
+  assert.equal(slotFactOf(facts, 'format').value.status, 'n/a');
+  assert.equal(slotFactOf(facts, 'test').value.command, 'node --test');
+  assert.equal(slotFactOf(facts, 'test').value.status, 'install-failed');
+});
+
+test('readback：没有 Hook → absent，facts 只有一条状态事实', (t) => {
+  const workspace = makeBareWorkspace(t);
+  const facts = readback(workspace).facts;
+  assert.equal(facts.facts.length, 1);
+  const state = stateFactOf(facts);
+  assert.equal(state.value.state, 'absent');
+  assert.equal(state.value.header, null);
+  assert.equal(state.value.currentFp, null);
+  assert.equal(state.value.block, null);
+  assert.equal(state.value.preset, null);
+  assert.equal(state.value.diff, null);
+  assert.deepEqual(state.evidence, { path: HOOK_REL, locator: 'none' });
+  assert.equal(slotFactsOf(facts).length, 0);
+
+  // .githooks 存在但 Hook 文件缺失：仍是 absent，locator 不冒充「有文件」。
+  fs.mkdirSync(path.join(workspace.repo, '.githooks'));
+  const dirOnly = stateFactOf(readback(workspace).facts);
+  assert.equal(dirOnly.value.state, 'absent');
+  assert.deepEqual(dirOnly.evidence, { path: HOOK_REL, locator: 'none' });
+});
+
+test('readback：Hook 存在但没有托管块 → unmanaged，零恢复值', (t) => {
+  const workspace = makeBareWorkspace(t);
+  fs.mkdirSync(path.join(workspace.repo, '.githooks'), { recursive: true });
+  fs.writeFileSync(hookFile(workspace), '#!/bin/sh\nnpm test\n', 'utf8');
+
+  const facts = readback(workspace).facts;
+  assert.equal(facts.facts.length, 1);
+  const state = stateFactOf(facts);
+  assert.equal(state.value.state, 'unmanaged');
+  assert.equal(state.value.header, null);
+  assert.equal(state.value.currentFp, null);
+  assert.equal(state.value.block, null);
+  assert.equal(state.value.preset, null);
+  assert.equal(state.value.diff, null);
+  assert.deepEqual(state.evidence, { path: HOOK_REL, locator: 'lazypack:start' });
+  assert.equal(slotFactsOf(facts).length, 0);
+});
+
+test('readback：CRLF 检出加 BOM 与 LF 夹具恢复值逐字相同，且不改写 Hook 字节', (t) => {
+  const text = renderHook(makeBareWorkspace(t), {
+    slotStatuses: { format: 'missing', lint: 'wired', type: 'wired', test: 'wired' }
+  });
+  const lfWorkspace = makeBareWorkspace(t);
+  writeHook(lfWorkspace, text);
+  const lfFacts = readback(lfWorkspace).facts;
+
+  const crlfWorkspace = makeBareWorkspace(t);
+  writeHook(crlfWorkspace, text, { crlf: true, bom: true });
+  const before = fs.readFileSync(hookFile(crlfWorkspace));
+  const crlfFacts = readback(crlfWorkspace).facts;
+  assert.deepEqual(crlfFacts.facts, lfFacts.facts);
+  assert.equal(crlfFacts.machineFp, lfFacts.machineFp);
+  assert.deepEqual(fs.readFileSync(hookFile(crlfWorkspace)), before);
+});
+
+test('readback：同一份 Hook 连读两次，输出逐字节相同', (t) => {
+  const workspace = makeBareWorkspace(t);
+  writeHook(workspace, renderHook(workspace));
+  const first = readback(workspace, { out: path.join(workspace.out, 'one.json') });
+  const second = readback(workspace, { out: path.join(workspace.out, 'two.json') });
+  assert.deepEqual(second.facts, first.facts);
+  assert.equal(fs.readFileSync(second.file, 'utf8'), fs.readFileSync(first.file, 'utf8'));
+});
+
+test('readback：出处行语法非法 → broken，diff provenance-grammar，零恢复值', (t) => {
+  const workspace = makeBareWorkspace(t);
+  const text = renderHook(workspace, {
+    provenanceLine:
+      'lazypack:preset id=ts-biome-vitest version=0.1.0 format=wiredx:preset:recommended lint=wired:preset:recommended test=wired:preset:recommended type=wired:preset:recommended'
+  });
+  writeHook(workspace, text);
+
+  const facts = readback(workspace).facts;
+  const state = stateFactOf(facts);
+  assert.equal(state.value.state, 'broken');
+  assert.equal(state.value.diff.kind, 'provenance-grammar');
+  assert.equal(state.value.diff.line, 1);
+  assert.equal(state.value.header, null);
+  assert.equal(state.value.preset, null);
+  assert.equal(slotFactsOf(facts).length, 0);
+});
+
+test('plan --readback：Hook 命令覆盖扫描命令，from 指向 hook 槽事实，preset 不被改写成 existing', (t) => {
+  const workspace = makeWorkspace(t);
+  writeHook(workspace, renderHook(workspace));
+  const { file, facts } = scan(workspace);
+  const rb = readback(workspace);
+  const { plan: result } = plan(workspace, file, { readbackFile: rb.file });
+
+  assert.equal(result.readbackFp, rb.facts.machineFp);
+  assert.deepEqual(result.hooks, [
+    { from: HOOK_STATE_FACT_ID, path: HOOK_REL, state: 'valid', preset: { id: 'ts-biome-vitest', version: '0.1.0' } }
+  ]);
+  for (const slot of SLOT_NAMES) {
+    const planned = slotOf(result, slot);
+    assert.equal(planned.commandSource, 'hook');
+    assert.equal(planned.from, `${HOOK_STATE_FACT_ID}#${slot}`);
+    assert.equal(planned.command, DEFAULT_SLOT_COMMANDS[slot]);
+    assert.equal(planned.cwd, '.');
+    assert.equal(planned.origin, 'existing');
+    assert.deepEqual(planned.needs, []);
+    assert.deepEqual(planned.hook, { state: 'wired', provenance: 'wired:preset:recommended', status: 'wired' });
+    assert.deepEqual(planned.outcomes, {
+      wired: { provenance: 'wired:preset:recommended', writeCommand: true }
+    });
+  }
+  assert.equal(slotOf(result, 'format').hook.provenance.split(':')[1], 'preset');
+  assert.equal(result.factsFp, facts.machineFp);
+  const { planFp, ...rest } = result;
+  assert.equal(planFp, independentDigest(rest));
+});
+
+test('plan --readback：Hook 记录命令 A 而扫描是命令 B → 退出 1，stderr 同时出现 A 与 B', (t) => {
+  const workspace = makeWorkspace(t);
+  writeHook(workspace, renderHook(workspace, { slotCommands: { format: 'npm run format:check' } }));
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+
+  const { result, plan: produced } = plan(workspace, file, { readbackFile: rb.file, expect: EXIT.ERROR });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /npm run format:check/);
+  assert.match(result.stderr, /npm run format/);
+  assert.match(result.stderr, /不择一/);
+});
+
+test('plan --readback：readback 后 Hook 变了 → 退出 4 并指出变化', (t) => {
+  const workspace = makeWorkspace(t);
+  const text = renderHook(workspace);
+  writeHook(workspace, text);
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+
+  const changed = withFingerprint(text.replace("FORMAT_CMD='npm run format'", "FORMAT_CMD='npm run format --write'"));
+  writeHook(workspace, changed);
+
+  const { result, plan: produced } = plan(workspace, file, { readbackFile: rb.file, expect: EXIT.STALE });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /machineFp 不一致/);
+  assert.match(result.stderr, /变化：hook:\.githooks\/pre-commit/);
+});
+
+test('readback 不写目标仓：仓库字节不变，out 目录之外没有新文件', (t) => {
+  const workspace = makeBareWorkspace(t);
+  writeHook(workspace, renderHook(workspace));
+  const beforeRepo = snapshotRepo(workspace);
+  const beforeRoot = fs.readdirSync(workspace.root).sort();
+  const beforeOut = fs.readdirSync(workspace.out).sort();
+
+  const { file } = readback(workspace);
+  assert.ok(fs.existsSync(file));
+  assert.deepEqual(snapshotRepo(workspace), beforeRepo);
+  assert.deepEqual(fs.readdirSync(workspace.out).sort(), [...beforeOut, 'readback.json'].sort());
+  assert.deepEqual(fs.readdirSync(workspace.root).sort(), beforeRoot);
 });

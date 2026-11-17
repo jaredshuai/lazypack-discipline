@@ -24,11 +24,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const EXIT = Object.freeze({ OK: 0, USAGE: 2, UNSAFE: 3, STALE: 4, BLOCK: 5, PAUSE: 6, VALIDATE: 7 });
 const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
-const RESERVED_TOKEN = /__[A-Z][A-Z0-9_]*__/;
+export const RESERVED_TOKEN = /__[A-Z][A-Z0-9_]*__/;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const RETENTION_REFERENCE = path.join(SCRIPT_DIR, '..', 'references', 'retention-sections.md');
 
@@ -44,8 +44,8 @@ class CliError extends Error {
 // Byte helpers
 // ---------------------------------------------------------------------------
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
-const fp16 = (buf) => sha256(buf).slice(0, 16);
-const lfNormalize = (buf) => Buffer.from(buf.toString('latin1').replace(/\r\n/g, '\n'), 'latin1');
+export const fp16 = (buf) => sha256(buf).slice(0, 16);
+export const lfNormalize = (buf) => Buffer.from(buf.toString('latin1').replace(/\r\n/g, '\n'), 'latin1');
 const startsWithBom = (buf) => buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
 
 /** Native EOL = majority newline of the existing file (CRLF when tied but present). */
@@ -95,7 +95,7 @@ function markerStyle(line) {
  * Returns { present, wellFormed, reason?, body, bodyStart, bodyEnd, blockStart,
  *           blockEnd, blockEndedWithNewline, startLine, endLine }
  */
-function scanBlock(buf) {
+export function scanBlock(buf) {
   const bomLength = startsWithBom(buf) ? 3 : 0;
   const text = buf.toString('latin1');
   const lines = [];
@@ -153,7 +153,7 @@ const STRICT_STYLES = [
 ];
 
 /** Strict header/end parse; requires the same comment style for both markers. */
-function parseStrictMarkers(startText, endText) {
+export function parseStrictMarkers(startText, endText) {
   for (const { style, start, end } of STRICT_STYLES) {
     const s = start.exec(startText);
     const e = end.exec(endText);
@@ -875,14 +875,16 @@ function main() {
   throw new CliError(EXIT.USAGE, `unknown command: ${command ?? '(none)'}`);
 }
 
-try {
-  main();
-} catch (error) {
-  if (error instanceof CliError) {
-    console.error(JSON.stringify({ ok: false, code: error.code, error: error.message, ...(error.details ?? {}) }));
-    process.exitCode = error.code;
-  } else {
-    console.error(JSON.stringify({ ok: false, code: EXIT.USAGE, error: error?.stack ?? String(error) }));
-    process.exitCode = EXIT.USAGE;
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
+  try {
+    main();
+  } catch (error) {
+    if (error instanceof CliError) {
+      console.error(JSON.stringify({ ok: false, code: error.code, error: error.message, ...(error.details ?? {}) }));
+      process.exitCode = error.code;
+    } else {
+      console.error(JSON.stringify({ ok: false, code: EXIT.USAGE, error: error?.stack ?? String(error) }));
+      process.exitCode = EXIT.USAGE;
+    }
   }
 }
