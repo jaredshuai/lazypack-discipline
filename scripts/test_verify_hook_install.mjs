@@ -155,29 +155,26 @@ try {
     try { assert.equal(inspectHookInstallation({ cwd: repo }).code, 'HOOKS_PATH_MISMATCH'); }
     finally { assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks').status, 0); }
   });
-  if (process.platform === 'win32') {
-    // Git for Windows reads a trailing CR as part of the line terminator, so
-    // `core.hooksPath ".githooks\r"` round-trips as `.githooks`. The literal-CR state is
-    // unreachable here, so the fail-closed branch cannot be exercised. Assert that premise:
-    // a Git that starts preserving the trailing CR fails this line and the case must move
-    // back to a real HOOKS_PATH_MISMATCH assertion.
-    check('Git for Windows normalizes a trailing CR in core.hooksPath (literal-CR input unreachable)', () => {
-      assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks\r').status, 0);
-      try {
-        const read = git(repo, 'config', '--null', '--get', 'core.hooksPath');
-        assert.equal(read.status, 0);
-        assert.equal(read.stdout.replace(/\0$/, ''), '.githooks');
-      } finally {
-        assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks').status, 0);
+  check('core.hooksPath ending in a literal CR never matches .githooks', () => {
+    assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks\r').status, 0);
+    try {
+      const read = git(repo, 'config', '--null', '--get', 'core.hooksPath');
+      assert.equal(read.status, 0);
+      const effective = read.stdout.replace(/\0$/, '');
+      // Git builds differ: Git for Windows 2.45 consumes the trailing CR as part of its
+      // line terminator, while 2.56 (the GitHub Windows runner) keeps it in the value.
+      // Follow what Git reports instead of the platform, and hold whichever state is
+      // reachable to its real contract.
+      if (effective === '.githooks\r') {
+        assert.equal(inspectHookInstallation({ cwd: repo }).code, 'HOOKS_PATH_MISMATCH');
+      } else {
+        assert.equal(effective, '.githooks', 'unexpected effective core.hooksPath');
+        assert.equal(inspectHookInstallation({ cwd: repo }).code, 'CONFIGURED_STATIC_ONLY');
       }
-    });
-  } else {
-    check('core.hooksPath ending in a literal CR fails closed instead of matching .githooks', () => {
-      assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks\r').status, 0);
-      try { assert.equal(inspectHookInstallation({ cwd: repo }).code, 'HOOKS_PATH_MISMATCH'); }
-      finally { assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks').status, 0); }
-    });
-  }
+    } finally {
+      assert.equal(git(repo, 'config', '--local', 'core.hooksPath', '.githooks').status, 0);
+    }
+  });
   check('invalid --mode uses documented exit code 2', () => {
     const p = cli('--mode', 'bogus');
     assert.equal(p.status, 2, p.stdout + p.stderr);

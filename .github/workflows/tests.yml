@@ -7,7 +7,7 @@ name: Tests
 # clean-room：净室安装测试（#109）、setup 管线入口测试（#114）与 Hook 静态验收
 #   （#85），在 Linux、Windows、macOS 上各跑一次。它们也在 fast 里跑，这里只为多出
 #   两个操作系统。只需要 Node 和 git。Hook 静态验收的 core.hooksPath 末尾 CR 用例
-#   依赖各平台 Git 的配置读写行为，只有放进这里才能在 Windows 上看见它的红绿。
+#   随 Git 版本变化（2.45 吞掉末尾 CR，2.56 保留），只有放进这里才看得见各 runner 的红绿。
 on:
   pull_request:
   push:

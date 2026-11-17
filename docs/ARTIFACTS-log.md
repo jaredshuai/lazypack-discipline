@@ -11,11 +11,11 @@
 
 ### 2026-11-17 #130 Hook 静态验收进入三系统 CI，末尾 CR 用例按平台断言
 
-- 检查范围：P1、P4（本轮改了 `tests.yml`、`test_verify_hook_install.mjs`、登记册与日志；任务点名不动固定层，P1 只核验未受影响）；另跑其余全部编号确认未受影响。人工核对：Windows 分支断言的是 Git 吞掉末尾 CR 这一前提，没有把失败改写成通过；`tests.yml` 只在既有三系统作业加关键字与说明，未动其他作业。
+- 检查范围：P1、P4（本轮改了 `tests.yml`、`test_verify_hook_install.mjs`、登记册与日志；任务点名不动固定层，P1 只核验未受影响）；另跑其余全部编号确认未受影响。人工核对：CR 用例按 Git 实际读回值分支，读回带 CR 时断言 fail-closed，读回被归一化时断言静态验收通过，没有把失败改写成通过；`tests.yml` 只在既有三系统作业加关键字与说明，未动其他作业。
 - 依据版本：开工 `b3ce72a`（main），收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
-- 处理结果：P1–P5、P8–P11 均未发现差异（9/9 PASS，退出码 0，各行均无 `declaration=`；P4 输出 register=127 log=124 failures=0）；`node scripts/test_verify_hook_install.mjs` 为 33/33 PASS（改前本机 Windows 在第 28 条失败），`node scripts/run_tests.mjs --fast` 为 17 passed, 0 failed, 2 skipped。
-- 未覆盖范围：Windows 上无法断言 effective `core.hooksPath` 末尾字面 CR 的 fail-closed 分支，只断言 Git 的归一化前提；本轮改动未在 Windows/macOS 的 Actions 上实跑，红绿以 PR 的 CI 为准，完整 Windows 安装仍未验证。未改固定层、其他 CI 作业与 skill 包，故未重生成 `MANIFEST.json`。
-- 未决事项：本机不加载 fnm 时 PATH 缺 npm，`--fast` 首跑让 `test_aggregate_gates` 报 `npm: command not found`；补 PATH 后该测试 14/14 通过、全量复跑通过，属本机环境问题。
+- 处理结果：P1–P5、P8–P11 均未发现差异（9/9 PASS，退出码 0，各行均无 `declaration=`；P4 输出 register=127 log=124 failures=0）；`node scripts/test_verify_hook_install.mjs` 为 33/33 PASS，`node scripts/run_tests.mjs --fast` 为 17 passed, 0 failed, 2 skipped。PR #131 的 Windows 作业首跑暴露版本差异：runner 的 Git 2.56.0 保留末尾 CR，本机 2.45.2 吞掉；用例据实改为跟随读回值，不把版本差异写死成平台差异。
+- 未覆盖范围：本机 Git 2.45 只能走归一化分支，fail-closed 分支由 CI Windows（2.56）与 POSIX 覆盖；macOS Actions 按同一 POSIX 断言运行，红绿以 PR CI 为准。未改固定层、其他 CI 作业与 skill 包，故未重生成 `MANIFEST.json`。
+- 未决事项：本机 PATH 缺 npm 时 `test_aggregate_gates` 报 `npm: command not found`；补 PATH 后 14/14 通过、全量复跑通过，属本机环境问题。
 
 ### 2026-11-17 #128 既有 Hook 出处读回迁入管线：readback 与 plan --readback
 

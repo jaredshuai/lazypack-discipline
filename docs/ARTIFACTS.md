@@ -86,7 +86,7 @@
 | [../skills/lazypack-setup/references/setup-pipeline.md](../skills/lazypack-setup/references/setup-pipeline.md) | setup 执行辅助 | current | 管线事实、回答、计划文件格式与入口用法，随迁移步骤增补。只写已落地部分，未迁入的注明「尚未迁入」 |
 | [../scripts/test_setup_helper.mjs](../scripts/test_setup_helper.mjs) | 本仓执行辅助 | current | #114/#128 管线入口回归：既有命令逐字入槽、聚合脚本不展开，读回六态、指纹漂移、CRLF+BOM 与 plan 合并/停止。夹具在系统临时目录，不改本仓 |
 | [../scripts/test_doc_retention.mjs](../scripts/test_doc_retention.mjs) | 本仓执行辅助 | current | #84 留存策略的隔离回归，含 Junction 与硬链接实际夹具；经 tests.yml 在 PR 与 main 上运行。未执行真实 setup 顺序 |
-| [../scripts/test_verify_hook_install.mjs](../scripts/test_verify_hook_install.mjs) | 本仓执行辅助 | current | #85 Hook 静态验收的隔离 Git 回归，只在临时无害夹具执行，不调用真实 Hook；经 tests.yml 三系统作业运行，末尾 CR 用例只在 Git 能保存该值的平台断言。完整 Windows 安装仍未验证 |
+| [../scripts/test_verify_hook_install.mjs](../scripts/test_verify_hook_install.mjs) | 本仓执行辅助 | current | #85 Hook 静态验收的隔离 Git 回归，只在临时无害夹具执行，不调用真实 Hook；经 tests.yml 三系统作业运行，末尾 CR 用例随 Git 实际读回值断言。完整 Windows 安装仍未验证 |
 | [../scripts/test_aggregate_gates.mjs](../scripts/test_aggregate_gates.mjs) | 本仓执行辅助 | current | #86 原生 Git Hook 聚合门禁的隔离回归，只执行自建无害夹具，不调用真实业务 Hook；经 tests.yml 在 PR 与 main 上运行 |
 | [../scripts/test_doc_scanner.mjs](../scripts/test_doc_scanner.mjs) | 本仓执行辅助 | current | #70、#83 扫描排除与链接越界防护的回归，用临时合成夹具；经 tests.yml 运行。不代表真实目标仓 setup 或 POSIX 实机验收 |
 | [../skills/lazypack-harvest/SKILL.md](../skills/lazypack-harvest/SKILL.md) | harvest 执行入口 | current | harvest 执行流程的入口正文，显式调用边界由该 skill 定义。本仓没有冻结规格 SPEC.md |
