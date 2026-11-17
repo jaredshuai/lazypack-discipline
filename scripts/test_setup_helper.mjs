@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SKILL_SRC = path.join(REPO_ROOT, 'skills', 'lazypack-setup');
@@ -1216,6 +1216,32 @@ test('plan --readback：Hook 记录未接线且扫描也没有 → 该槽不出�
   assert.equal(planned.commandSource, 'hook');
   assert.deepEqual(planned.hook, { state: 'missing', provenance: 'missing:preset:declined', status: 'missing' });
   assert.deepEqual(planned.outcomes, { missing: { provenance: 'missing:preset:declined', writeCommand: false } });
+});
+
+test('sameScriptInvocation：npm 生命周期白名单，pnpm/yarn 一律可省略 run', async (t) => {
+  const workspace = makeBareWorkspace(t);
+  const { sameScriptInvocation } = await import(
+    pathToFileURL(path.join(workspace.skill, 'scripts', 'setup_helper.mjs')).href
+  );
+  const same = [
+    ['pnpm test', 'pnpm run test'],
+    ['pnpm lint', 'pnpm run lint'],
+    ['yarn lint', 'yarn run lint'],
+    ['npm test', 'npm run test'],
+    ['npm start', 'npm run start']
+  ];
+  const different = [
+    ['npm lint', 'npm run lint'],
+    ['npm version', 'npm run version'],
+    ['pnpm lint', 'yarn run lint'],
+    ['pnpm lint', 'pnpm run lint:ci']
+  ];
+  for (const [left, right] of same) {
+    assert.equal(sameScriptInvocation(left, right), true, `${left} vs ${right} 应视为同一调用`);
+  }
+  for (const [left, right] of different) {
+    assert.equal(sameScriptInvocation(left, right), false, `${left} vs ${right} 不应视为同一调用`);
+  }
 });
 
 test('plan --readback：pnpm run test 与 pnpm test 视为同一调用，仍逐字保留 Hook 命令', (t) => {

@@ -186,18 +186,19 @@ function invocationFor(packageManager, scriptName) {
 /**
  * `pnpm run test` 与 `pnpm test` 是同一个脚本的两种合法写法。读回比对时按同一调用
  * 处理，避免配方模板的 `run` 写法与扫描合成写法打成本不存在的冲突；仍然逐字保留
- * Hook 里的命令。
+ * Hook 里的命令。省略 `run` 的规则按包管理器区分：npm 只认 test/start/stop/restart
+ * 这四个生命周期脚本（`npm version` 是 npm 自己的命令，不是脚本），pnpm / yarn 对
+ * 任意脚本名都允许省略 `run`。
  */
-function sameScriptInvocation(left, right) {
+export function sameScriptInvocation(left, right) {
   const parse = (value) => /^(npm|pnpm|yarn) (run )?([A-Za-z0-9_][A-Za-z0-9_:.\/@+-]*)$/.exec(value);
   const a = parse(left);
   const b = parse(right);
   if (!a || !b || a[1] !== b[1] || a[3] !== b[3]) return false;
   if (Boolean(a[2]) === Boolean(b[2])) return true;
-  // npm 只对 test/start/stop/restart/version 这类生命周期脚本允许省略 run；
-  // 其它脚本必须带 run，`npm lint` 与 `npm run lint` 不是同一个调用。
+  if (a[1] !== 'npm') return true;
   const bare = a[2] ? b : a;
-  return ['test', 'start', 'stop', 'restart', 'version'].includes(bare[3]);
+  return ['test', 'start', 'stop', 'restart'].includes(bare[3]);
 }
 
 export function scanExistingCommands(cwd) {
