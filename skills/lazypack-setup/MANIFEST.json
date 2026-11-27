@@ -255,7 +255,7 @@
     },
     {
       "path": "references/managed-blocks.md",
-      "sha256": "1ec6aa6589d515391d962491592cf9e4b4787b746a4de1da5632c0eab2b20ae2"
+      "sha256": "36c0f8fbc381460a2aa4312cfe0d701dc44f04a9fdc1d9b48be0fb8a4f8487d8"
     },
     {
       "path": "references/retention-sections.md",
@@ -303,7 +303,7 @@
     },
     {
       "path": "scripts/setup_helper.mjs",
-      "sha256": "6abb013edbcfa48350dfb4b88907c35a4ad177b806bbe744248f11a7a303cd9d"
+      "sha256": "838d097b17b8c67b95acc132ff4fb5256d3cf61d7e2a7fdf1aed6a092af53431"
     },
     {
       "path": "scripts/unit_contracts.mjs",

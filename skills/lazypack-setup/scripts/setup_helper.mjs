@@ -262,6 +262,7 @@ const HOOK_KINDS = ['hook-managed-block', 'hook-slot'];
 const HOOK_STATES = ['absent', 'unmanaged', 'no-provenance', 'valid', 'drift', 'broken'];
 const SLOT_STATUS_VALUES = ['wired', 'missing', 'install-failed', 'n/a'];
 const PROVENANCE_LINE_RE = /^# lazypack:preset id=([a-z0-9][a-z0-9-]*) version=(\d+\.\d+\.\d+) format=(\S+) lint=(\S+) test=(\S+) type=(\S+)$/;
+const EXISTING_PROVENANCE_LINE_RE = /^# lazypack:preset existing format=(\S+) lint=(\S+) test=(\S+) type=(\S+)$/;
 const PROVENANCE_VALUE_RE = new RegExp(
   `^(${SLOT_STATUS_VALUES.join('|')}):(preset|existing|none):(recommended|declined|pre-existing|no-tool|install-error|not-applicable)$`
 );
@@ -279,6 +280,7 @@ function hookStateValue() {
     contentFp: null,
     block: null,
     preset: null,
+    presets: null,
     diff: null
   };
 }
@@ -290,6 +292,7 @@ function markBroken(value, diff, contentFp = null) {
   value.currentFp = null;
   value.block = null;
   value.preset = null;
+  value.presets = null;
   value.contentFp = contentFp;
   value.diff = { line: null, ...diff };
   return value;
@@ -520,63 +523,80 @@ function readHook(repoRoot) {
   const firstNonEmpty = bodyLines.findIndex((line) => line.trim() !== '');
   const bodyLineToFile = (bodyIndex) => (startLineNo == null ? null : startLineNo + bodyIndex + 1);
 
-  if (provenanceLines.length > 1) {
-    return {
-      value: markBroken(value, {
-        kind: 'provenance-ambiguous',
-        detail: `正文里有 ${provenanceLines.length} 行 lazypack:preset`,
-        line: bodyLineToFile(provenanceLines[1])
-      }, contentFp),
-      slotFacts: null,
-      locator
-    };
-  }
-
   let provenanceBySlot = null;
   let preset = null;
+  let presets = null;
   let provenanceState = 'no-provenance';
-  if (provenanceLines.length === 1) {
-    const index = provenanceLines[0];
-    if (index !== firstNonEmpty) {
+  if (provenanceLines.length >= 1) {
+    if (provenanceLines[0] !== firstNonEmpty || provenanceLines.some((line, index) => line !== firstNonEmpty + index)) {
       return {
         value: markBroken(value, {
           kind: 'provenance-ambiguous',
-          detail: 'lazypack:preset 出处行不在正文头部',
-          line: bodyLineToFile(index)
+          detail: 'lazypack:preset 出处行必须连续位于正文头部',
+          line: bodyLineToFile(provenanceLines.find((line) => line !== firstNonEmpty) ?? provenanceLines[0])
         }, contentFp),
         slotFacts: null,
         locator
       };
     }
-    const match = PROVENANCE_LINE_RE.exec(bodyLines[index]);
-    if (!match) {
-      return {
-        value: markBroken(value, {
-          kind: 'provenance-grammar',
-          detail: '出处行不符合严格语法',
-          line: bodyLineToFile(index)
-        }, contentFp),
-        slotFacts: null,
-        locator
-      };
-    }
-    const [, id, version, formatValue, lintValue, testValue, typeValue] = match;
-    const parsed = { format: formatValue, lint: lintValue, type: typeValue, test: testValue };
-    for (const slot of SLOTS) {
-      if (!PROVENANCE_VALUE_RE.test(parsed[slot])) {
+    const parsedLines = [];
+    for (const index of provenanceLines) {
+      const line = bodyLines[index];
+      const match = PROVENANCE_LINE_RE.exec(line);
+      const existing = EXISTING_PROVENANCE_LINE_RE.exec(line);
+      if (!match && !existing) {
         return {
           value: markBroken(value, {
             kind: 'provenance-grammar',
-            detail: `出处行的 ${slot} 段不是 <state>:<source>:<reason>`,
+            detail: '出处行不符合严格语法',
             line: bodyLineToFile(index)
           }, contentFp),
           slotFacts: null,
           locator
         };
       }
+      const values = match ? match.slice(3) : existing.slice(1);
+      const parsed = { format: values[0], lint: values[1], test: values[2], type: values[3] };
+      for (const slot of SLOTS) {
+        if (!PROVENANCE_VALUE_RE.test(parsed[slot])) {
+          return {
+            value: markBroken(value, {
+              kind: 'provenance-grammar',
+              detail: `出处行的 ${slot} 段不是 <state>:<source>:<reason>`,
+              line: bodyLineToFile(index)
+            }, contentFp),
+            slotFacts: null,
+            locator
+          };
+        }
+      }
+      parsedLines.push({ id: match ? match[1] : 'existing', version: match ? match[2] : null, values: parsed });
     }
-    provenanceBySlot = parsed;
-    preset = { id, version };
+    const ids = parsedLines.map((entry) => entry.id);
+    const sortedIds = [...ids].sort(compareCodePoints);
+    if (ids.some((id, index) => id !== sortedIds[index]) || new Set(ids).size !== ids.length) {
+      return {
+        value: markBroken(value, {
+          kind: 'provenance-order',
+          detail: '多配方出处行必须按 id 字典序且不得重复',
+          line: bodyLineToFile(provenanceLines[0])
+        }, contentFp),
+        slotFacts: null,
+        locator
+      };
+    }
+    const recipeLines = parsedLines.filter((entry) => entry.id !== 'existing');
+    const existingLine = parsedLines.find((entry) => entry.id === 'existing');
+    if (recipeLines.length === 1 && !existingLine) {
+      provenanceBySlot = recipeLines[0].values;
+      preset = { id: recipeLines[0].id, version: recipeLines[0].version };
+    } else {
+      presets = recipeLines.map((entry) => ({ id: entry.id, version: entry.version }));
+      provenanceBySlot = Object.fromEntries(SLOTS.map((slot) => [slot, recipeLines.map((entry) => entry.values[slot])]));
+      if (existingLine) {
+        for (const slot of SLOTS) provenanceBySlot[slot].push(existingLine.values[slot]);
+      }
+    }
     provenanceState = 'valid';
   }
 
@@ -649,25 +669,33 @@ function readHook(repoRoot) {
       };
     }
     // valid 用出处行三段式；no-provenance 按通用既有命令处理（§5.6）。
-    const provenance = provenanceBySlot ? provenanceBySlot[slot] : `${status}:existing:pre-existing`;
-    const [state, source, reason] = provenance.split(':');
-    if (provenanceBySlot && state !== status) {
+    const rawProvenance = provenanceBySlot ? provenanceBySlot[slot] : `${status}:existing:pre-existing`;
+    const provenances = Array.isArray(rawProvenance) ? rawProvenance : [rawProvenance];
+    const parsedProvenances = provenances.map((provenance) => {
+      const [state, source, reason] = provenance.split(':');
+      return { state, source, reason, provenance };
+    });
+    const mismatch = parsedProvenances.find((entry) => entry.state !== status);
+    if (mismatch) {
       return {
         value: markBroken(value, {
           kind: 'slot-state-mismatch',
-          detail: `出处行 ${slot} 的状态 ${state} 与 ${upper}_STATUS ${status} 不一致`,
+          detail: `出处行 ${slot} 的状态 ${mismatch.state} 与 ${upper}_STATUS ${status} 不一致`,
           line: hits.STATUS[0].line
         }, contentFp),
         slotFacts: null,
         locator
       };
     }
+    const first = parsedProvenances[0];
+    const slotValue = { slot, state: first.state, source: first.source, reason: first.reason, status, command };
+    if (Array.isArray(rawProvenance)) slotValue.provenances = provenances;
     slotFacts.push({
       id: `${HOOK_STATE_FACT_ID}#${slot}`,
       item: 7,
       kind: 'hook-slot',
       source: 'machine',
-      value: { slot, state, source, reason, status, command },
+      value: slotValue,
       evidence: { path: HOOK_PATH, locator: `${upper}_STATUS/${upper}_CMD` }
     });
   }
@@ -677,6 +705,7 @@ function readHook(repoRoot) {
   value.currentFp = currentFp;
   value.block = block;
   value.preset = preset;
+  value.presets = presets;
   return { value, slotFacts, locator };
 }
 

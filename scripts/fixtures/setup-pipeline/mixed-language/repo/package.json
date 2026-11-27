@@ -1,0 +1,5 @@
+{
+  "name": "mixed-language-fixture",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {"lint": "biome check .", "test": "vitest run", "type": "tsc --noEmit"}
+}

@@ -33,6 +33,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SKILL_SRC = path.join(REPO_ROOT, 'skills', 'lazypack-setup');
 const FIXTURE = path.join(REPO_ROOT, 'scripts', 'fixtures', 'setup-pipeline', 'ts-aggregate-gates');
+const MIXED_FIXTURE = path.join(REPO_ROOT, 'scripts', 'fixtures', 'setup-pipeline', 'mixed-language', 'repo');
 const TEST_FACT_ID = 'cmd:package.json#scripts.test';
 const EXIT = { OK: 0, ERROR: 1, USAGE: 2, UNSAFE: 3, STALE: 4 };
 
@@ -863,6 +864,30 @@ test('readback：有效出处行与 fp 一致 → valid，四个槽逐字恢复'
     command: 'node --test'
   });
   assert.deepEqual(slotFactOf(facts, 'format').evidence, { path: HOOK_REL, locator: 'FORMAT_STATUS/FORMAT_CMD' });
+});
+
+test('readback：TS+Python 双配方出处按 id 排序恢复，槽出处完整且不重复命令', (t) => {
+  const workspace = makeBareWorkspace(t);
+  fs.rmSync(workspace.repo, { recursive: true, force: true });
+  fs.cpSync(MIXED_FIXTURE, workspace.repo, { recursive: true });
+  const lines = [
+    'lazypack:preset id=python-uv-ruff version=0.1.0 format=wired:preset:recommended lint=wired:preset:recommended test=wired:preset:recommended type=wired:preset:recommended',
+    'lazypack:preset id=ts-biome-vitest version=0.1.0 format=wired:preset:recommended lint=wired:preset:recommended test=wired:preset:recommended type=wired:preset:recommended'
+  ].join('\n# ');
+  writeHook(workspace, renderHook(workspace, { provenanceLine: lines }));
+  const facts = readback(workspace).facts;
+  const state = stateFactOf(facts);
+  assert.equal(state.value.state, 'valid');
+  assert.equal(state.value.preset, null);
+  assert.deepEqual(state.value.presets, [
+    { id: 'python-uv-ruff', version: '0.1.0' },
+    { id: 'ts-biome-vitest', version: '0.1.0' }
+  ]);
+  assert.deepEqual(slotFactOf(facts, 'lint').value.provenances, [
+    'wired:preset:recommended',
+    'wired:preset:recommended'
+  ]);
+  assert.equal(slotFactOf(facts, 'lint').value.command, 'npm run lint');
 });
 
 test('readback：手改正文但 header fp 未更新 → drift，零槽事实、无 preset', (t) => {

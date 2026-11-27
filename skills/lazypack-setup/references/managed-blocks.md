@@ -181,9 +181,12 @@
 ```
 
 - **字段规范与约束**：
-  * `preset`：配方身份对象，固定包含 `id`（如 `"python-uv-ruff"` 或 `"ts-biome-vitest"`）与 `version`（如 `"0.1.0"`）；
-  * `presetSrc`：所采纳配方数据卡（实际采用的配方卡，如 `skills/lazypack-setup/presets/python-uv-ruff.md` 或 `skills/lazypack-setup/presets/ts-biome-vitest.md`）经剔除 UTF-8 BOM、CRLF→LF 规范化后的 UTF-8 字节流计算 SHA-256 的前 16 位小写十六进制字符串。配方卡正文发生变动时驱动 Hook 精准触发 `[UPGRADE]`；
-  * `provenance`：规范化的逐门禁槽位出处子字典（键严格固定为 `format`, `lint`, `test`, `type`，值为对应 `<state>:<source>:<reason>` 三段式稳定枚举串）。
+  * 单配方时使用 `preset`、`presetSrc`、`provenance` 三个字段；`preset` 固定包含 `id` 与 `version`。
+  * 多配方时三者全部改用 `presets` 数组，数组按 `id` 字典序排列，每项包含 `id`、`version`、`presetSrc` 与固定四槽 `provenance`；`preset`/`presetSrc`/`provenance` 与 `presets` 互斥，不得同时出现。
+  * 多配方正文每个采纳配方独占一行：`# lazypack:preset id=<id> version=<version> format=<state>:<source>:<reason> lint=<...> test=<...> type=<...>`，按 `id` 字典序排列。非配方既有命令另占一行 `# lazypack:preset existing format=<...> lint=<...> test=<...> type=<...>`，不冒充任何配方来源。
+  * 单槽由多个配方提供时按配方 `id` 字典序执行；完全相同的命令字符串在 Hook 中只执行一次，但每个槽的出处仍分别保留。
+  * 读回必须全有或全无：任一出处行非法、重复、乱序，或出处行数量与 `input.presets` 数量不一致，整体标记 `broken`，不恢复部分配方或槽事实。
+  * `provenance`：规范化的逐门禁槽位出处子字典，值为对应 `<state>:<source>:<reason>` 三段式稳定枚举串；旧单配方格式继续按原规则读回且不产生漂移。
 - **输入-正文一致性保证（防止正文变动而输入未变）**：
   * 用户在交互确认中对工具的选择、安装失败或跳过，会直接改变 Hook 受管正文中的 `# lazypack:preset` 出处注释行（如由 `recommended` 变为 `declined`，或由 `wired` 变为 `install-failed`）；
   * 若仅在 input 中记录 `commands`，可能出现“正文因出处变动而改变指纹 `fp`，但输入摘要 `input` 未变”，导致重跑时误触发 `[DRIFT]`；
