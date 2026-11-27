@@ -9,6 +9,15 @@
 
 ## 每轮记录
 
+## 2026-11-27 #115 过时文档确定性失效信号夹具
+
+- 检查范围：P4、P5；人工核对 #115/#87 的夹具边界，未修改固定层 `docs/DECISIONS.md`。
+- 依据版本：开工 `9746a99`，收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
+- 处理结果：已同步；新增 `scripts/fixtures/doc-stale/`，文档扫描器记录扫描目录、检查信号和每个确定性失效发现；`node scripts/test_doc_scanner.mjs` 20/20 PASS。
+- 未覆盖范围：未做文档语义过时判断；混合语言多配方 Hook 与双门禁净室证据仍待本轮其他实现完成。
+- 未决事项：`invalidPaths`/`coverage` 输出字段是否纳入长期公共契约，需维护者在 PR 评审中确认。
+
+
 ### 2026-11-17 #130 Hook 静态验收进入三系统 CI，末尾 CR 用例按平台断言
 
 - 检查范围：P1、P4（本轮改了 `tests.yml`、`test_verify_hook_install.mjs`、登记册与日志；任务点名不动固定层，P1 只核验未受影响）；另跑其余全部编号确认未受影响。人工核对：CR 用例按 Git 实际读回值分支，读回带 CR 时断言 fail-closed，读回被归一化时断言静态验收通过，没有把失败改写成通过；`tests.yml` 只在既有三系统作业加关键字与说明，未动其他作业。

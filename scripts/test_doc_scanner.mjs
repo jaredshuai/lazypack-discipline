@@ -827,6 +827,23 @@ function caseCliExclude(base) {
   assertCase(JSON.stringify(excluded.deadlinks.map((item) => item.targetRel)) === JSON.stringify(['docs/missing.md']), 'CLI exclude 后真实死链应保留');
 }
 
+function caseStaleDocumentationFixture(base) {
+  const source = path.resolve(__dirname, 'fixtures', 'doc-stale');
+  const repo = path.join(base, 'stale-doc-fixture');
+  fs.cpSync(source, repo, { recursive: true });
+  const scan = scanProjectDocuments(repo);
+  const deadTarget = 'docs/missing-build.md';
+  const scriptTarget = 'scripts/retired-release.mjs';
+  assertCase(scan.deadlinks.some((item) => item.sourceRelPath === 'RELEASE.md' && item.targetRel === deadTarget), '夹具中的失效文档链接必须被发现');
+  assertCase(scan.invalidPaths.some((item) => item.sourceRelPath === 'RELEASE.md' && item.targetRel === scriptTarget), '夹具中的失效脚本路径必须被发现');
+  assertCase(scan.coverage.scannedDirectories.includes('.'), '覆盖记录必须包含仓根目录');
+  assertCase(scan.coverage.scannedDirectories.includes('docs'), '覆盖记录必须包含 docs 目录');
+  assertCase(scan.coverage.checkedSignals.includes('markdown-relative-links'), '覆盖记录必须声明检查文档链接');
+  assertCase(scan.coverage.checkedSignals.includes('referenced-script-paths'), '覆盖记录必须声明检查脚本路径');
+  assertCase(scan.coverage.findings.some((item) => item.kind === 'dead-link' && item.targetRel === deadTarget), '覆盖记录必须包含预埋死链');
+  assertCase(scan.coverage.findings.some((item) => item.kind === 'script-path' && item.targetRel === scriptTarget), '覆盖记录必须包含预埋失效脚本路径');
+}
+
 // Windows may return ENOENT for this path; inject ENOTDIR to cover the POSIX error branch.
 function caseFileAncestorDeadlink(base) {
   const repo = path.join(base, 'file-ancestor');
@@ -858,6 +875,7 @@ function caseFileAncestorDeadlink(base) {
 }
 
 const CASES = [
+  ['过时文档夹具确定性失效信号与覆盖记录', caseStaleDocumentationFixture],
   ['scan 普通文件祖先死链与 ENOTDIR 分支', caseFileAncestorDeadlink],
   ['normalizeExcludePaths 归一化', caseNormalizeExcludePaths],
   ['buildExclusionMatcher 命中判定', caseBuildExclusionMatcher],

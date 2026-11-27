@@ -261,9 +261,12 @@ export function scanProjectDocuments(repoRoot, options = {}) {
   const files = [];
   const inboundMap = new Map(); // targetRelPath -> [{ sourceRelPath, rawUrl, line }]
   const deadlinks = [];
+  const invalidPaths = [];
+  const scannedDirectories = new Set();
   let boundedExclusionsCount = 0;
 
   function walk(dir) {
+    scannedDirectories.add(normalizeRelPath(path.relative(absRepo, dir)) || '.');
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const ent of entries) {
       const fullPath = path.join(dir, ent.name);
@@ -300,6 +303,29 @@ export function scanProjectDocuments(repoRoot, options = {}) {
         const content = fs.readFileSync(fullPath, 'utf8');
         const sha256 = computeSha256(fullPath);
         const headings = extractHeadingsAndSlugs(content);
+
+        // 确定性检查文档中明确引用的仓内脚本/配置路径；不做语义判断。
+        // 只认 scripts/、.github/ 和 docs/ 下带常见代码/配置后缀的路径，避免把自然语言误报为路径。
+        const scriptPathRegex = /(?<![A-Za-z0-9_./-])((?:scripts|\.github|docs)\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.(?:mjs|js|cjs|ts|tsx|py|sh|yml|yaml|json))(?![A-Za-z0-9_.-])/g;
+        const rawLines = content.split(/\r?\n/);
+        for (let lineNum = 1; lineNum <= rawLines.length; lineNum += 1) {
+          const line = rawLines[lineNum - 1].replace(/`/g, '');
+          scriptPathRegex.lastIndex = 0;
+          let pathMatch;
+          while ((pathMatch = scriptPathRegex.exec(line)) !== null) {
+            const targetRel = normalizeRelPath(pathMatch[1]);
+            const absTarget = path.resolve(absRepo, targetRel);
+            if (!fs.existsSync(absTarget)) {
+              invalidPaths.push({
+                sourceRelPath: relPath,
+                targetRel,
+                line: lineNum,
+                kind: 'script-path',
+                reason: 'Referenced path does not exist'
+              });
+            }
+          }
+        }
 
         // 提取链接
         const outboundLinks = [];
@@ -402,6 +428,12 @@ export function scanProjectDocuments(repoRoot, options = {}) {
     boundedExclusionsCount,
     files,
     inboundReferences,
-    deadlinks
+    deadlinks,
+    invalidPaths,
+    coverage: {
+      scannedDirectories: [...scannedDirectories].sort(),
+      checkedSignals: ['markdown-relative-links', 'referenced-script-paths'],
+      findings: [...deadlinks.map((item) => ({ ...item, kind: 'dead-link' })), ...invalidPaths]
+    }
   };
 }

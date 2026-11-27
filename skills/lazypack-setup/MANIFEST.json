@@ -291,7 +291,7 @@
     },
     {
       "path": "scripts/doc_scanner.mjs",
-      "sha256": "744a59696bbc021816c295e173e90c5753cc5dc98b72f96fcbbdf6efd80ce08d"
+      "sha256": "dc0d8d59370417e0ce547fb33153bedc0505c2d4c4d9e9552cc01541b7737e0d"
     },
     {
       "path": "scripts/managed_blocks.mjs",
