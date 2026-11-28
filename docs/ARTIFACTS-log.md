@@ -13,15 +13,15 @@
 
 - 检查范围：P4、P5；人工核对 #112 六项约束、旧单配方兼容边界及 `unit-contracts.md` 证据规则，未修改固定层。
 - 依据版本：开工 `f4f1e92`，收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
-- 处理结果：已同步；Hook 读回支持按 id 排序的多行配方出处、既有命令独立出处行、全量校验与多配方槽出处；新增 TS+Python 混合夹具和回归断言。
+- 处理结果：P4 未发现差异（追加条目的相对链接可解析，检查行无 `declaration=`）；P5 未发现差异（入口文件未改，检查行无 `declaration=`）。功能方面已同步 Hook 多配方出处读回、既有命令独立出处行、全量校验与多配方槽出处，并新增 TS+Python 混合夹具和回归断言。
 - 未覆盖范围：多配方 Hook 的生成/执行编排和双配方命令去重仍需继续接入 setup 装配路径；main 分支 Actions 证据不得在 PR 中提前填入。
 - 未决事项：`input.presets` 的生成端字段互斥与数量校验需在装配实现完成后补充端到端验证。
 
-## 2026-11-27 #115 过时文档确定性失效信号夹具
+### 2026-11-27 #115 过时文档确定性失效信号夹具
 
 - 检查范围：P4、P5；人工核对 #115/#87 的夹具边界，未修改固定层 `docs/DECISIONS.md`。
 - 依据版本：开工 `9746a99`，收尾本轮工作区；声明 `docs/agents/doc-pairs.md`，命令 `node scripts/check_doc_pairs.mjs`。
-- 处理结果：已同步；新增 `scripts/fixtures/doc-stale/`，文档扫描器记录扫描目录、检查信号和每个确定性失效发现；`node scripts/test_doc_scanner.mjs` 20/20 PASS。
+- 处理结果：P4 未发现差异（追加条目的相对链接可解析，检查行无 `declaration=`）；P5 未发现差异（入口文件未改，检查行无 `declaration=`）。功能方面已同步文档扫描器的扫描目录、检查信号和确定性失效发现记录；`node scripts/test_doc_scanner.mjs` 通过。
 - 未覆盖范围：未做文档语义过时判断；混合语言多配方 Hook 与双门禁净室证据仍待本轮其他实现完成。
 - 未决事项：`invalidPaths`/`coverage` 输出字段是否纳入长期公共契约，需维护者在 PR 评审中确认。
 

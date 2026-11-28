@@ -182,10 +182,10 @@
 
 - **字段规范与约束**：
   * 单配方时使用 `preset`、`presetSrc`、`provenance` 三个字段；`preset` 固定包含 `id` 与 `version`。
-  * 多配方时三者全部改用 `presets` 数组，数组按 `id` 字典序排列，每项包含 `id`、`version`、`presetSrc` 与固定四槽 `provenance`；`preset`/`presetSrc`/`provenance` 与 `presets` 互斥，不得同时出现。
+  * 多配方时三者全部改用 `presets` 数组，数组按 `id` 字典序排列，每项包含 `id`、`version`、`src` 与固定四槽 `provenance`；单配方继续使用顶层 `presetSrc`，`preset`/`presetSrc`/`provenance` 与 `presets` 互斥，不得同时出现。
   * 多配方正文每个采纳配方独占一行：`# lazypack:preset id=<id> version=<version> format=<state>:<source>:<reason> lint=<...> test=<...> type=<...>`，按 `id` 字典序排列。非配方既有命令另占一行 `# lazypack:preset existing format=<...> lint=<...> test=<...> type=<...>`，不冒充任何配方来源。
-  * 单槽由多个配方提供时按配方 `id` 字典序执行；完全相同的命令字符串在 Hook 中只执行一次，但每个槽的出处仍分别保留。
-  * 读回必须全有或全无：任一出处行非法、重复、乱序，或出处行数量与 `input.presets` 数量不一致，整体标记 `broken`，不恢复部分配方或槽事实。
+  * 本轮只实现多配方出处的确定性读回与 plan 传递；单槽多命令按 `id` 排序、相同命令去重及其逐命令执行/报告仍未接入装配模板，不能据此宣称当前 Hook 已提供该行为。
+  * 读回必须全有或全无：任一出处行非法、重复、乱序，整体标记 `broken`，不恢复部分配方或槽事实；`plan --readback` 另以 canonical `input.presets` 校验配方数量和顺序不一致，拒绝恢复部分历史。
   * `provenance`：规范化的逐门禁槽位出处子字典，值为对应 `<state>:<source>:<reason>` 三段式稳定枚举串；旧单配方格式继续按原规则读回且不产生漂移。
 - **输入-正文一致性保证（防止正文变动而输入未变）**：
   * 用户在交互确认中对工具的选择、安装失败或跳过，会直接改变 Hook 受管正文中的 `# lazypack:preset` 出处注释行（如由 `recommended` 变为 `declined`，或由 `wired` 变为 `install-failed`）；
@@ -262,6 +262,9 @@
 
 ##### 5. 旧版 header.input 兼容与一次性平滑升级
 若既有受管文件的 `header.input` 缺失 `artifacts` 字段或使用旧版结构，在重跑时由于序列化差异，决策树检测到 `current_input !== header.input`；在正文未手改的前提下，准确触发 `[UPGRADE]` 提示差异；经用户一次性确认更新写盘后，立即纳入新规范，后续从磁盘重读保持稳定 `[NO-OP]`。
+
+### 3.1.1.3 配方卡来源摘要
+配方卡的来源摘要只对卡片正文计算：先剥离 UTF-8 BOM、将 CRLF 规范化为 LF，再对 UTF-8 字节流计算 SHA-256，取前 16 位小写十六进制字符串。多配方的每个 `presets[].src` 均按此算法独立计算；旧单配方继续使用顶层 `presetSrc`。
 
 ### 3.2 规范序列化算法
 1. 字典所有键按 Unicode 码点升序排序（嵌套对象同理）。

@@ -255,7 +255,7 @@
     },
     {
       "path": "references/managed-blocks.md",
-      "sha256": "36c0f8fbc381460a2aa4312cfe0d701dc44f04a9fdc1d9b48be0fb8a4f8487d8"
+      "sha256": "e0052d8390edd644d720fb3cc3618854d078a6e6fab64540f9e52d74df956829"
     },
     {
       "path": "references/retention-sections.md",
@@ -291,7 +291,7 @@
     },
     {
       "path": "scripts/doc_scanner.mjs",
-      "sha256": "dc0d8d59370417e0ce547fb33153bedc0505c2d4c4d9e9552cc01541b7737e0d"
+      "sha256": "f2298d02c3586f999689e9e55f7b4858a7b8a89e566294de2fd45ddcf991b6ae"
     },
     {
       "path": "scripts/managed_blocks.mjs",
@@ -303,7 +303,7 @@
     },
     {
       "path": "scripts/setup_helper.mjs",
-      "sha256": "838d097b17b8c67b95acc132ff4fb5256d3cf61d7e2a7fdf1aed6a092af53431"
+      "sha256": "e4225aa21d7a20fdeca265bb5df91a41e68ae872365fbf9e0ef89ec77816afdb"
     },
     {
       "path": "scripts/unit_contracts.mjs",

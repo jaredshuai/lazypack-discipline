@@ -306,15 +306,59 @@ export function scanProjectDocuments(repoRoot, options = {}) {
 
         // 确定性检查文档中明确引用的仓内脚本/配置路径；不做语义判断。
         // 只认 scripts/、.github/ 和 docs/ 下带常见代码/配置后缀的路径，避免把自然语言误报为路径。
-        const scriptPathRegex = /(?<![A-Za-z0-9_./-])((?:scripts|\.github|docs)\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.(?:mjs|js|cjs|ts|tsx|py|sh|yml|yaml|json))(?![A-Za-z0-9_.-])/g;
+        const scriptPathRegex = /(?<![A-Za-z0-9_./-])((?:\.\/)?(?:scripts|\.github|docs)\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.(?:mjs|js|cjs|ts|tsx|py|sh|yml|yaml|json))(?![A-Za-z0-9_.-])/g;
         const rawLines = content.split(/\r?\n/);
+        let scriptInFence = false;
         for (let lineNum = 1; lineNum <= rawLines.length; lineNum += 1) {
-          const line = rawLines[lineNum - 1].replace(/`/g, '');
+          const rawLine = rawLines[lineNum - 1];
+          if (/^\s*```/.test(rawLine)) {
+            scriptInFence = !scriptInFence;
+            continue;
+          }
+          if (scriptInFence || relPath === 'docs/ARTIFACTS-log.md' || /(?:历史|historical|未实现|not yet implemented|过时|旧记录)/i.test(rawLine)) {
+            continue;
+          }
+          // URL spans are external references, not repository-relative paths.
+          const line = rawLine.replace(/\b(?:https?|ftp|file|mailto):\/\/[^\s)]+/gi, ' ');
           scriptPathRegex.lastIndex = 0;
           let pathMatch;
           while ((pathMatch = scriptPathRegex.exec(line)) !== null) {
-            const targetRel = normalizeRelPath(pathMatch[1]);
-            const absTarget = path.resolve(absRepo, targetRel);
+            const rawTarget = pathMatch[1];
+            const explicitRelative = rawTarget.startsWith('./');
+            const token = normalizeRelPath(rawTarget);
+            const documentDir = path.dirname(fullPath);
+            const localAbs = path.resolve(documentDir, token);
+            const rootAbs = path.resolve(absRepo, token);
+            const localRel = normalizeRelPath(path.relative(absRepo, localAbs));
+            const rootRel = normalizeRelPath(path.relative(absRepo, rootAbs));
+            const isLexicallyBounded = (rel) => rel !== '..' && !rel.startsWith('../') && !path.isAbsolute(rel);
+            // 先做词法边界判断，再调用 realRepoRelPath / existsSync；越界候选不得
+            // 触碰仓外文件系统，避免把文档内容变成任意主机路径探测。
+            const localBounded = isLexicallyBounded(localRel);
+            const rootBounded = isLexicallyBounded(rootRel);
+            const localKnown = localBounded && !isExcluded(localRel) && realRepoRelPath(absRepo, localRel) && fs.existsSync(localAbs);
+            const rootKnown = rootBounded && !isExcluded(rootRel) && realRepoRelPath(absRepo, rootRel) && fs.existsSync(rootAbs);
+            // Explicit ./ is document-relative. Bare paths are root-relative for root
+            // documents, or document-relative when that is the only existing bounded target;
+            // otherwise the base is ambiguous and must not produce a false finding.
+            let targetRel;
+            let absTarget;
+            if (explicitRelative) {
+              if (!localBounded) continue;
+              targetRel = localRel;
+              absTarget = localAbs;
+            } else if (path.dirname(relPath) === '.' || rootKnown) {
+              if (!rootBounded) continue;
+              targetRel = rootRel;
+              absTarget = rootAbs;
+            } else if (localKnown) {
+              targetRel = localRel;
+              absTarget = localAbs;
+            } else {
+              continue;
+            }
+            const realTargetRel = realRepoRelPath(absRepo, targetRel);
+            if (!realTargetRel || isExcluded(targetRel) || isExcluded(realTargetRel)) continue;
             if (!fs.existsSync(absTarget)) {
               invalidPaths.push({
                 sourceRelPath: relPath,

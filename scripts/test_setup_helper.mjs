@@ -883,11 +883,112 @@ test('readback：TS+Python 双配方出处按 id 排序恢复，槽出处完整�
     { id: 'python-uv-ruff', version: '0.1.0' },
     { id: 'ts-biome-vitest', version: '0.1.0' }
   ]);
-  assert.deepEqual(slotFactOf(facts, 'lint').value.provenances, [
-    'wired:preset:recommended',
-    'wired:preset:recommended'
-  ]);
+  for (const slot of SLOT_NAMES) {
+    assert.deepEqual(slotFactOf(facts, slot).value.provenances, [
+      'wired:preset:recommended',
+      'wired:preset:recommended'
+    ]);
+    assert.deepEqual(slotFactOf(facts, slot).value.provenanceRecords, [
+      { kind: 'recipe', id: 'python-uv-ruff', version: '0.1.0', provenance: 'wired:preset:recommended' },
+      { kind: 'recipe', id: 'ts-biome-vitest', version: '0.1.0', provenance: 'wired:preset:recommended' }
+    ]);
+  }
   assert.equal(slotFactOf(facts, 'lint').value.command, 'npm run lint');
+});
+
+test('readback：多配方加 existing 行按行种类恢复，且 plan 保留全部 provenance', (t) => {
+  const workspace = makeWorkspace(t);
+  const lines = [
+    'lazypack:preset id=python-uv-ruff version=0.1.0 format=wired:preset:recommended lint=install-failed:preset:install-error test=wired:preset:recommended type=wired:preset:recommended',
+    'lazypack:preset id=ts-biome-vitest version=0.1.0 format=wired:preset:recommended lint=wired:preset:recommended test=wired:preset:recommended type=wired:preset:recommended',
+    'lazypack:preset existing format=wired:existing:pre-existing lint=wired:existing:pre-existing test=wired:existing:pre-existing type=wired:existing:pre-existing'
+  ].join('\n# ');
+  writeHook(workspace, renderHook(workspace, { provenanceLine: lines }));
+  const rb = readback(workspace);
+  const state = stateFactOf(rb.facts);
+  assert.equal(state.value.state, 'valid');
+  assert.deepEqual(state.value.presets, [
+    { id: 'python-uv-ruff', version: '0.1.0' },
+    { id: 'ts-biome-vitest', version: '0.1.0' }
+  ]);
+  assert.equal(slotFactOf(rb.facts, 'lint').value.status, 'wired');
+  assert.deepEqual(slotFactOf(rb.facts, 'lint').value.provenanceRecords, [
+    { kind: 'recipe', id: 'python-uv-ruff', version: '0.1.0', provenance: 'install-failed:preset:install-error' },
+    { kind: 'recipe', id: 'ts-biome-vitest', version: '0.1.0', provenance: 'wired:preset:recommended' },
+    { kind: 'existing', id: null, version: null, provenance: 'wired:existing:pre-existing' }
+  ]);
+
+  const { file, facts } = scan(workspace);
+  const result = plan(workspace, file, { readbackFile: rb.file }).plan;
+  for (const slot of SLOT_NAMES) {
+    const planned = slotOf(result, slot);
+    assert.deepEqual(planned.hook.provenances, slotFactOf(rb.facts, slot).value.provenanceRecords);
+    assert.deepEqual(planned.outcomes.wired.provenances, slotFactOf(rb.facts, slot).value.provenanceRecords);
+  }
+  assert.deepEqual(result.hooks[0].presets, state.value.presets);
+});
+
+test('readback：existing-only 与单配方加 existing 均拒绝，不恢复部分历史', (t) => {
+  const workspace = makeBareWorkspace(t);
+  for (const provenanceLine of [
+    'lazypack:preset existing format=wired:existing:pre-existing lint=wired:existing:pre-existing test=wired:existing:pre-existing type=wired:existing:pre-existing',
+    'lazypack:preset id=ts-biome-vitest version=0.1.0 format=wired:preset:recommended lint=wired:preset:recommended test=wired:preset:recommended type=wired:preset:recommended\n# lazypack:preset existing format=wired:existing:pre-existing lint=wired:existing:pre-existing test=wired:existing:pre-existing type=wired:existing:pre-existing'
+  ]) {
+    writeHook(workspace, renderHook(workspace, { provenanceLine }));
+    const facts = readback(workspace).facts;
+    assert.equal(stateFactOf(facts).value.state, 'broken');
+    assert.equal(stateFactOf(facts).value.diff.kind, 'provenance-shape');
+    assert.equal(slotFactsOf(facts).length, 0);
+  }
+});
+
+test('plan --readback：canonical input.presets 数量不一致时全有或全无拒绝', (t) => {
+  const workspace = makeWorkspace(t);
+  const text = renderHook(workspace);
+  writeHook(workspace, text);
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+  const answers = readJson(workspace.answers);
+  answers.answers.presets = [
+    { id: 'python-uv-ruff', version: '0.1.0' },
+    { id: 'ts-biome-vitest', version: '0.1.0' }
+  ];
+  fs.writeFileSync(workspace.answers, `${JSON.stringify(answers, null, 2)}\n`, 'utf8');
+  const { result, plan: produced } = plan(workspace, file, { readbackFile: rb.file, expect: EXIT.ERROR });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /canonical input\.presets 不一致/);
+});
+
+test('plan --readback：无出处正文也不得绕过 canonical input.presets 数量校验', (t) => {
+  const workspace = makeWorkspace(t);
+  writeHook(workspace, renderHook(workspace, { includeProvenance: false }));
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+  const answers = readJson(workspace.answers);
+  answers.answers.presets = [
+    { id: 'python-uv-ruff', version: '0.1.0' },
+    { id: 'ts-biome-vitest', version: '0.1.0' }
+  ];
+  fs.writeFileSync(workspace.answers, `${JSON.stringify(answers, null, 2)}\n`, 'utf8');
+  const { result, plan: produced } = plan(workspace, file, { readbackFile: rb.file, expect: EXIT.ERROR });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /canonical input\.presets 不一致/);
+});
+
+test('plan --readback：旧版单配方 facts 缺少 presets 时不把同一 Hook 判成变化', (t) => {
+  const workspace = makeWorkspace(t);
+  writeHook(workspace, renderHook(workspace));
+  const { file } = scan(workspace);
+  const rb = readback(workspace);
+  const legacy = readJson(rb.file);
+  for (const fact of legacy.facts) {
+    if (fact.value && Object.prototype.hasOwnProperty.call(fact.value, 'presets')) delete fact.value.presets;
+  }
+  legacy.machineFp = independentDigest(legacy.facts);
+  fs.writeFileSync(rb.file, `${JSON.stringify(legacy, null, 2)}\n`, 'utf8');
+  const { plan: produced } = plan(workspace, file, { readbackFile: rb.file });
+  assert.ok(produced);
+  assert.equal(produced.readbackFp, legacy.machineFp);
 });
 
 test('readback：手改正文但 header fp 未更新 → drift，零槽事实、无 preset', (t) => {
