@@ -9,6 +9,14 @@
 
 ## 每轮记录
 
+### 2026-11-29 #132 最后四条评审意见收口
+
+- 检查范围：P4、P5；人工核对 setup_helper.mjs 的单配方事实字段、回答配方排序与 existing 行边界，以及 #109 净室测试新增混合语言和过时文档夹具；确认未修改固定层。
+- 依据版本：开工 dc237d7；收尾为本轮工作区；声明文件 docs/agents/doc-pairs.md，检查器 node scripts/check_doc_pairs.mjs。
+- 处理结果：已同步，旧单配方 readback 不再新增 presets: null，并补回归断言；#109 净室流程纳入两个夹具，覆盖单配方出处、重跑 NO-OP 与既有过时文档保留；随包清单将在本轮源文件更新后重生成。
+- 未覆盖范围：本轮不修改 docs/DECISIONS.md，不写入 PR 分支 Actions 证据，也不宣称已完成多配方 Hook 生成/执行编排。
+- 未决事项：提交推送后的三平台 CI、自动 Review 与合并后 main 证据仍由维护者继续核验。
+
 ### 2026-11-28 #132 评审补收口：配方来源摘要边界
 
 - 检查范围：P4；人工核对新一轮评审指出的 `managed-blocks.md` 配方来源摘要描述与 `setup_helper.mjs` 读回/计划实际字段，确认本轮仍未修改 `docs/DECISIONS.md`。

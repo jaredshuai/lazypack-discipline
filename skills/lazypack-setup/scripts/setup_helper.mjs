@@ -280,7 +280,6 @@ function hookStateValue() {
     contentFp: null,
     block: null,
     preset: null,
-    presets: null,
     diff: null
   };
 }
@@ -292,7 +291,7 @@ function markBroken(value, diff, contentFp = null) {
   value.currentFp = null;
   value.block = null;
   value.preset = null;
-  value.presets = null;
+  delete value.presets;
   value.contentFp = contentFp;
   value.diff = { line: null, ...diff };
   return value;
@@ -755,7 +754,8 @@ function readHook(repoRoot) {
   value.currentFp = currentFp;
   value.block = block;
   value.preset = preset;
-  value.presets = presets;
+  if (presets !== null) value.presets = presets;
+  else delete value.presets;
   return { value, slotFacts, locator };
 }
 

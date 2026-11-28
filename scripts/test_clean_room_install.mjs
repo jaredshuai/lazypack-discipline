@@ -506,7 +506,7 @@ function assertBlocksVerified(record) {
 // 用例
 // ---------------------------------------------------------------------------
 
-for (const fixtureName of ['ts-new', 'py-new']) {
+for (const fixtureName of ['ts-new', 'py-new', 'mixed-language', 'doc-stale']) {
   test(`${fixtureName}：只用拷出的 skill 完成装配，产物通过核验，原样重跑不改工作树`, (t) => {
     const workspace = makeWorkspace(t, fixtureName);
     const { assumed, step3_answers: answers } = workspace.answers;
@@ -557,8 +557,27 @@ for (const fixtureName of ['ts-new', 'py-new']) {
       'Hook 应恰有一行出处行，且四个槽位的出处都与回答文件一致'
     );
 
+    if (fixtureName === 'mixed-language') {
+      assert.ok(fs.existsSync(path.join(workspace.repo, 'pyproject.toml')), '混合语言夹具应保留 Python 清单');
+      assert.ok(fs.existsSync(path.join(workspace.repo, 'python_app', 'main.py')), '混合语言夹具应保留 Python 入口');
+      assert.ok(fs.existsSync(path.join(workspace.repo, 'src', 'index.ts')), '混合语言夹具应保留 TypeScript 入口');
+      assert.equal(
+        hookText.split('\n').filter((line) => line.startsWith('# lazypack:preset')).length,
+        1,
+        '净室装配的混合语言夹具仍只写单配方出处行，单配方格式不应提前升级'
+      );
+    }
+    if (fixtureName === 'doc-stale') {
+      const releaseText = fs.readFileSync(path.join(workspace.repo, 'RELEASE.md'), 'utf8');
+      assert.match(releaseText, /docs\/missing-build\.md/, '过时文档夹具的死链文字应保留在受管块外');
+      assert.match(releaseText, /scripts\/retired-release\.mjs/, '过时文档夹具的脚本路径文字应保留');
+      assert.ok(fs.existsSync(path.join(workspace.repo, 'docs', 'README.md')), '过时文档夹具的文档目录应保留');
+    }
+
     // 托管产物：新文件走 create，已有的常驻入口走 append 且块外字节不变。
-    const expectedWrites = Object.fromEntries(LAYER0.map((item) => [item.path, 'create']));
+    const expectedWrites = Object.fromEntries(
+      LAYER0.map((item) => [item.path, fs.existsSync(path.join(workspace.fixtureRepo, ...item.path.split('/'))) ? 'append' : 'create'])
+    );
     expectedWrites[residentEntry] = 'append';
     assert.deepEqual(first.writes, expectedWrites);
     assertBlocksVerified(first);

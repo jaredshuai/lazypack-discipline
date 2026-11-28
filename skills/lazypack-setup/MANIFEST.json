@@ -303,7 +303,7 @@
     },
     {
       "path": "scripts/setup_helper.mjs",
-      "sha256": "93efa160e966e50e2cf1b8310235bcbda697f7201efed111edcb26e4b990367d"
+      "sha256": "4246088e096942bc5dacea73d299094962c9ab2392139141c27802367012cc0f"
     },
     {
       "path": "scripts/unit_contracts.mjs",

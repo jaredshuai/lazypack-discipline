@@ -989,7 +989,7 @@ test('plan --readback：无出处正文也不得绕过 canonical input.presets �
   assert.match(result.stderr, /canonical input\.presets 不一致/);
 });
 
-test('plan --readback：旧版单配方 facts 缺少 presets 时不把同一 Hook 判成变化', (t) => {
+test('readback：未变更的旧单配方事实不新增 presets 字段，且 plan 保持兼容', (t) => {
   const workspace = makeWorkspace(t);
   writeHook(workspace, renderHook(workspace));
   const { file } = scan(workspace);
