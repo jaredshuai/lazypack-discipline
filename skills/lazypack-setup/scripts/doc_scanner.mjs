@@ -318,8 +318,9 @@ export function scanProjectDocuments(repoRoot, options = {}) {
           if (scriptInFence || relPath === 'docs/ARTIFACTS-log.md' || /(?:历史|historical|未实现|not yet implemented|过时|旧记录)/i.test(rawLine)) {
             continue;
           }
-          // URL spans are external references, not repository-relative paths.
-          const line = rawLine.replace(/\b(?:https?|ftp|file|mailto):\/\/[^\s)]+/gi, ' ');
+          // URI spans are external references, not repository-relative paths. Mask
+          // every valid URI scheme, not only the handful of common web schemes.
+          const line = rawLine.replace(/\b[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s)]+/g, ' ');
           scriptPathRegex.lastIndex = 0;
           let pathMatch;
           while ((pathMatch = scriptPathRegex.exec(line)) !== null) {

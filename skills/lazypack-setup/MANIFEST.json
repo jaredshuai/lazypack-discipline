@@ -255,7 +255,7 @@
     },
     {
       "path": "references/managed-blocks.md",
-      "sha256": "e0052d8390edd644d720fb3cc3618854d078a6e6fab64540f9e52d74df956829"
+      "sha256": "afe8983b5d37478ebf9c0f1b15be3150c7c8b390e412355ae49360404cf11665"
     },
     {
       "path": "references/retention-sections.md",
@@ -263,7 +263,7 @@
     },
     {
       "path": "references/setup-pipeline.md",
-      "sha256": "0a3966a62fbd710b27b21eae29335d44357a554bc502596c65c04c27978e5d97"
+      "sha256": "4b3a73c2134be08d8cc43ce86935d3a62418dcd170fb18823d4b3c77475c026b"
     },
     {
       "path": "references/unit-matrix.md",
@@ -291,7 +291,7 @@
     },
     {
       "path": "scripts/doc_scanner.mjs",
-      "sha256": "f2298d02c3586f999689e9e55f7b4858a7b8a89e566294de2fd45ddcf991b6ae"
+      "sha256": "bdc49c64bfa1dad677740ca7b3e1212dd752a1e306e299b26e04a264d0a3a29e"
     },
     {
       "path": "scripts/managed_blocks.mjs",
@@ -303,7 +303,7 @@
     },
     {
       "path": "scripts/setup_helper.mjs",
-      "sha256": "e4225aa21d7a20fdeca265bb5df91a41e68ae872365fbf9e0ef89ec77816afdb"
+      "sha256": "93efa160e966e50e2cf1b8310235bcbda697f7201efed111edcb26e4b990367d"
     },
     {
       "path": "scripts/unit_contracts.mjs",

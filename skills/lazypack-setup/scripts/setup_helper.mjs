@@ -938,12 +938,18 @@ function validateAnswers(answers) {
       throw new CliError(EXIT.ERROR, '回答文件的 answers.presets 必须是非空数组');
     }
     const seen = new Set();
+    const presetIds = [];
     for (const [index, preset] of answers.answers.presets.entries()) {
       if (!isPlainObject(preset) || typeof preset.id !== 'string' || typeof preset.version !== 'string') {
         throw new CliError(EXIT.ERROR, `回答文件的 answers.presets[${index}] 必须含字符串 id 与 version`);
       }
       if (seen.has(preset.id)) throw new CliError(EXIT.ERROR, `回答文件的 answers.presets 含重复 id：${preset.id}`);
       seen.add(preset.id);
+      presetIds.push(preset.id);
+    }
+    const sortedPresetIds = [...presetIds].sort(compareCodePoints);
+    if (presetIds.some((id, index) => id !== sortedPresetIds[index])) {
+      throw new CliError(EXIT.ERROR, '回答文件的 answers.presets 必须按 id 的字典序排列');
     }
   }
   if (answers.rulings !== undefined && !Array.isArray(answers.rulings)) {

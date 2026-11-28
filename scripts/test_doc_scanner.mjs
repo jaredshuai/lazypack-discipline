@@ -866,6 +866,7 @@ function caseScriptPathSignals(base) {
       'node scripts/fenced.mjs',
       '```',
       '[外部](https://example.com/path/scripts/external.mjs)',
+      '远程脚本：ssh://example.com/scripts/remote.mjs',
       '历史记录：scripts/history.mjs（未实现）',
       '排除目录：docs/raw-qa/missing.mjs'
     ].join('\n') + '\n',
@@ -875,6 +876,7 @@ function caseScriptPathSignals(base) {
   assertCase(scan.invalidPaths.some((item) => item.sourceRelPath === 'README.md' && item.targetRel === 'scripts/missing.mjs'), './scripts/缺失路径必须被发现');
   assertCase(!scan.invalidPaths.some((item) => item.targetRel === 'scripts/fenced.mjs'), 'fenced code block 不得产生失效路径');
   assertCase(!scan.invalidPaths.some((item) => item.targetRel === 'scripts/external.mjs'), '外部 URL 不得产生本地路径');
+  assertCase(!scan.invalidPaths.some((item) => item.targetRel === 'scripts/remote.mjs'), '任意 URI scheme 不得产生本地路径');
   assertCase(!scan.invalidPaths.some((item) => item.targetRel === 'scripts/history.mjs'), '历史记录不得产生本地路径');
   assertCase(!scan.invalidPaths.some((item) => item.targetRel.startsWith('docs/raw-qa/')), '排除目录不得泄露失效路径');
   assertCase(!scan.invalidPaths.some((item) => item.sourceRelPath === 'skills/lazypack-setup/SKILL.md'), 'skill 相对 scripts/ 路径不得按仓根误报');

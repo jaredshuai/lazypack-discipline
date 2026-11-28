@@ -959,6 +959,20 @@ test('plan --readback：canonical input.presets 数量不一致时全有或全�
   assert.match(result.stderr, /canonical input\.presets 不一致/);
 });
 
+test('回答文件的 answers.presets 必须按 id 字典序排列', (t) => {
+  const workspace = makeWorkspace(t);
+  const { file } = scan(workspace);
+  const answers = readJson(workspace.answers);
+  answers.answers.presets = [
+    { id: 'ts-biome-vitest', version: '0.1.0' },
+    { id: 'python-uv-ruff', version: '0.1.0' }
+  ];
+  fs.writeFileSync(workspace.answers, `${JSON.stringify(answers, null, 2)}\n`, 'utf8');
+  const { result, plan: produced } = plan(workspace, file, { expect: EXIT.ERROR });
+  assert.equal(produced, null);
+  assert.match(result.stderr, /answers\.presets 必须按 id 的字典序排列/);
+});
+
 test('plan --readback：无出处正文也不得绕过 canonical input.presets 数量校验', (t) => {
   const workspace = makeWorkspace(t);
   writeHook(workspace, renderHook(workspace, { includeProvenance: false }));
