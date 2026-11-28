@@ -11,7 +11,7 @@
     },
     "3.A.document_homes": {
       "asked": false,
-      "reason": "夹具没有存量文档和同主题冲突，按默认 preserve-existing，不提问"
+      "reason": "夹具已有 RELEASE.md 与 docs/README.md 等文档，但没有同主题冲突，按默认 preserve-existing，不提问"
     },
     "3.B.preset": {
       "id": "ts-biome-vitest",

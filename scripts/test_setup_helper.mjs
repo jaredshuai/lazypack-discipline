@@ -994,7 +994,11 @@ test('readback：未变更的旧单配方事实不新增 presets 字段，且 pl
   writeHook(workspace, renderHook(workspace));
   const { file } = scan(workspace);
   const rb = readback(workspace);
-  const legacy = readJson(rb.file);
+  const current = readJson(rb.file);
+  const currentState = current.facts.find((fact) => fact.kind === 'hook-managed-block');
+  assert.ok(currentState);
+  assert.equal(Object.hasOwn(currentState.value, 'presets'), false);
+  const legacy = current;
   for (const fact of legacy.facts) {
     if (fact.value && Object.prototype.hasOwnProperty.call(fact.value, 'presets')) delete fact.value.presets;
   }

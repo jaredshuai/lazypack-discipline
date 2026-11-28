@@ -181,7 +181,7 @@
 ```
 
 - **字段规范与约束**：
-  * 单配方时使用 `preset`、`presetSrc`、`provenance` 三个字段；`preset` 固定包含 `id` 与 `version`。
+  * 单配方时使用 `preset`、`presetSrc`、`provenance` 三个字段；`preset` 固定包含 `id` 与 `version`，并省略多配方专用的 `presets` 字段。
   * 多配方时三者全部改用 `presets` 数组，数组按 `id` 字典序排列，每项包含 `id`、`version`、`src` 与固定四槽 `provenance`；单配方继续使用顶层 `presetSrc`，`preset`/`presetSrc`/`provenance` 与 `presets` 互斥，不得同时出现。
   * 多配方正文每个采纳配方独占一行：`# lazypack:preset id=<id> version=<version> format=<state>:<source>:<reason> lint=<...> test=<...> type=<...>`，按 `id` 字典序排列。非配方既有命令另占一行 `# lazypack:preset existing format=<...> lint=<...> test=<...> type=<...>`，不冒充任何配方来源。
   * 本轮只实现多配方出处的确定性读回与 plan 传递；单槽多命令按 `id` 排序、相同命令去重及其逐命令执行/报告仍未接入装配模板，不能据此宣称当前 Hook 已提供该行为。

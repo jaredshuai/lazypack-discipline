@@ -255,7 +255,7 @@
     },
     {
       "path": "references/managed-blocks.md",
-      "sha256": "9da2e8136465aa8384de0c34268cdd837acae89e350a7070422b2f2fdb393f4a"
+      "sha256": "217ced4dea3f4a7203a11e519b4be2802c39a8c537be0eda6a9850131999a28f"
     },
     {
       "path": "references/retention-sections.md",
@@ -263,7 +263,7 @@
     },
     {
       "path": "references/setup-pipeline.md",
-      "sha256": "4b3a73c2134be08d8cc43ce86935d3a62418dcd170fb18823d4b3c77475c026b"
+      "sha256": "27b2b718419fb636ba2628f5d7a1531e00be5bed3d0f8a05f2d7d0a6d305ae7a"
     },
     {
       "path": "references/unit-matrix.md",

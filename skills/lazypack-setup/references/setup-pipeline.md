@@ -81,17 +81,17 @@ node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answ
 | `contentFp` | 整个文件去 BOM、CRLF→LF 后的 16 位指纹，只在 `unmanaged` / `broken` 且 Hook 是可读普通文件时给出：这两种状态没有可信的正文指纹，`plan` 靠它发现读回后文件又变了；其余状态（含符号链接、目录）为 `null` |
 | `block` | `{name, style}`；没有有效块时为 `null` |
 | `preset` | 单配方出处行的 `{id, version}`；多配方或没有出处时为 `null` |
-| `presets` | 多配方出处行的 `[{id, version}]`，按 `id` 字典序排列；单配方或没有出处时为 `null` |
+| `presets` | 多配方出处行的 `[{id, version}]`，按 `id` 字典序排列；单配方、没有出处或 `broken` 时省略该字段 |
 | `diff` | `null` 或差异 `{kind, detail, line}`；`line` 是文件内 1-based 行号，定位不到时为 `null`；`drift` 的两侧指纹在 `header.fp` 与 `currentFp` |
 
 六种状态：
 
 - `absent`：`.githooks` 或其下的 `pre-commit` 不存在。恢复值全 `null`。
 - `unmanaged`：文件存在但没有 lazypack 托管块。恢复值全 `null`；`contentFp` 记整个文件。
-- `no-provenance`：块有效（标记、header、`fp` 一致）但没有 `# lazypack:preset` 出处行。四个槽按 `existing` / `pre-existing` 恢复，`preset` 与 `presets` 均为 `null`。
-- `valid`：块有效且出处行严格合法。单配方恢复 `preset`；多配方恢复 `presets`；四个槽均恢复出处、状态、命令及多配方的逐行记录。
-- `drift`：`currentFp !== header.fp`。不产出槽事实，`preset` 与 `presets` 均为 `null`；两侧指纹看 `header.fp` 与 `currentFp`。
-- `broken`：标记残缺、header 非法、注释风格不对、块名不是 `pre-commit-hook`、保留变量残留、出处行歧义或语法非法、出处行状态与 `<SLOT>_STATUS` 不一致、槽变量缺失/重复/非法，或 `.githooks` / Hook 是符号链接、目录、非普通文件。零恢复值：不产出槽事实，`header`、`currentFp`、`block`、`preset`、`presets` 全 `null`；可读普通文件时 `contentFp` 记整个文件，其余为 `null`。
+- `no-provenance`：块有效（标记、header、`fp` 一致）但没有 `# lazypack:preset` 出处行。四个槽按 `existing` / `pre-existing` 恢复，`preset` 为 `null` 且省略 `presets`。
+- `valid`：块有效且出处行严格合法。单配方恢复 `preset` 并省略 `presets`；多配方恢复 `presets`；四个槽均恢复出处、状态、命令及多配方的逐行记录。
+- `drift`：`currentFp !== header.fp`。不产出槽事实，`preset` 为 `null` 且省略 `presets`；两侧指纹看 `header.fp` 与 `currentFp`。
+- `broken`：标记残缺、header 非法、注释风格不对、块名不是 `pre-commit-hook`、保留变量残留、出处行歧义或语法非法、出处行状态与 `<SLOT>_STATUS` 不一致、槽变量缺失/重复/非法，或 `.githooks` / Hook 是符号链接、目录、非普通文件。零恢复值：不产出槽事实，`header`、`currentFp`、`block`、`preset` 均为 `null` 且省略 `presets`；可读普通文件时 `contentFp` 记整个文件，其余为 `null`。
 
 `diff.kind`：`not-a-regular-file`、`boundary`、`header`、`style-mismatch`、`unexpected-block`、`placeholder`、`fp-mismatch`、`provenance-ambiguous`、`provenance-grammar`、`slot-variables`、`slot-state-mismatch`。`evidence.locator`：没有文件为 `none`，有文件但无托管块为 `file`，找到 start 标记为 `lazypack:start`，块名与风格核验通过为 `lazypack:start block=pre-commit-hook`。
 

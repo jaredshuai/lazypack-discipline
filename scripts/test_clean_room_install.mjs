@@ -569,8 +569,23 @@ for (const fixtureName of ['ts-new', 'py-new', 'mixed-language', 'doc-stale']) {
     }
     if (fixtureName === 'doc-stale') {
       const releaseText = fs.readFileSync(path.join(workspace.repo, 'RELEASE.md'), 'utf8');
-      assert.match(releaseText, /docs\/missing-build\.md/, '过时文档夹具的死链文字应保留在受管块外');
-      assert.match(releaseText, /scripts\/retired-release\.mjs/, '过时文档夹具的脚本路径文字应保留');
+      let insideManagedRelease = false;
+      const releaseOutside = releaseText
+        .split('\n')
+        .filter((line) => {
+          if (line.includes('lazypack:start block=release-discipline')) {
+            insideManagedRelease = true;
+            return false;
+          }
+          if (line.includes('lazypack:end block=release-discipline')) {
+            insideManagedRelease = false;
+            return false;
+          }
+          return !insideManagedRelease;
+        })
+        .join('\n');
+      assert.match(releaseOutside, /docs\/missing-build\.md/, '过时文档夹具的死链文字应保留在受管块外');
+      assert.match(releaseOutside, /scripts\/retired-release\.mjs/, '过时文档夹具的脚本路径文字应保留');
       assert.ok(fs.existsSync(path.join(workspace.repo, 'docs', 'README.md')), '过时文档夹具的文档目录应保留');
     }
 
