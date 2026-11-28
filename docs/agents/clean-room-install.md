@@ -26,7 +26,7 @@
 - 不执行任何由 AI 按提示词完成的环节（探测、访谈、草案确认、撰写、完成报告）。
 - 不安装依赖，不运行任何门禁命令，不触发真实提交。
 - 不测文档迁移，只测默认的原位保留。
-- 不测存量仓：两份夹具都是全新仓库，没有既有 Hook、既有托管块或既有登记册。
+- 不测真正的存量仓：`ts-new`、`py-new` 是全新仓；`mixed-language` 与 `doc-stale` 带有混合语言入口或既有文档，但没有既有 Hook、既有托管块或既有登记册。
 
 ## 怎么运行
 
@@ -45,6 +45,8 @@ node scripts/run_tests.mjs test_clean_room_install
 |---|---|---|---|
 | `ts-new` | 全新 TypeScript | 想法池与纪要 | `ts-biome-vitest`，四槽全采纳 |
 | `py-new` | 全新 Python | 只留决议 | `python-uv-ruff`，四槽全采纳 |
+| `mixed-language` | 同时含 TypeScript 与 Python 入口的混合语言仓 | 只留决议 | 仅接入 `ts-biome-vitest` 单配方，重跑断言全为 `noop` |
+| `doc-stale` | 含死链与不存在脚本路径的旧文档仓 | 只留决议 | `ts-biome-vitest`，并断言旧文档文字保留 |
 
 `answers.json` 分两段，含义不同：
 

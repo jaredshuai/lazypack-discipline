@@ -262,6 +262,7 @@ const HOOK_KINDS = ['hook-managed-block', 'hook-slot'];
 const HOOK_STATES = ['absent', 'unmanaged', 'no-provenance', 'valid', 'drift', 'broken'];
 const SLOT_STATUS_VALUES = ['wired', 'missing', 'install-failed', 'n/a'];
 const PROVENANCE_LINE_RE = /^# lazypack:preset id=([a-z0-9][a-z0-9-]*) version=(\d+\.\d+\.\d+) format=(\S+) lint=(\S+) test=(\S+) type=(\S+)$/;
+const EXISTING_PROVENANCE_LINE_RE = /^# lazypack:preset existing format=(\S+) lint=(\S+) test=(\S+) type=(\S+)$/;
 const PROVENANCE_VALUE_RE = new RegExp(
   `^(${SLOT_STATUS_VALUES.join('|')}):(preset|existing|none):(recommended|declined|pre-existing|no-tool|install-error|not-applicable)$`
 );
@@ -290,6 +291,7 @@ function markBroken(value, diff, contentFp = null) {
   value.currentFp = null;
   value.block = null;
   value.preset = null;
+  delete value.presets;
   value.contentFp = contentFp;
   value.diff = { line: null, ...diff };
   return value;
@@ -520,63 +522,122 @@ function readHook(repoRoot) {
   const firstNonEmpty = bodyLines.findIndex((line) => line.trim() !== '');
   const bodyLineToFile = (bodyIndex) => (startLineNo == null ? null : startLineNo + bodyIndex + 1);
 
-  if (provenanceLines.length > 1) {
-    return {
-      value: markBroken(value, {
-        kind: 'provenance-ambiguous',
-        detail: `正文里有 ${provenanceLines.length} 行 lazypack:preset`,
-        line: bodyLineToFile(provenanceLines[1])
-      }, contentFp),
-      slotFacts: null,
-      locator
-    };
-  }
-
   let provenanceBySlot = null;
   let preset = null;
+  let presets = null;
   let provenanceState = 'no-provenance';
-  if (provenanceLines.length === 1) {
-    const index = provenanceLines[0];
-    if (index !== firstNonEmpty) {
+  let provenanceEntries = null;
+  if (provenanceLines.length >= 1) {
+    if (provenanceLines[0] !== firstNonEmpty || provenanceLines.some((line, index) => line !== firstNonEmpty + index)) {
       return {
         value: markBroken(value, {
           kind: 'provenance-ambiguous',
-          detail: 'lazypack:preset 出处行不在正文头部',
-          line: bodyLineToFile(index)
+          detail: 'lazypack:preset 出处行必须连续位于正文头部',
+          line: bodyLineToFile(provenanceLines.find((line) => line !== firstNonEmpty) ?? provenanceLines[0])
         }, contentFp),
         slotFacts: null,
         locator
       };
     }
-    const match = PROVENANCE_LINE_RE.exec(bodyLines[index]);
-    if (!match) {
-      return {
-        value: markBroken(value, {
-          kind: 'provenance-grammar',
-          detail: '出处行不符合严格语法',
-          line: bodyLineToFile(index)
-        }, contentFp),
-        slotFacts: null,
-        locator
-      };
-    }
-    const [, id, version, formatValue, lintValue, testValue, typeValue] = match;
-    const parsed = { format: formatValue, lint: lintValue, type: typeValue, test: testValue };
-    for (const slot of SLOTS) {
-      if (!PROVENANCE_VALUE_RE.test(parsed[slot])) {
+    const parsedLines = [];
+    for (const index of provenanceLines) {
+      const line = bodyLines[index];
+      const match = PROVENANCE_LINE_RE.exec(line);
+      const existing = EXISTING_PROVENANCE_LINE_RE.exec(line);
+      if (!match && !existing) {
         return {
           value: markBroken(value, {
             kind: 'provenance-grammar',
-            detail: `出处行的 ${slot} 段不是 <state>:<source>:<reason>`,
+            detail: '出处行不符合严格语法',
             line: bodyLineToFile(index)
           }, contentFp),
           slotFacts: null,
           locator
         };
       }
+      const values = match ? match.slice(3) : existing.slice(1);
+      const kind = match ? 'recipe' : 'existing';
+      const parsed = { format: values[0], lint: values[1], test: values[2], type: values[3] };
+      for (const slot of SLOTS) {
+        const provenance = parsed[slot];
+        if (!PROVENANCE_VALUE_RE.test(provenance)) {
+          return {
+            value: markBroken(value, {
+              kind: 'provenance-grammar',
+              detail: `出处行的 ${slot} 段不是 <state>:<source>:<reason>`,
+              line: bodyLineToFile(index)
+            }, contentFp),
+            slotFacts: null,
+            locator
+          };
+        }
+        const source = provenance.split(':')[1];
+        const expectedSource = kind === 'recipe' ? 'preset' : 'existing';
+        if (source !== expectedSource) {
+          return {
+            value: markBroken(value, {
+              kind: 'provenance-source',
+              detail: `${kind === 'recipe' ? '配方' : '既有命令'}出处行的 ${slot} 段来源必须是 ${expectedSource}`,
+              line: bodyLineToFile(index)
+            }, contentFp),
+            slotFacts: null,
+            locator
+          };
+        }
+      }
+      parsedLines.push({
+        kind,
+        id: match ? match[1] : null,
+        version: match ? match[2] : null,
+        values: parsed
+      });
     }
-    provenanceBySlot = parsed;
-    preset = { id, version };
+    const recipeLines = parsedLines.filter((entry) => entry.kind === 'recipe');
+    const existingLines = parsedLines.filter((entry) => entry.kind === 'existing');
+    const recipeIds = recipeLines.map((entry) => entry.id);
+    const sortedRecipeIds = [...recipeIds].sort(compareCodePoints);
+    if (recipeIds.some((id, index) => id !== sortedRecipeIds[index]) || new Set(recipeIds).size !== recipeIds.length) {
+      return {
+        value: markBroken(value, {
+          kind: 'provenance-order',
+          detail: '多配方出处行必须按 id 字典序且不得重复',
+          line: bodyLineToFile(provenanceLines[0])
+        }, contentFp),
+        slotFacts: null,
+        locator
+      };
+    }
+    if (existingLines.length > 1 || (existingLines.length > 0 && recipeLines.length < 2)) {
+      return {
+        value: markBroken(value, {
+          kind: 'provenance-shape',
+          detail: 'existing 出处行只能在至少两个配方的多配方正文中出现一次',
+          line: bodyLineToFile(provenanceLines[0])
+        }, contentFp),
+        slotFacts: null,
+        locator
+      };
+    }
+    if (recipeLines.length === 0) {
+      return {
+        value: markBroken(value, {
+          kind: 'provenance-shape',
+          detail: '出处行至少需要一条配方行；无配方时不得出现 existing 行',
+          line: bodyLineToFile(provenanceLines[0])
+        }, contentFp),
+        slotFacts: null,
+        locator
+      };
+    }
+    const existingLine = existingLines[0] ?? null;
+    provenanceEntries = [...recipeLines, ...(existingLine ? [existingLine] : [])];
+    if (recipeLines.length === 1 && !existingLine) {
+      provenanceBySlot = recipeLines[0].values;
+      preset = { id: recipeLines[0].id, version: recipeLines[0].version };
+    } else {
+      presets = recipeLines.map((entry) => ({ id: entry.id, version: entry.version }));
+      provenanceBySlot = Object.fromEntries(SLOTS.map((slot) => [slot, provenanceEntries.map((entry) => entry.values[slot])]));
+    }
     provenanceState = 'valid';
   }
 
@@ -649,25 +710,41 @@ function readHook(repoRoot) {
       };
     }
     // valid 用出处行三段式；no-provenance 按通用既有命令处理（§5.6）。
-    const provenance = provenanceBySlot ? provenanceBySlot[slot] : `${status}:existing:pre-existing`;
-    const [state, source, reason] = provenance.split(':');
-    if (provenanceBySlot && state !== status) {
+    const rawProvenance = provenanceBySlot ? provenanceBySlot[slot] : `${status}:existing:pre-existing`;
+    const provenances = Array.isArray(rawProvenance) ? rawProvenance : [rawProvenance];
+    const parsedProvenances = provenances.map((provenance) => {
+      const [state, source, reason] = provenance.split(':');
+      return { state, source, reason };
+    });
+    const hasWiredOutcome = parsedProvenances.some((entry) => entry.state === 'wired');
+    if ((status === 'wired') !== hasWiredOutcome) {
       return {
         value: markBroken(value, {
           kind: 'slot-state-mismatch',
-          detail: `出处行 ${slot} 的状态 ${state} 与 ${upper}_STATUS ${status} 不一致`,
+          detail: `槽 ${slot} 的聚合状态 ${status} 与出处行中实际接线结果不一致`,
           line: hits.STATUS[0].line
         }, contentFp),
         slotFacts: null,
         locator
       };
     }
+    const first = parsedProvenances[0];
+    const slotValue = { slot, state: status, source: first.source, reason: first.reason, status, command };
+    if (Array.isArray(rawProvenance)) {
+      slotValue.provenances = provenances;
+      slotValue.provenanceRecords = (provenanceEntries ?? []).map((entry, index) => ({
+        kind: entry.kind,
+        id: entry.id,
+        version: entry.version,
+        provenance: provenances[index]
+      }));
+    }
     slotFacts.push({
       id: `${HOOK_STATE_FACT_ID}#${slot}`,
       item: 7,
       kind: 'hook-slot',
       source: 'machine',
-      value: { slot, state, source, reason, status, command },
+      value: slotValue,
       evidence: { path: HOOK_PATH, locator: `${upper}_STATUS/${upper}_CMD` }
     });
   }
@@ -677,6 +754,8 @@ function readHook(repoRoot) {
   value.currentFp = currentFp;
   value.block = block;
   value.preset = preset;
+  if (presets !== null) value.presets = presets;
+  else delete value.presets;
   return { value, slotFacts, locator };
 }
 
@@ -714,12 +793,26 @@ function describeFactChanges(recordedFacts, currentFacts) {
   const changes = [];
   for (const [id, fact] of current) {
     if (!recorded.has(id)) changes.push(`新增：${id}`);
-    else if (canonicalJson(recorded.get(id)) !== canonicalJson(fact)) changes.push(`变化：${id}`);
+    else if (canonicalJson(normalizeLegacyReadbackFact(recorded.get(id))) !== canonicalJson(normalizeLegacyReadbackFact(fact))) {
+      changes.push(`变化：${id}`);
+    }
   }
   for (const id of recorded.keys()) {
     if (!current.has(id)) changes.push(`消失：${id}`);
   }
   return changes;
+}
+
+/**
+ * 兼容升级前的 readback facts：多配方版本新增的可选 `presets: null` 不应让
+ * 同一份 Hook 在 plan --readback 时被误判为发生变化。非空 presets、preset
+ * 以及其它字段仍逐字参与比较，避免把真正的历史变化归一化掉。
+ */
+function normalizeLegacyReadbackFact(fact) {
+  if (!isPlainObject(fact) || !isPlainObject(fact.value)) return fact;
+  const value = { ...fact.value };
+  if (value.presets === null) delete value.presets;
+  return { ...fact, value };
 }
 
 function validateFactsFile(file) {
@@ -840,6 +933,25 @@ function validateAnswers(answers) {
     throw new CliError(EXIT.ERROR, `回答文件的 origin 必须是 ${ANSWER_ORIGINS.join(' 或 ')}`);
   }
   if (!isPlainObject(answers.answers)) throw new CliError(EXIT.ERROR, '回答文件缺少 answers 对象');
+  if (answers.answers.presets !== undefined) {
+    if (!Array.isArray(answers.answers.presets) || answers.answers.presets.length === 0) {
+      throw new CliError(EXIT.ERROR, '回答文件的 answers.presets 必须是非空数组');
+    }
+    const seen = new Set();
+    const presetIds = [];
+    for (const [index, preset] of answers.answers.presets.entries()) {
+      if (!isPlainObject(preset) || typeof preset.id !== 'string' || typeof preset.version !== 'string') {
+        throw new CliError(EXIT.ERROR, `回答文件的 answers.presets[${index}] 必须含字符串 id 与 version`);
+      }
+      if (seen.has(preset.id)) throw new CliError(EXIT.ERROR, `回答文件的 answers.presets 含重复 id：${preset.id}`);
+      seen.add(preset.id);
+      presetIds.push(preset.id);
+    }
+    const sortedPresetIds = [...presetIds].sort(compareCodePoints);
+    if (presetIds.some((id, index) => id !== sortedPresetIds[index])) {
+      throw new CliError(EXIT.ERROR, '回答文件的 answers.presets 必须按 id 的字典序排列');
+    }
+  }
   if (answers.rulings !== undefined && !Array.isArray(answers.rulings)) {
     throw new CliError(EXIT.ERROR, '回答文件的 rulings 必须是数组');
   }
@@ -994,6 +1106,13 @@ function mergeReadbackSlots(slots, readbackFacts) {
     }
 
     const provenance = `${fact.value.state}:${fact.value.source}:${fact.value.reason}`;
+    const provenanceRecords = Array.isArray(fact.value.provenanceRecords) ? fact.value.provenanceRecords : null;
+    const hook = { state: fact.value.state, provenance, status: fact.value.status };
+    const outcome = { provenance, writeCommand: !!(hookCommand && fact.value.state === 'wired') };
+    if (provenanceRecords) {
+      hook.provenances = provenanceRecords;
+      outcome.provenances = provenanceRecords;
+    }
     const origin = hookCommand ? 'existing' : 'none';
     const merged = {
       ...slot,
@@ -1003,8 +1122,8 @@ function mergeReadbackSlots(slots, readbackFacts) {
       from: fact.id,
       needs: [],
       commandSource: 'hook',
-      hook: { state: fact.value.state, provenance, status: fact.value.status },
-      outcomes: { [fact.value.state]: { provenance, writeCommand: !!(hookCommand && fact.value.state === 'wired') } }
+      hook,
+      outcomes: { [fact.value.state]: outcome }
     };
     // origin 为 none 时保留扫描槽的 reason；有命令的槽没有 reason。
     if (origin === 'existing') delete merged.reason;
@@ -1053,7 +1172,9 @@ export function buildPlan({ cwd, factsFile, answersFile, readbackFile = null }) 
   } else {
     // readback 之后 Hook 变了：与 scan 的 machineFp 同理，停下不写。
     const fresh = buildReadbackFactsFile(repoRoot);
-    if (fresh.machineFp !== readbackFile.machineFp) {
+    const freshComparableFp = digest(fresh.facts.map(normalizeLegacyReadbackFact));
+    const recordedComparableFp = digest(readbackFile.facts.map(normalizeLegacyReadbackFact));
+    if (freshComparableFp !== recordedComparableFp) {
       const changes = describeFactChanges(readbackFile.facts, fresh.facts);
       throw new CliError(
         EXIT.STALE,
@@ -1061,6 +1182,18 @@ export function buildPlan({ cwd, factsFile, answersFile, readbackFile = null }) 
       );
     }
     const stateFact = readbackFile.facts.find((fact) => fact.kind === 'hook-managed-block');
+    const expectedPresets = answersFile.answers.presets;
+    if (expectedPresets !== undefined && ['valid', 'no-provenance'].includes(stateFact?.value.state)) {
+      const actualPresets = stateFact.value.presets ?? (stateFact.value.preset ? [stateFact.value.preset] : []);
+      if (actualPresets.length !== expectedPresets.length || actualPresets.some((preset, index) =>
+        preset.id !== expectedPresets[index].id || preset.version !== expectedPresets[index].version
+      )) {
+        throw new CliError(
+          EXIT.ERROR,
+          `Hook 出处行的配方数量或顺序与 canonical input.presets 不一致（期望 ${expectedPresets.length}，实际 ${actualPresets.length}），不恢复部分历史`
+        );
+      }
+    }
     if (stateFact && (stateFact.value.state === 'drift' || stateFact.value.state === 'broken')) {
       const diff = stateFact.value.diff;
       const at = diff && diff.line != null ? `（第 ${diff.line} 行）` : '';
@@ -1072,7 +1205,13 @@ export function buildPlan({ cwd, factsFile, answersFile, readbackFile = null }) 
     plannedSlots = mergeReadbackSlots(slots, readbackFile.facts);
     hooks = readbackFile.facts
       .filter((fact) => fact.kind === 'hook-managed-block')
-      .map((fact) => ({ from: fact.id, path: fact.value.path, state: fact.value.state, preset: fact.value.preset }));
+      .map((fact) => ({
+        from: fact.id,
+        path: fact.value.path,
+        state: fact.value.state,
+        ...(fact.value.preset ? { preset: fact.value.preset } : {}),
+        ...(fact.value.presets ? { presets: fact.value.presets } : {})
+      }));
     readbackFp = readbackFile.machineFp;
   }
 

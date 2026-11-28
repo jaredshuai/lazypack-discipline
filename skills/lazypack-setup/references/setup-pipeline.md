@@ -80,17 +80,18 @@ node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answ
 | `currentFp` | 正文按 `managed-blocks.md` §2 规范化后的 16 位指纹；无效时为 `null` |
 | `contentFp` | 整个文件去 BOM、CRLF→LF 后的 16 位指纹，只在 `unmanaged` / `broken` 且 Hook 是可读普通文件时给出：这两种状态没有可信的正文指纹，`plan` 靠它发现读回后文件又变了；其余状态（含符号链接、目录）为 `null` |
 | `block` | `{name, style}`；没有有效块时为 `null` |
-| `preset` | 出处行的 `{id, version}`；没有出处或出处无效时为 `null` |
+| `preset` | 单配方出处行的 `{id, version}`；多配方或没有出处时为 `null` |
+| `presets` | 多配方出处行的 `[{id, version}]`，按 `id` 字典序排列；单配方、没有出处或 `broken` 时省略该字段 |
 | `diff` | `null` 或差异 `{kind, detail, line}`；`line` 是文件内 1-based 行号，定位不到时为 `null`；`drift` 的两侧指纹在 `header.fp` 与 `currentFp` |
 
 六种状态：
 
 - `absent`：`.githooks` 或其下的 `pre-commit` 不存在。恢复值全 `null`。
 - `unmanaged`：文件存在但没有 lazypack 托管块。恢复值全 `null`；`contentFp` 记整个文件。
-- `no-provenance`：块有效（标记、header、`fp` 一致）但没有 `# lazypack:preset` 出处行。四个槽按 `existing` / `pre-existing` 恢复，`preset` 为 `null`。
-- `valid`：块有效且出处行严格合法。恢复 `preset` 与四个槽的出处、状态、命令。
-- `drift`：`currentFp !== header.fp`。不产出槽事实，`preset` 为 `null`；两侧指纹看 `header.fp` 与 `currentFp`。
-- `broken`：标记残缺、header 非法、注释风格不对、块名不是 `pre-commit-hook`、保留变量残留、出处行歧义或语法非法、出处行状态与 `<SLOT>_STATUS` 不一致、槽变量缺失/重复/非法，或 `.githooks` / Hook 是符号链接、目录、非普通文件。零恢复值：不产出槽事实，`header`、`currentFp`、`block`、`preset` 全 `null`；可读普通文件时 `contentFp` 记整个文件，其余为 `null`。
+- `no-provenance`：块有效（标记、header、`fp` 一致）但没有 `# lazypack:preset` 出处行。四个槽按 `existing` / `pre-existing` 恢复，`preset` 为 `null` 且省略 `presets`。
+- `valid`：块有效且出处行严格合法。单配方恢复 `preset` 并省略 `presets`；多配方恢复 `presets`；四个槽均恢复出处、状态、命令及多配方的逐行记录。
+- `drift`：`currentFp !== header.fp`。不产出槽事实，`preset` 为 `null` 且省略 `presets`；两侧指纹看 `header.fp` 与 `currentFp`。
+- `broken`：标记残缺、header 非法、注释风格不对、块名不是 `pre-commit-hook`、保留变量残留、出处行歧义或语法非法、出处行状态与 `<SLOT>_STATUS` 不一致、槽变量缺失/重复/非法，或 `.githooks` / Hook 是符号链接、目录、非普通文件。零恢复值：不产出槽事实，`header`、`currentFp`、`block`、`preset` 均为 `null` 且省略 `presets`；可读普通文件时 `contentFp` 记整个文件，其余为 `null`。
 
 `diff.kind`：`not-a-regular-file`、`boundary`、`header`、`style-mismatch`、`unexpected-block`、`placeholder`、`fp-mismatch`、`provenance-ambiguous`、`provenance-grammar`、`slot-variables`、`slot-state-mismatch`。`evidence.locator`：没有文件为 `none`，有文件但无托管块为 `file`，找到 start 标记为 `lazypack:start`，块名与风格核验通过为 `lazypack:start block=pre-commit-hook`。
 
@@ -104,6 +105,8 @@ node scripts/setup_helper.mjs plan --cwd <目标仓> --facts <facts.json> --answ
 | `reason` | `valid` 时取自第三段；`no-provenance` 时固定 `pre-existing` |
 | `status` | `<SLOT>_STATUS` 原值：`wired`、`missing`、`install-failed`、`n/a` |
 | `command` | `<SLOT>_CMD` 原值，按 `managed-blocks.md` §5.4 把 `'\''` 还原为 `'`；未接线时为空串 |
+| `provenances` | 多配方时按出处行顺序保留每个槽的三段式字符串；单配方或无出处时省略 |
+| `provenanceRecords` | 多配方时按出处行顺序保留 `{kind, id, version, provenance}`；单配方或无出处时省略 |
 
 `evidence.locator` 为 `<SLOT>_STATUS/<SLOT>_CMD`。命令、状态与三段式逐字保留；不得因当前环境里找到同名工具就把 `preset` 改写成 `existing`（No Regressive Reclassification）。
 
@@ -166,7 +169,7 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 | `docPlanFp` | 文档迁移计划的 `planFp`；目前恒为 `null`（尚未迁入）。文档迁移仍走 `doc_helper.mjs`，两份计划并列不合并 |
 | `covers` | 本计划覆盖的写入类别，目前是 `["gate-slots"]` |
 | `readbackFp` | 读回文件的 `machineFp`；没传 `--readback` 时为 `null` |
-| `hooks` | 受管 Hook 状态事实的摘要 `[{from, path, state, preset}]`；没传读回文件时为空数组 |
+| `hooks` | 受管 Hook 状态事实的摘要 `[{from, path, state, preset|presets}]`；没传读回文件时为空数组 |
 | `slots` | 四个门禁槽各自的决定，顺序 `format`、`lint`、`type`、`test` |
 | `unassigned` | 没有分到任何槽的既有命令：`{from, reason}`，`reason` 为 `hook-pause`（判断为不合规）、`judged-no-slot:<判断 id>`（判断的 `slots` 为空）、`no-slot-name`（名字不认领槽且没有判断认领）或 `unsafe-name`（脚本名不能安全拼进命令行）。列在这里不等于缺一个门禁：被聚合命令内部调用的脚本（如夹具里的 `check`）也在这里，AI 不要为它们另补 Hook 命令 |
 | `aiItems` | 依赖 AI 判断的条目：全部 `coverage` 判断的 `id`。`slots` 为空或 `compliant` 为 `false` 的判断也决定了哪个槽没有命令，所以一并列出 |
@@ -185,11 +188,11 @@ AI 只写 `judgments` 段，不改 `facts`，不改 `machineFp`。AI 对某条�
 | `from` | 出处：既有命令写事实 `id`；读回覆盖时写 hook 槽事实 `id`（即使该槽 `origin` 为 `none`，也指向记录「未接线」的 hook 槽事实）；其余 `none` 为 `null` |
 | `needs` | 这个槽依赖的安装动作 `id`；既有命令为空数组 |
 | `reason` | 只在 `none` 时出现：`no-existing-command`、`hook-pause:<事实 id>` 或 `judged-not-covered:<事实 id>` |
-| `outcomes` | 键是状态词，值是 `{provenance, writeCommand}`。`existing` 为 `wired` → `wired:existing:pre-existing`、`writeCommand` 为 `true`（Hook 写入这条命令）。没有读回事实的 `none` 是空对象：配方是否补这个槽尚未迁入，计划不预告它最后的状态。有读回事实时，键取 Hook 记录的状态词（含 `none` 槽），`writeCommand` 仅在状态为 `wired` 且有命令时为 `true`。状态词与三段式取自 `managed-blocks.md` §5.6 和 `verification.md` §3.3 |
+| `outcomes` | 键是状态词，值是 `{provenance, writeCommand}`；多配方读回时另带 `provenances` 与 `provenanceRecords`，按出处行顺序保留。`existing` 为 `wired` → `wired:existing:pre-existing`、`writeCommand` 为 `true`（Hook 写入这条命令）。没有读回事实的 `none` 是空对象：配方是否补这个槽尚未迁入，计划不预告它最后的状态。有读回事实时，键取 Hook 记录的状态词（含 `none` 槽），`writeCommand` 仅在状态为 `wired` 且有命令时为 `true`。状态词与三段式取自 `managed-blocks.md` §5.6 和 `verification.md` §3.3 |
 | `commandSource` | 命令以谁为准：`hook`（读回记录；记录为空命令时也表示这个槽按 Hook 的「未接线」处理）、`scan`（本轮扫描）或 `null`（既没有读回记录也没有扫描命令） |
-| `hook` | 读回槽事实的 `{state, provenance, status}`；没有对应读回事实时为 `null` |
+| `hook` | 读回槽事实的 `{state, provenance, provenances?, provenanceRecords?, status}`；没有对应读回事实时为 `null` |
 
-带 `--readback` 且某个槽有读回事实时，以 Hook 为准：`commandSource` 为 `hook`，`from` 指向 hook 槽事实 `id`，`needs` 为空数组。只有 Hook 状态为 `wired` 时 `command` 才取读回命令（空串写 `null`）、`cwd` 为 `.`、`origin` 为 `existing`；其余状态即使 Hook 里记着命令串也写 `command: null`、`cwd: null`、`origin: none`，并把 `outcomes` 的 `writeCommand` 标为 `false`。`hook.provenance` 逐字保留；不因当前环境或本轮扫描找到同名命令就把 `preset` 改写成 `existing`。同一包管理器的 `pnpm run test` 与 `pnpm test` 视为同一调用（同管理器、同脚本名）：`npm` 省略 `run` 只对 `test` / `start` / `stop` / `restart` 生效（`npm version` 是 npm 自己的命令，不是脚本），`pnpm` / `yarn` 对任意脚本名都允许省略 `run`。不因写法差异停下，命令仍逐字保留 Hook 里的写法。没有对应读回事实的槽保持分槽结果，`commandSource` 为 `scan`（有命令）或 `null`，`hook` 为 `null`。
+带 `--readback` 且某个槽有读回事实时，以 Hook 为准：`commandSource` 为 `hook`，`from` 指向 hook 槽事实 `id`，`needs` 为空数组。只有 Hook 状态为 `wired` 时 `command` 才取读回命令（空串写 `null`）、`cwd` 为 `.`、`origin` 为 `existing`；其余状态即使 Hook 里记着命令串也写 `command: null`、`cwd: null`、`origin: none`，并把 `outcomes` 的 `writeCommand` 标为 `false`。`hook.provenance` 逐字保留；多配方时同时保留 `hook.provenances` 与 `hook.provenanceRecords`。不因当前环境或本轮扫描找到同名命令就把 `preset` 改写成 `existing`。同一包管理器的 `pnpm run test` 与 `pnpm test` 视为同一调用（同管理器、同脚本名）：`npm` 省略 `run` 只对 `test` / `start` / `stop` / `restart` 生效（`npm version` 是 npm 自己的命令，不是脚本），`pnpm` / `yarn` 对任意脚本名都允许省略 `run`。不因写法差异停下，命令仍逐字保留 Hook 里的写法。没有对应读回事实的槽保持分槽结果，`commandSource` 为 `scan`（有命令）或 `null`，`hook` 为 `null`。
 
 分槽规则：
 

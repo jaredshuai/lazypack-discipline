@@ -827,6 +827,61 @@ function caseCliExclude(base) {
   assertCase(JSON.stringify(excluded.deadlinks.map((item) => item.targetRel)) === JSON.stringify(['docs/missing.md']), 'CLI exclude 后真实死链应保留');
 }
 
+function caseStaleDocumentationFixture(base) {
+  const source = path.resolve(__dirname, 'fixtures', 'doc-stale');
+  const repo = path.join(base, 'stale-doc-fixture');
+  fs.cpSync(source, repo, { recursive: true });
+  const scan = scanProjectDocuments(repo);
+  const deadTarget = 'docs/missing-build.md';
+  const scriptTarget = 'scripts/retired-release.mjs';
+  assertCase(scan.deadlinks.some((item) => item.sourceRelPath === 'RELEASE.md' && item.targetRel === deadTarget), '夹具中的失效文档链接必须被发现');
+  assertCase(scan.invalidPaths.some((item) => item.sourceRelPath === 'RELEASE.md' && item.targetRel === scriptTarget), '夹具中的失效脚本路径必须被发现');
+  assertCase(scan.coverage.scannedDirectories.includes('.'), '覆盖记录必须包含仓根目录');
+  assertCase(scan.coverage.scannedDirectories.includes('docs'), '覆盖记录必须包含 docs 目录');
+  assertCase(scan.coverage.checkedSignals.includes('markdown-relative-links'), '覆盖记录必须声明检查文档链接');
+  assertCase(scan.coverage.checkedSignals.includes('referenced-script-paths'), '覆盖记录必须声明检查脚本路径');
+  assertCase(scan.coverage.findings.some((item) => item.kind === 'dead-link' && item.targetRel === deadTarget), '覆盖记录必须包含预埋死链');
+  assertCase(scan.coverage.findings.some((item) => item.kind === 'script-path' && item.targetRel === scriptTarget), '覆盖记录必须包含预埋失效脚本路径');
+}
+
+function caseScriptPathSignals(base) {
+  const repo = path.join(base, 'script-path-signals');
+  fs.mkdirSync(path.join(repo, 'scripts'), { recursive: true });
+  fs.mkdirSync(path.join(repo, 'docs', 'raw-qa'), { recursive: true });
+  fs.mkdirSync(path.join(repo, 'skills', 'lazypack-setup', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'scripts', 'present.mjs'), '', 'utf8');
+  fs.writeFileSync(path.join(repo, 'skills', 'lazypack-setup', 'scripts', 'package_manifest.mjs'), '', 'utf8');
+  fs.writeFileSync(
+    path.join(repo, 'skills', 'lazypack-setup', 'SKILL.md'),
+    '在 skill 目录执行 `node scripts/package_manifest.mjs`。\n',
+    'utf8'
+  );
+  fs.writeFileSync(
+    path.join(repo, 'README.md'),
+    [
+      '# signals',
+      'node ./scripts/missing.mjs',
+      'node scripts/present.mjs',
+      '```sh',
+      'node scripts/fenced.mjs',
+      '```',
+      '[外部](https://example.com/path/scripts/external.mjs)',
+      '远程脚本：ssh://example.com/scripts/remote.mjs',
+      '历史记录：scripts/history.mjs（未实现）',
+      '排除目录：docs/raw-qa/missing.mjs'
+    ].join('\n') + '\n',
+    'utf8'
+  );
+  const scan = scanProjectDocuments(repo);
+  assertCase(scan.invalidPaths.some((item) => item.sourceRelPath === 'README.md' && item.targetRel === 'scripts/missing.mjs'), './scripts/缺失路径必须被发现');
+  assertCase(!scan.invalidPaths.some((item) => item.targetRel === 'scripts/fenced.mjs'), 'fenced code block 不得产生失效路径');
+  assertCase(!scan.invalidPaths.some((item) => item.targetRel === 'scripts/external.mjs'), '外部 URL 不得产生本地路径');
+  assertCase(!scan.invalidPaths.some((item) => item.targetRel === 'scripts/remote.mjs'), '任意 URI scheme 不得产生本地路径');
+  assertCase(!scan.invalidPaths.some((item) => item.targetRel === 'scripts/history.mjs'), '历史记录不得产生本地路径');
+  assertCase(!scan.invalidPaths.some((item) => item.targetRel.startsWith('docs/raw-qa/')), '排除目录不得泄露失效路径');
+  assertCase(!scan.invalidPaths.some((item) => item.sourceRelPath === 'skills/lazypack-setup/SKILL.md'), 'skill 相对 scripts/ 路径不得按仓根误报');
+}
+
 // Windows may return ENOENT for this path; inject ENOTDIR to cover the POSIX error branch.
 function caseFileAncestorDeadlink(base) {
   const repo = path.join(base, 'file-ancestor');
@@ -858,6 +913,8 @@ function caseFileAncestorDeadlink(base) {
 }
 
 const CASES = [
+  ['过时文档夹具确定性失效信号与覆盖记录', caseStaleDocumentationFixture],
+  ['脚本路径围栏、外链、历史与边界过滤', caseScriptPathSignals],
   ['scan 普通文件祖先死链与 ENOTDIR 分支', caseFileAncestorDeadlink],
   ['normalizeExcludePaths 归一化', caseNormalizeExcludePaths],
   ['buildExclusionMatcher 命中判定', caseBuildExclusionMatcher],
