@@ -264,7 +264,7 @@
 若既有受管文件的 `header.input` 缺失 `artifacts` 字段或使用旧版结构，在重跑时由于序列化差异，决策树检测到 `current_input !== header.input`；在正文未手改的前提下，准确触发 `[UPGRADE]` 提示差异；经用户一次性确认更新写盘后，立即纳入新规范，后续从磁盘重读保持稳定 `[NO-OP]`。
 
 ### 3.1.1.3 配方卡来源摘要
-配方卡的来源摘要对完整 Markdown 文件计算（包括 YAML frontmatter）：先剥离 UTF-8 BOM、将 CRLF 规范化为 LF，再对 UTF-8 字节流计算 SHA-256，取前 16 位小写十六进制字符串。多配方的每个 `presets[].src` 均按此算法独立计算；旧单配方继续使用顶层 `presetSrc`。
+配方卡来源摘要的目标算法是对完整 Markdown 文件（包括 YAML frontmatter）计算：先剥离 UTF-8 BOM、将 CRLF 规范化为 LF，再对 UTF-8 字节流计算 SHA-256，取前 16 位小写十六进制字符串。当前读回与 plan 管线尚未实现该摘要：多配方只保留并比较出处行中的 `id`、`version`，不产出或校验 `presets[].src`；旧单配方的顶层 `presetSrc` 也不在本票支持范围内。
 
 ### 3.2 规范序列化算法
 1. 字典所有键按 Unicode 码点升序排序（嵌套对象同理）。
